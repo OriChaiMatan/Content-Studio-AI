@@ -172,11 +172,57 @@ export function ContentCasePipeline() {
         <div className="max-w-2xl mx-auto">
 
           {/* Page header */}
-          <div className="mb-8">
+          <div className="mb-6">
             <h3 className="text-[22px] font-serif text-on-surface mb-1">Content Pipeline</h3>
             <p className="text-[14px] text-on-surface-variant">
-              The pipeline runs Research, Fact Check, and Content Creation in sequence.
+              Research, Fact Check, and Content Creation run in sequence using all sources in this workspace.
             </p>
+          </div>
+
+          {/* Source count context */}
+          <div className={[
+            'flex items-center gap-3 rounded-xl p-4 mb-6 border',
+            c.sources.length === 0
+              ? 'bg-surface-container-low border-outline-variant/30'
+              : 'bg-primary-fixed/20 border-primary/20',
+          ].join(' ')}>
+            <Icon
+              name="article"
+              className={c.sources.length === 0 ? 'text-outline' : 'text-primary'}
+            />
+            <div>
+              {c.sources.length === 0 ? (
+                <>
+                  <p className="text-[14px] font-medium text-on-surface-variant">No sources added yet</p>
+                  <p className="text-[12px] text-outline">
+                    You can still run the pipeline — or{' '}
+                    <button
+                      onClick={() => navigate(`/cases/${c.id}`)}
+                      className="text-primary underline hover:no-underline"
+                    >
+                      go back to the workspace
+                    </button>{' '}
+                    to add sources first.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[14px] font-medium text-on-surface">
+                    <span className="font-bold">{c.sources.length}</span>{' '}
+                    source{c.sources.length !== 1 ? 's' : ''} ready for this run
+                  </p>
+                  <p className="text-[12px] text-on-surface-variant">
+                    All sources collected in this workspace will be processed.{' '}
+                    <button
+                      onClick={() => navigate(`/cases/${c.id}`)}
+                      className="text-primary underline hover:no-underline"
+                    >
+                      Add more sources
+                    </button>
+                  </p>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Pipeline steps */}

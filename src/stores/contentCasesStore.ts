@@ -1,6 +1,8 @@
 import { create } from 'zustand';
-import type { ContentCase, OutputStatus, WizardFormData, PipelineStep } from '../types';
+import type { ContentCase, ContentSource, OutputStatus, SourceType, WizardFormData, PipelineStep } from '../types';
 import { mockContentCases } from '../data/mockContentCases';
+
+type NewSourceInput = { type: SourceType; label: string; content: string };
 
 interface ContentCasesState {
   cases: ContentCase[];
@@ -11,6 +13,11 @@ interface ContentCasesState {
   updateCase: (id: string, partial: Partial<ContentCase>) => void;
   deleteCase: (id: string) => void;
   getCaseById: (id: string) => ContentCase | undefined;
+
+  // Source management — sources can be added at any time after case creation
+  addSource: (caseId: string, source: NewSourceInput) => ContentSource;
+  updateSource: (caseId: string, sourceId: string, updates: { label?: string; content?: string }) => void;
+  deleteSource: (caseId: string, sourceId: string) => void;
 
   // Output actions
   updateOutputStatus: (caseId: string, outputId: string, status: OutputStatus) => void;
@@ -54,6 +61,7 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
         id: genId('src'),
         contentCaseId: caseId,
         createdAt: now,
+        updatedAt: null,
       })),
       outputs: [],
       pipeline: [
@@ -77,6 +85,59 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
 
   deleteCase: (id) =>
     set(state => ({ cases: state.cases.filter(c => c.id !== id) })),
+
+  // ── Source management ─────────────────────────────────────
+
+  addSource: (caseId, sourceInput) => {
+    const now = new Date().toISOString();
+    const newSource: ContentSource = {
+      id: genId('src'),
+      contentCaseId: caseId,
+      type: sourceInput.type,
+      label: sourceInput.label || sourceInput.type,
+      content: sourceInput.content,
+      createdAt: now,
+      updatedAt: null,
+    };
+    set(state => ({
+      cases: state.cases.map(c =>
+        c.id !== caseId ? c : {
+          ...c,
+          sources: [...c.sources, newSource],
+          updatedAt: now,
+        },
+      ),
+    }));
+    return newSource;
+  },
+
+  updateSource: (caseId, sourceId, updates) => {
+    const now = new Date().toISOString();
+    set(state => ({
+      cases: state.cases.map(c =>
+        c.id !== caseId ? c : {
+          ...c,
+          sources: c.sources.map(s =>
+            s.id !== sourceId ? s : { ...s, ...updates, updatedAt: now },
+          ),
+          updatedAt: now,
+        },
+      ),
+    }));
+  },
+
+  deleteSource: (caseId, sourceId) => {
+    const now = new Date().toISOString();
+    set(state => ({
+      cases: state.cases.map(c =>
+        c.id !== caseId ? c : {
+          ...c,
+          sources: c.sources.filter(s => s.id !== sourceId),
+          updatedAt: now,
+        },
+      ),
+    }));
+  },
 
   updateOutputStatus: (caseId, outputId, status) =>
     set(state => ({

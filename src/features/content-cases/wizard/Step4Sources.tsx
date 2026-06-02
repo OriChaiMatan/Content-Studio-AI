@@ -39,9 +39,14 @@ export function Step4Sources({ form, update }: Props) {
 
   return (
     <div className="space-y-4">
-      <p className="text-[14px] text-on-surface-variant">
-        Add research sources: text notes, URLs, or PDFs. The AI will use these as the foundation for all content.
-      </p>
+      <div className="bg-surface-container-low rounded-xl p-4 border border-outline-variant/20">
+        <p className="text-[14px] text-on-surface font-medium mb-1">Sources are optional at this stage</p>
+        <p className="text-[13px] text-on-surface-variant">
+          Your Content Case is a persistent workspace. You can skip this step and add sources
+          — text notes, URLs, or PDFs — any time from the case page. The pipeline will use all
+          sources collected at the time it runs.
+        </p>
+      </div>
 
       {/* Existing sources */}
       {form.sources.length > 0 && (
@@ -150,8 +155,8 @@ export function Step4Sources({ form, update }: Props) {
 
       <p className="text-[12px] text-on-surface-variant">
         {form.sources.length === 0
-          ? 'You can also skip this step and add sources later.'
-          : `${form.sources.length} source${form.sources.length !== 1 ? 's' : ''} added.`}
+          ? 'No sources added. You can skip this step — add sources from the case workspace at any time.'
+          : `${form.sources.length} initial source${form.sources.length !== 1 ? 's' : ''} added. More can be added after creation.`}
       </p>
     </div>
   );

@@ -4,13 +4,8 @@ import { CaseStatusBadge, PlatformBadge, OutputStatusBadge } from '../../compone
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { Card } from '../../components/ui/Card';
+import { SourcesPanel } from './SourcesPanel';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
-
-const sourceTypeIcon: Record<string, string> = {
-  text: 'notes',
-  url:  'link',
-  pdf:  'picture_as_pdf',
-};
 
 export function ContentCaseDetail() {
   const { id } = useParams<{ id: string }>();
@@ -27,7 +22,6 @@ export function ContentCaseDetail() {
 
   const c = caseItem;
   const canReview = c.status === 'in_review' || c.status === 'completed';
-  const canPipeline = true; // Always show Pipeline access; label varies by status
 
   return (
     <>
@@ -35,12 +29,10 @@ export function ContentCaseDetail() {
         title={c.title}
         actions={
           <div className="flex gap-2">
-            {canPipeline && (
-              <Button variant="secondary" size="sm" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
-                <Icon name={c.status === 'draft' ? 'play_arrow' : 'schema'} size="sm" />
-                {c.status === 'draft' ? 'Start Pipeline' : 'Pipeline'}
-              </Button>
-            )}
+            <Button variant="secondary" size="sm" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
+              <Icon name={c.status === 'draft' ? 'play_arrow' : 'schema'} size="sm" />
+              {c.status === 'draft' ? 'Start Pipeline' : 'Pipeline'}
+            </Button>
             {canReview && (
               <Button size="sm" onClick={() => navigate(`/cases/${c.id}/review`)}>
                 <Icon name="rate_review" size="sm" />
@@ -52,14 +44,15 @@ export function ContentCaseDetail() {
       />
 
       <main className="flex-1 p-8 overflow-y-auto space-y-6">
-        {/* Header card */}
+
+        {/* ── Header card ─────────────────────────────── */}
         <div className="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant/30 shadow-sm flex items-start justify-between gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <CaseStatusBadge status={c.status} />
               <span className="text-[12px] text-on-surface-variant uppercase font-bold tracking-wider">{c.language}</span>
             </div>
-            <h2 className="text-[28px] font-serif text-on-surface mb-2">{c.title}</h2>
+            <h2 className="text-[28px] font-serif text-on-surface mb-1">{c.title}</h2>
             <p className="text-[14px] text-on-surface-variant">{c.targetAudience}</p>
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
@@ -77,11 +70,12 @@ export function ContentCaseDetail() {
           </div>
         </div>
 
+        {/* ── 2-column: config + outputs/pipeline ─────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Details */}
+
+          {/* Left: Audience + Writing style */}
           <div className="lg:col-span-2 space-y-5">
 
-            {/* Audience */}
             <Card accent className="p-5">
               <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Icon name="groups" className="text-outline" size="sm" />
@@ -103,7 +97,6 @@ export function ContentCaseDetail() {
               </div>
             </Card>
 
-            {/* Writing style */}
             <Card accent className="p-5">
               <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Icon name="edit_note" className="text-outline" size="sm" />
@@ -126,49 +119,22 @@ export function ContentCaseDetail() {
                 )}
               </div>
             </Card>
-
-            {/* Sources */}
-            <Card accent className="p-5">
-              <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Icon name="article" className="text-outline" size="sm" />
-                Content Sources ({c.sources.length})
-              </h4>
-              {c.sources.length === 0 ? (
-                <p className="text-[14px] text-outline">No sources added.</p>
-              ) : (
-                <div className="space-y-2">
-                  {c.sources.map(source => (
-                    <div key={source.id} className="flex items-start gap-3 p-3 bg-surface-container-low rounded-lg">
-                      <Icon name={sourceTypeIcon[source.type]} className="text-outline shrink-0" size="sm" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium text-on-surface">{source.label}</p>
-                        <p className="text-[12px] text-on-surface-variant truncate">{source.content}</p>
-                      </div>
-                      <span className="text-[10px] uppercase font-bold text-outline bg-surface-container px-2 py-0.5 rounded shrink-0">
-                        {source.type}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
           </div>
 
-          {/* Right: Outputs summary */}
+          {/* Right: Outputs + Pipeline */}
           <div className="space-y-4">
             <Card className="p-5">
               <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Icon name="auto_awesome" className="text-outline" size="sm" />
                 Outputs
               </h4>
-
               {c.outputs.length === 0 ? (
-                <div className="flex flex-col items-center py-6 text-center gap-3">
+                <div className="flex flex-col items-center py-6 text-center gap-2">
                   <Icon name="pending" size="xl" className="text-outline" />
                   <p className="text-[13px] text-on-surface-variant">
                     {c.status === 'draft'
-                      ? 'Use the Start Pipeline button above to generate outputs.'
-                      : 'Pipeline is running — outputs will appear here when complete.'}
+                      ? 'Add sources below, then start the pipeline.'
+                      : 'Pipeline is running — outputs will appear here.'}
                   </p>
                 </div>
               ) : (
@@ -181,11 +147,7 @@ export function ContentCaseDetail() {
                     </div>
                   ))}
                   {canReview && (
-                    <Button
-                      fullWidth
-                      className="mt-3"
-                      onClick={() => navigate(`/cases/${c.id}/review`)}
-                    >
+                    <Button fullWidth className="mt-3" onClick={() => navigate(`/cases/${c.id}/review`)}>
                       <Icon name="rate_review" size="sm" />
                       Review All
                     </Button>
@@ -194,17 +156,24 @@ export function ContentCaseDetail() {
               )}
             </Card>
 
-            {/* Pipeline status */}
             <Card className="p-5">
               <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Icon name="schema" className="text-outline" size="sm" />
                 Pipeline
               </h4>
-              <div className="space-y-2">
+              {/* Source count context */}
+              <div className="flex items-center gap-2 mb-3 text-[12px] text-on-surface-variant bg-surface-container-low rounded-lg px-3 py-2">
+                <Icon name="article" size="sm" className="text-outline" />
+                <span>
+                  <span className="font-bold text-on-surface">{c.sources.length}</span>{' '}
+                  source{c.sources.length !== 1 ? 's' : ''} queued for next run
+                </span>
+              </div>
+              <div className="space-y-2 mb-4">
                 {c.pipeline.map(step => (
                   <div key={step.id} className="flex items-center gap-3">
                     <div className={[
-                      'w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs',
+                      'w-6 h-6 rounded-full flex items-center justify-center shrink-0',
                       step.status === 'completed' ? 'bg-primary text-on-primary' :
                       step.status === 'running'   ? 'bg-secondary-container text-on-secondary-container' :
                       'bg-surface-container text-outline',
@@ -220,18 +189,22 @@ export function ContentCaseDetail() {
                     <p className={`text-[13px] capitalize ${step.status === 'idle' ? 'text-outline' : 'text-on-surface'}`}>
                       {step.name.replace('_', ' ')}
                     </p>
-                    {step.confidence && (
+                    {step.confidence !== null && (
                       <span className="ml-auto text-[11px] text-primary font-bold">{step.confidence}%</span>
                     )}
                   </div>
                 ))}
               </div>
-              <Button variant="secondary" size="sm" fullWidth className="mt-4" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
+              <Button variant="secondary" size="sm" fullWidth onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
                 {c.status === 'draft' ? 'Start Pipeline' : 'View Pipeline'}
               </Button>
             </Card>
           </div>
         </div>
+
+        {/* ── Content Sources workspace (full width) ───── */}
+        <SourcesPanel caseId={c.id} />
+
       </main>
     </>
   );

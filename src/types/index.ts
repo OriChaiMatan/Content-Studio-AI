@@ -32,6 +32,7 @@ export type ExperienceLevel = 'beginner' | 'intermediate' | 'expert';
 
 // ── ContentSource ──────────────────────────────────────────
 // Maps to: content_sources table
+// Sources are added continuously over the life of a Content Case.
 export interface ContentSource {
   id: string;
   contentCaseId: string;
@@ -39,6 +40,7 @@ export interface ContentSource {
   label: string;
   content: string;         // text body, URL string, or original filename
   createdAt: string;       // ISO 8601
+  updatedAt: string | null; // set when a text source is edited; null otherwise
 }
 
 // ── PipelineStep ───────────────────────────────────────────
@@ -155,8 +157,8 @@ export interface WizardFormData {
   writingStyle: string;
   goals: string;
   aiInstructions: string;
-  // Step 4 (sources added dynamically)
-  sources: Omit<ContentSource, 'id' | 'contentCaseId' | 'createdAt'>[];
+  // Step 4 — initial sources (optional; more can be added after case creation)
+  sources: Omit<ContentSource, 'id' | 'contentCaseId' | 'createdAt' | 'updatedAt'>[];
   // Step 5
   schedule: Schedule;
 }

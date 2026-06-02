@@ -239,9 +239,9 @@ export function ContentCaseReview() {
       />
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Sub-header: progress bar */}
-        <div className="px-8 py-4 bg-surface-container-low border-b border-outline-variant flex items-center gap-6">
-          <div className="flex-1">
+        {/* Sub-header: progress + source context */}
+        <div className="px-8 py-4 bg-surface-container-low border-b border-outline-variant flex items-center gap-6 flex-wrap">
+          <div className="flex-1 min-w-[200px]">
             <div className="flex items-center justify-between text-[13px] text-on-surface-variant mb-1.5">
               <span>Review Progress</span>
               <span className="font-bold text-on-surface">{approvedCount} / {totalCount} approved</span>
@@ -253,6 +253,15 @@ export function ContentCaseReview() {
               />
             </div>
           </div>
+
+          {/* Source count used in this generation */}
+          {c.sources.length > 0 && (
+            <div className="flex items-center gap-2 text-[12px] text-on-surface-variant bg-surface-container px-3 py-1.5 rounded-lg border border-outline-variant/30">
+              <Icon name="article" size="sm" className="text-outline" />
+              <span>Generated from <span className="font-bold text-on-surface">{c.sources.length}</span> source{c.sources.length !== 1 ? 's' : ''}</span>
+            </div>
+          )}
+
           {approvedCount === totalCount && totalCount > 0 && (
             <div className="flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-xl">
               <Icon name="celebration" size="sm" />
