@@ -172,14 +172,29 @@ export function ContentCaseDetail() {
                 <Icon name="schema" className="text-outline" size="sm" />
                 Pipeline
               </h4>
-              {/* Source count context */}
-              <div className="flex items-center gap-2 mb-3 text-[12px] text-on-surface-variant bg-surface-container-low rounded-lg px-3 py-2">
-                <Icon name="article" size="sm" className="text-outline" />
-                <span>
-                  <span className="font-bold text-on-surface">{c.sources.length}</span>{' '}
-                  source{c.sources.length !== 1 ? 's' : ''} queued for next run
-                </span>
-              </div>
+              {/* Source lifecycle summary */}
+              {(() => {
+                const newCount  = c.sources.filter(s => s.status === 'new').length;
+                const usedCount = c.sources.filter(s => s.status === 'used').length;
+                const noNew = c.sources.length > 0 && newCount === 0;
+                return (
+                  <div className={[
+                    'flex items-center gap-2 mb-3 text-[12px] rounded-lg px-3 py-2',
+                    noNew ? 'bg-surface-container-high text-on-surface-variant' : 'bg-surface-container-low text-on-surface-variant',
+                  ].join(' ')}>
+                    <Icon name="article" size="sm" className={noNew ? 'text-outline' : 'text-primary'} />
+                    {c.sources.length === 0 ? (
+                      <span>No sources yet</span>
+                    ) : (
+                      <span>
+                        <span className="font-bold text-primary">{newCount} new</span>
+                        {usedCount > 0 && <> · <span className="font-bold">{usedCount} used</span></>}
+                        {noNew && <span className="text-outline"> — add new sources to run again</span>}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="space-y-2 mb-4">
                 {c.pipeline.map(step => (
                   <div key={step.id} className="flex items-center gap-3">

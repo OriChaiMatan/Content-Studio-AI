@@ -1,4 +1,4 @@
-import type { Prisma, ContentSource, ContentOutput, PipelineStep } from '@prisma/client';
+import type { Prisma, ContentSource, ContentOutput, PipelineStep, PipelineRun } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import type { CreateCaseInput, UpdateCaseInput } from '../schemas/caseSchemas';
 
@@ -15,46 +15,51 @@ const caseInclude = {
   sources:       { orderBy: { createdAt: 'desc' as const } },
   outputs:       { orderBy: { generatedAt: 'desc' as const } },
   pipelineSteps: true,
+  // Include only the most recent run for the currentRun summary
+  pipelineRuns:  { orderBy: { startedAt: 'desc' as const }, take: 1 },
 } satisfies Prisma.ContentCaseInclude;
 
 type FullCase = Prisma.ContentCaseGetPayload<{ include: typeof caseInclude }>;
 
 // ── Serializers — transform Prisma records to frontend ContentCase shape ──────
 
-function serializeSource(s: ContentSource) {
+export function serializeSource(s: ContentSource) {
   return {
-    id: s.id,
+    id:            s.id,
     contentCaseId: s.contentCaseId,
-    type: s.type,
-    label: s.label,
-    content: s.content,
-    createdAt: s.createdAt.toISOString(),
-    updatedAt: s.updatedAt ? s.updatedAt.toISOString() : null,
+    type:          s.type,
+    label:         s.label,
+    content:       s.content,
+    status:        s.status,
+    usedInRunId:   s.usedInRunId,
+    lastUsedAt:    s.lastUsedAt ? s.lastUsedAt.toISOString() : null,
+    createdAt:     s.createdAt.toISOString(),
+    updatedAt:     s.updatedAt ? s.updatedAt.toISOString() : null,
   };
 }
 
 function serializeOutput(o: ContentOutput) {
   return {
-    id: o.id,
-    contentCaseId: o.contentCaseId,
-    platform: o.platform,
-    title: o.title,
-    body: o.body,
-    status: o.status,
-    version: o.version,
-    contentScore: o.contentScore,
+    id:                 o.id,
+    contentCaseId:      o.contentCaseId,
+    platform:           o.platform,
+    title:              o.title,
+    body:               o.body,
+    status:             o.status,
+    version:            o.version,
+    contentScore:       o.contentScore,
     researchConfidence: o.researchConfidence,
-    factCheckAccuracy: o.factCheckAccuracy,
-    generatedAt: o.generatedAt.toISOString(),
-    reviewedAt: o.reviewedAt ? o.reviewedAt.toISOString() : null,
+    factCheckAccuracy:  o.factCheckAccuracy,
+    generatedAt:        o.generatedAt.toISOString(),
+    reviewedAt:         o.reviewedAt ? o.reviewedAt.toISOString() : null,
   };
 }
 
 function serializePipelineStep(s: PipelineStep) {
   return {
-    id: s.id,
-    name: s.name,
-    status: s.status,
+    id:          s.id,
+    name:        s.name,
+    status:      s.status,
     startedAt:   s.startedAt   ? s.startedAt.toISOString()   : null,
     completedAt: s.completedAt ? s.completedAt.toISOString() : null,
     summary:     s.summary,
@@ -62,13 +67,26 @@ function serializePipelineStep(s: PipelineStep) {
   };
 }
 
-function serializeCase(c: FullCase) {
-  // Sort pipeline steps into the canonical order the frontend expects.
+function serializeRun(r: PipelineRun) {
+  return {
+    id:               r.id,
+    status:           r.status,
+    primarySourceIds: r.primarySourceIds,
+    contextSourceIds: r.contextSourceIds,
+    sourceCount:      r.sourceCount,
+    startedAt:        r.startedAt.toISOString(),
+    completedAt:      r.completedAt ? r.completedAt.toISOString() : null,
+  };
+}
+
+export function serializeCase(c: FullCase) {
   const sortedSteps = [...c.pipelineSteps].sort(
     (a, b) =>
       PIPELINE_STEP_ORDER.indexOf(a.name as StepName) -
       PIPELINE_STEP_ORDER.indexOf(b.name as StepName),
   );
+
+  const latestRun = c.pipelineRuns[0] ?? null;
 
   return {
     id:              c.id,
@@ -81,18 +99,18 @@ function serializeCase(c: FullCase) {
     writingStyle:    c.writingStyle,
     goals:           c.goals,
     aiInstructions:  c.aiInstructions,
-    // Denormalized schedule columns → nested Schedule object
     schedule: {
       frequency:   c.scheduleFrequency,
       time:        c.scheduleTime,
       dayOfWeek:   c.scheduleDayOfWeek,
       dayOfMonth:  c.scheduleDayOfMonth,
     },
-    sources:  c.sources.map(serializeSource),
-    outputs:  c.outputs.map(serializeOutput),
-    pipeline: sortedSteps.map(serializePipelineStep),
-    createdAt: c.createdAt.toISOString(),
-    updatedAt: c.updatedAt.toISOString(),
+    sources:    c.sources.map(serializeSource),
+    outputs:    c.outputs.map(serializeOutput),
+    pipeline:   sortedSteps.map(serializePipelineStep),
+    currentRun: latestRun ? serializeRun(latestRun) : null,
+    createdAt:  c.createdAt.toISOString(),
+    updatedAt:  c.updatedAt.toISOString(),
   };
 }
 
@@ -117,7 +135,6 @@ export const caseService = {
   },
 
   async createCase(data: CreateCaseInput) {
-    // Create case + sources + 3 pipeline steps in a single transaction.
     const c = await prisma.$transaction(async tx => {
       return tx.contentCase.create({
         data: {
@@ -139,9 +156,9 @@ export const caseService = {
               type:    s.type,
               label:   s.label || s.type,
               content: s.content,
+              // status defaults to 'new' via schema default
             })),
           },
-          // Always create the 3 pipeline steps starting in idle state.
           pipelineSteps: {
             create: PIPELINE_STEP_ORDER.map(name => ({
               name,
@@ -184,7 +201,6 @@ export const caseService = {
   },
 
   async deleteCase(id: string) {
-    // onDelete: Cascade on all child relations handles cleanup.
     await prisma.contentCase.delete({ where: { id } });
   },
 };

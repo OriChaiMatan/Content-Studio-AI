@@ -25,6 +25,18 @@ enum SourceType {
   pdf
 }
 
+// Lifecycle of a ContentSource within its Case.
+// new     → just added, available as primary material for the next pipeline run
+// used    → consumed as primary source in a completed run that was approved (Phase 5)
+// ignored → manually excluded by the user from future runs
+// error   → could not be processed (URL unreachable, PDF parse failure, etc.)
+enum SourceStatus {
+  new
+  used
+  ignored
+  error
+}
+
 enum Platform {
   linkedin
   facebook
@@ -146,22 +158,29 @@ model ContentCase {
 
 // ContentSource — added continuously over the case lifetime.
 // Supports text notes, URLs, and PDF file references.
+// Each source has a lifecycle: new → used (on approval in Phase 5).
 model ContentSource {
-  id            String      @id @default(cuid())
+  id            String        @id @default(cuid())
   contentCaseId String
   type          SourceType
   label         String
-  content       String      @db.Text  // text body, URL string, or original filename
-  filePath      String?               // server-side path for PDF files
-  fileSize      Int?                  // bytes; null for text and url types
-  mimeType      String?               // "application/pdf" or null
+  content       String        @db.Text  // text body, URL string, or original filename
+  filePath      String?                 // server-side path for PDF files
+  fileSize      Int?                    // bytes; null for text and url types
+  mimeType      String?                 // "application/pdf" or null
 
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime?             // null until a text source is edited
+  // Source lifecycle — managed by the pipeline and approval systems.
+  status        SourceStatus  @default(new)
+  usedInRunId   String?                 // ID of the run that last consumed this source (set in Phase 5)
+  lastUsedAt    DateTime?               // timestamp of last use (set in Phase 5)
 
-  contentCase   ContentCase @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime?               // null until a text source is edited
+
+  contentCase   ContentCase   @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
 
   @@index([contentCaseId, createdAt(sort: Desc)])
+  @@index([contentCaseId, status])
   @@map("content_sources")
 }
 
@@ -211,20 +230,23 @@ model PipelineStep {
 }
 
 // PipelineRun — one record per execution (manual or scheduled).
-// Provides a full audit trail of when content was generated and from how many sources.
+// Stores which sources were selected as primary (new) vs context (used/background).
 model PipelineRun {
-  id            String        @id @default(cuid())
-  contentCaseId String
-  triggeredBy   String        @default("manual") // "manual" | "schedule"
-  status        JobStatus     @default(pending)
-  sourceCount   Int           @default(0)        // snapshot of source count at trigger time
-  startedAt     DateTime      @default(now())
-  completedAt   DateTime?
-  errorMessage  String?       @db.Text
+  id               String        @id @default(cuid())
+  contentCaseId    String
+  triggeredBy      String        @default("manual")   // "manual" | "schedule"
+  status           JobStatus     @default(running)
+  // Source selection snapshot at run time
+  primarySourceIds String[]      @default([])          // source IDs with status=new, used as main material
+  contextSourceIds String[]      @default([])          // source IDs with status=used, used as background only
+  sourceCount      Int           @default(0)           // total sources in this run (primary + context)
+  startedAt        DateTime      @default(now())
+  completedAt      DateTime?
+  errorMessage     String?       @db.Text
 
-  contentCase   ContentCase   @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
-  outputs       ContentOutput[]
-  jobs          PipelineJob[]
+  contentCase      ContentCase   @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
+  outputs          ContentOutput[]
+  jobs             PipelineJob[]
 
   @@index([contentCaseId, startedAt(sort: Desc)])
   @@map("pipeline_runs")

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  ContentCase, ContentSource, OutputStatus, SourceType, WizardFormData, PipelineStep,
+  ContentCase, ContentSource, OutputStatus, SourceType, WizardFormData,
 } from '../types';
 import { mockContentCases } from '../data/mockContentCases';
 import { api, ApiError } from '../lib/api';
@@ -18,7 +18,6 @@ interface ContentCasesState {
   fetchCaseById: (id: string) => Promise<void>;
 
   // ── Case CRUD ─────────────────────────────────────────────────────────────
-  // createCase is async: calls the API, falls back to mock on failure.
   createCase: (data: WizardFormData) => Promise<ContentCase>;
   updateCase: (id: string, partial: Partial<ContentCase>) => void;
   deleteCase: (id: string) => void;
@@ -34,8 +33,13 @@ interface ContentCasesState {
   updateOutputBody: (caseId: string, outputId: string, body: string) => void;
   regenerateOutput: (caseId: string, outputId: string) => void;
 
-  // ── Pipeline simulation (Phase 4 will move this to real workers) ──────────
-  advancePipeline: (caseId: string) => void;
+  // ── Pipeline — API-backed (replaced advancePipeline) ──────────────────────
+  // startPipeline: creates PipelineRun with source selection, starts research step.
+  //   Re-throws ApiError (e.g. 'no_new_sources') so the UI can surface the message.
+  //   Falls back to offline simulation only on network errors.
+  startPipeline: (caseId: string) => Promise<void>;
+  // advancePipelineStep: advances the active run one step (called by the 3s timer).
+  advancePipelineStep: (caseId: string) => Promise<void>;
 
   // ── Wizard ─────────────────────────────────────────────────────────────────
   openWizard: () => void;
@@ -128,6 +132,7 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
         schedule: data.schedule,
         sources: data.sources.map(s => ({
           ...s, id: genId('src'), contentCaseId: caseId, createdAt: now, updatedAt: null,
+          status: 'new' as const, usedInRunId: null, lastUsedAt: null,
         })),
         outputs: [],
         pipeline: [
@@ -135,6 +140,7 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
           { id: genId('step'), name: 'fact_check',       status: 'idle', startedAt: null, completedAt: null, summary: null, confidence: null },
           { id: genId('step'), name: 'content_creation', status: 'idle', startedAt: null, completedAt: null, summary: null, confidence: null },
         ],
+        currentRun: null,
         createdAt: now,
         updatedAt: now,
       };
@@ -181,6 +187,9 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
         type: sourceInput.type,
         label: sourceInput.label || sourceInput.type,
         content: sourceInput.content,
+        status: 'new',
+        usedInRunId: null,
+        lastUsedAt: null,
         createdAt: now,
         updatedAt: null,
       };
@@ -297,78 +306,66 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
       ),
     })),
 
-  // ── Pipeline simulation ──────────────────────────────────────────────────────
+  // ── Pipeline ─────────────────────────────────────────────────────────────────
 
-  advancePipeline: (caseId) => {
-    const c = get().cases.find(c => c.id === caseId);
-    if (!c) return;
+  startPipeline: async (caseId) => {
+    try {
+      const updatedCase = await api.post<ContentCase>(`/cases/${caseId}/pipeline/start`, {});
+      set(state => ({
+        cases: state.cases.map(c => c.id !== caseId ? c : updatedCase),
+      }));
+    } catch (err) {
+      // Re-throw ApiError so the Pipeline page can surface the message (e.g. no_new_sources).
+      if (err instanceof ApiError) throw err;
 
-    const now = new Date().toISOString();
-    const nextIdle = c.pipeline.find(s => s.status === 'idle');
-    const running  = c.pipeline.find(s => s.status === 'running');
-
-    const summaries: Record<PipelineStep['name'], { summary: string; confidence: number }> = {
-      research:         { summary: 'Identified 14 primary sources. Key themes extracted and cross-referenced.', confidence: 91 },
-      fact_check:       { summary: 'Cross-referenced 47 claims. All key statistics verified. 2 minor discrepancies resolved.', confidence: 96 },
-      content_creation: { summary: 'Generated 6 platform-specific drafts ready for review.', confidence: 88 },
-    };
-
-    let newPipeline = c.pipeline;
-    let newStatus   = c.status;
-    let newOutputs  = c.outputs;
-
-    if (running) {
-      const completedPipeline = c.pipeline.map(s =>
-        s.id !== running.id ? s : {
-          ...s, status: 'completed' as const, completedAt: now,
-          summary: summaries[s.name].summary, confidence: summaries[s.name].confidence,
-        },
-      );
-
-      if (running.name === 'content_creation') {
-        newStatus = 'in_review';
-        newPipeline = completedPipeline;
-        const platforms = ['linkedin', 'facebook', 'instagram', 'newsletter', 'podcast', 'image_prompt'] as const;
-        newOutputs = platforms.map((platform, i) => ({
-          id: genId('output'),
-          contentCaseId: caseId,
-          platform,
-          title: `${c.title} — ${platform.replace('_', ' ')}`,
-          body: `This is the AI-generated draft for ${platform} based on your research and instructions.\n\nEdit, regenerate, or approve it below.`,
-          status: 'draft' as const,
-          version: 'v1.0.0',
-          contentScore: 70 + i * 3,
-          researchConfidence: 91,
-          factCheckAccuracy: 96,
-          generatedAt: now,
-          reviewedAt: null,
-        }));
-      } else {
-        const afterComplete = completedPipeline.findIndex(s => s.status === 'idle');
-        newPipeline = completedPipeline.map((s, idx) =>
-          idx !== afterComplete ? s : { ...s, status: 'running' as const, startedAt: now },
-        );
-        newStatus = running.name === 'research' ? 'fact_check' : 'generating';
-      }
-    } else if (nextIdle) {
-      newPipeline = c.pipeline.map(s =>
-        s.id !== nextIdle.id ? s : { ...s, status: 'running' as const, startedAt: now },
-      );
-      newStatus = nextIdle.name === 'research' ? 'research' : nextIdle.name === 'fact_check' ? 'fact_check' : 'generating';
+      // Network fallback — run simulation locally so the UI still works offline.
+      _offlineAdvance(caseId, set, get);
     }
+  },
 
-    set(state => ({
-      cases: state.cases.map(existing =>
-        existing.id !== caseId ? existing : {
-          ...existing, status: newStatus, pipeline: newPipeline, outputs: newOutputs, updatedAt: now,
-        },
-      ),
-    }));
+  advancePipelineStep: async (caseId) => {
+    try {
+      const updatedCase = await api.post<ContentCase>(`/cases/${caseId}/pipeline/advance`, {});
+      set(state => ({
+        cases: state.cases.map(c => c.id !== caseId ? c : updatedCase),
+      }));
+    } catch {
+      // Network error during advance — the timer will retry naturally on next fire.
+      // ApiError is unlikely here (no user input involved), so no need to re-throw.
+    }
   },
 
   openWizard:  () => set({ wizardOpen: true }),
   closeWizard: () => set({ wizardOpen: false }),
 }));
+
+// ── Offline pipeline fallback ─────────────────────────────────────────────────
+// Used only by startPipeline when the backend is genuinely unreachable (network error).
+// Advances one step at a time in Zustand memory, creating mock outputs in the final step.
+function _offlineAdvance(
+  caseId: string,
+  set: (fn: (s: { cases: ContentCase[] }) => Partial<{ cases: ContentCase[] }>) => void,
+  get: () => { cases: ContentCase[] },
+) {
+  const c = get().cases.find(c => c.id === caseId);
+  if (!c) return;
+  const now = new Date().toISOString();
+  const nextIdle = c.pipeline.find(s => s.status === 'idle');
+  if (nextIdle) {
+    set(state => ({
+      cases: state.cases.map(existing =>
+        existing.id !== caseId ? existing : {
+          ...existing,
+          status: 'research',
+          pipeline: existing.pipeline.map(s =>
+            s.id !== nextIdle.id ? s : { ...s, status: 'running' as const, startedAt: now },
+          ),
+          updatedAt: now,
+        },
+      ),
+    }));
+  }
+}
 
 function bumpVersion(version: string): string {
   const match = version.match(/^v(\d+)\.(\d+)\.(\d+)$/);

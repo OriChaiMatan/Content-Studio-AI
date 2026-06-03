@@ -3,8 +3,9 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import cors from 'cors';
 import helmet from 'helmet';
 import { prisma } from './lib/prisma';
-import casesRouter   from './api/routes/cases';
-import sourcesRouter from './api/routes/sources';
+import casesRouter    from './api/routes/cases';
+import sourcesRouter  from './api/routes/sources';
+import pipelineRouter from './api/routes/pipeline';
 
 const app = express();
 
@@ -41,6 +42,8 @@ app.use(express.urlencoded({ extended: true }));
 // No conflicts — /:id only matches a single path segment.
 app.use('/api/cases', casesRouter);
 app.use('/api/cases', sourcesRouter);
+// pipeline routes: /:id/pipeline, /:id/pipeline/start, /:id/pipeline/advance
+app.use('/api/cases', pipelineRouter);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 // Returns 200 when the server is up.

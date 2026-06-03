@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma';
 import type { AddSourceInput, UpdateSourceInput } from '../schemas/sourceSchemas';
 
 // ── Serializer ────────────────────────────────────────────────────────────────
-// Strips server-only fields (filePath, fileSize, mimeType) from the response.
+// Strips server-only fields (filePath, fileSize, mimeType) but includes lifecycle fields.
 
 function serializeSource(s: ContentSource) {
   return {
@@ -12,6 +12,9 @@ function serializeSource(s: ContentSource) {
     type:          s.type,
     label:         s.label,
     content:       s.content,
+    status:        s.status,
+    usedInRunId:   s.usedInRunId,
+    lastUsedAt:    s.lastUsedAt ? s.lastUsedAt.toISOString() : null,
     createdAt:     s.createdAt.toISOString(),
     updatedAt:     s.updatedAt ? s.updatedAt.toISOString() : null,
   };

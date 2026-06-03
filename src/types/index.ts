@@ -8,6 +8,13 @@ export type Language = 'en' | 'he';
 
 export type SourceType = 'text' | 'url' | 'pdf';
 
+// Lifecycle of a ContentSource.
+// new     → just added, available as primary material for the next run
+// used    → consumed as primary source; marked used on approval (Phase 5)
+// ignored → excluded from future runs by the user
+// error   → could not be processed by the pipeline
+export type SourceStatus = 'new' | 'used' | 'ignored' | 'error';
+
 export type Platform =
   | 'linkedin'
   | 'facebook'
@@ -38,9 +45,31 @@ export interface ContentSource {
   contentCaseId: string;
   type: SourceType;
   label: string;
-  content: string;         // text body, URL string, or original filename
-  createdAt: string;       // ISO 8601
-  updatedAt: string | null; // set when a text source is edited; null otherwise
+  content: string;          // text body, URL string, or original filename
+  status: SourceStatus;     // lifecycle state — starts as 'new'
+  usedInRunId: string | null; // run that last consumed this source (set in Phase 5)
+  lastUsedAt: string | null;  // ISO 8601 — set in Phase 5
+  createdAt: string;          // ISO 8601
+  updatedAt: string | null;   // set when a text source is edited; null otherwise
+}
+
+// Minimal source shape sent from the wizard (server infers all lifecycle fields).
+export interface SourceInput {
+  type: SourceType;
+  label: string;
+  content: string;
+}
+
+// ── PipelineRunSummary ─────────────────────────────────────
+// Lightweight run info embedded in ContentCase responses.
+export interface PipelineRunSummary {
+  id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  primarySourceIds: string[];   // new sources selected as main material
+  contextSourceIds: string[];   // used sources included as background
+  sourceCount: number;          // primarySourceIds.length + contextSourceIds.length
+  startedAt: string;            // ISO 8601
+  completedAt: string | null;
 }
 
 // ── PipelineStep ───────────────────────────────────────────
@@ -105,6 +134,7 @@ export interface ContentCase {
   sources: ContentSource[];
   outputs: ContentOutput[];
   pipeline: PipelineStep[];
+  currentRun: PipelineRunSummary | null; // active or most recent pipeline run
 
   // Timestamps
   createdAt: string;
@@ -157,8 +187,8 @@ export interface WizardFormData {
   writingStyle: string;
   goals: string;
   aiInstructions: string;
-  // Step 4 — initial sources (optional; more can be added after case creation)
-  sources: Omit<ContentSource, 'id' | 'contentCaseId' | 'createdAt' | 'updatedAt'>[];
+  // Step 4 — initial sources (optional; server defaults status to 'new')
+  sources: SourceInput[];
   // Step 5
   schedule: Schedule;
 }

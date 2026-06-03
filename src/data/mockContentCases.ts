@@ -1,4 +1,9 @@
-import type { ContentCase, ContentOutput, PipelineStep } from '../types';
+import type { ContentCase, ContentOutput, ContentSource, PipelineStep } from '../types';
+
+// Adds required lifecycle fields to mock source objects (all start as 'new').
+function src(s: Omit<ContentSource, 'status' | 'usedInRunId' | 'lastUsedAt'>): ContentSource {
+  return { ...s, status: 'new', usedInRunId: null, lastUsedAt: null };
+}
 
 // ── Pipeline helpers ──────────────────────────────────────
 
@@ -105,7 +110,7 @@ export const mockContentCases: ContentCase[] = [
     aiInstructions: 'Avoid excessive jargon. Always ground claims in cited research. Maintain a tone that is optimistic but not hyperbolic. Use active voice.',
     schedule: { frequency: 'weekly', time: '09:00', dayOfWeek: 1, dayOfMonth: null },
     sources: [
-      {
+      src({
         id: 'src-c1-1',
         contentCaseId: 'case-1',
         type: 'text',
@@ -113,8 +118,8 @@ export const mockContentCases: ContentCase[] = [
         content: 'Quantum computing breakthroughs in 2024 have focused on error correction (Google Willow chip achieving 105 qubits with sub-threshold error rates) and practical applications in optimization problems including supply chain routing, drug discovery, and financial modeling.',
         createdAt: '2024-03-01T09:00:00.000Z',
         updatedAt: null,
-      },
-      {
+      }),
+      src({
         id: 'src-c1-2',
         contentCaseId: 'case-1',
         type: 'url',
@@ -122,8 +127,8 @@ export const mockContentCases: ContentCase[] = [
         content: 'https://www.technologyreview.com/2024/quantum-logistics',
         createdAt: '2024-03-03T14:22:00.000Z',
         updatedAt: null,
-      },
-      {
+      }),
+      src({
         id: 'src-c1-3',
         contentCaseId: 'case-1',
         type: 'pdf',
@@ -131,8 +136,8 @@ export const mockContentCases: ContentCase[] = [
         content: 'Q1_Quantum_Logistics_Report.pdf',
         createdAt: '2024-03-05T10:15:00.000Z',
         updatedAt: null,
-      },
-      {
+      }),
+      src({
         id: 'src-c1-4',
         contentCaseId: 'case-1',
         type: 'url',
@@ -140,8 +145,8 @@ export const mockContentCases: ContentCase[] = [
         content: 'https://maersk.com/digital/quantum-pilot-2024',
         createdAt: '2024-03-07T16:40:00.000Z',
         updatedAt: null,
-      },
-      {
+      }),
+      src({
         id: 'src-c1-5',
         contentCaseId: 'case-1',
         type: 'text',
@@ -149,12 +154,13 @@ export const mockContentCases: ContentCase[] = [
         content: 'Key insight from interview: quantum annealing is commercially viable for routing problems with 500+ nodes. Classical simulated annealing tops out around 200 nodes efficiently. Timeline to mainstream adoption: 3-5 years for early adopters, 8-10 years for industry standard.',
         createdAt: '2024-03-09T11:30:00.000Z',
         updatedAt: '2024-03-09T15:00:00.000Z',
-      },
+      }),
     ],
     outputs: makeOutputs('case-1'),
     pipeline: makePipeline('completed'),
     createdAt: '2024-03-01T09:00:00.000Z',
     updatedAt: '2024-03-10T10:00:00.000Z',
+    currentRun: null,
   },
 
   {
@@ -170,7 +176,7 @@ export const mockContentCases: ContentCase[] = [
     aiInstructions: 'Present multiple perspectives. Avoid taking strong political stances. Cite real examples where possible.',
     schedule: { frequency: 'weekly', time: '08:00', dayOfWeek: 3, dayOfMonth: null },
     sources: [
-      {
+      src({
         id: 'src-c2-1',
         contentCaseId: 'case-2',
         type: 'url',
@@ -178,8 +184,8 @@ export const mockContentCases: ContentCase[] = [
         content: 'https://eur-lex.europa.eu/ai-act',
         createdAt: '2024-02-20T10:00:00.000Z',
         updatedAt: null,
-      },
-      {
+      }),
+      src({
         id: 'src-c2-2',
         contentCaseId: 'case-2',
         type: 'text',
@@ -187,8 +193,8 @@ export const mockContentCases: ContentCase[] = [
         content: 'Large action models (LAMs) differ from LLMs in their ability to take real-world actions autonomously — booking appointments, executing code, making purchases. This creates fundamentally new accountability questions that existing AI regulation frameworks were not designed to address.',
         createdAt: '2024-02-22T14:30:00.000Z',
         updatedAt: null,
-      },
-      {
+      }),
+      src({
         id: 'src-c2-3',
         contentCaseId: 'case-2',
         type: 'pdf',
@@ -196,8 +202,8 @@ export const mockContentCases: ContentCase[] = [
         content: 'Stanford_HAI_Ethics_2024.pdf',
         createdAt: '2024-02-25T09:00:00.000Z',
         updatedAt: null,
-      },
-      {
+      }),
+      src({
         id: 'src-c2-4',
         contentCaseId: 'case-2',
         type: 'url',
@@ -205,7 +211,7 @@ export const mockContentCases: ContentCase[] = [
         content: 'https://openai.com/safety/preparedness',
         createdAt: '2024-03-01T11:15:00.000Z',
         updatedAt: null,
-      },
+      }),
     ],
     outputs: makeOutputs('case-2').map(o => ({
       ...o,
@@ -216,6 +222,7 @@ export const mockContentCases: ContentCase[] = [
     pipeline: makePipeline('completed'),
     createdAt: '2024-02-20T10:00:00.000Z',
     updatedAt: '2024-03-09T15:00:00.000Z',
+    currentRun: null,
   },
 
   {
@@ -231,7 +238,7 @@ export const mockContentCases: ContentCase[] = [
     aiInstructions: 'Emphasize human stories alongside data. Include actionable next steps for readers.',
     schedule: { frequency: 'monthly', time: '10:00', dayOfWeek: null, dayOfMonth: 1 },
     sources: [
-      {
+      src({
         id: 'src-c3-1',
         contentCaseId: 'case-3',
         type: 'text',
@@ -239,8 +246,8 @@ export const mockContentCases: ContentCase[] = [
         content: 'Solar energy costs have dropped 89% in the past decade. Tidal energy is emerging as a reliable baseload source for island nations. Key market: Pacific island nations spending 30–40% of GDP on imported fuel.',
         createdAt: '2024-03-01T08:00:00.000Z',
         updatedAt: null,
-      },
-      {
+      }),
+      src({
         id: 'src-c3-2',
         contentCaseId: 'case-3',
         type: 'url',
@@ -248,8 +255,8 @@ export const mockContentCases: ContentCase[] = [
         content: 'https://irena.org/publications/2024/renewables-cost',
         createdAt: '2024-03-04T13:00:00.000Z',
         updatedAt: null,
-      },
-      {
+      }),
+      src({
         id: 'src-c3-3',
         contentCaseId: 'case-3',
         type: 'text',
@@ -257,12 +264,13 @@ export const mockContentCases: ContentCase[] = [
         content: 'Tidal energy predictability is 95%+ accurate 18 months in advance — far better than solar or wind. The Maldives, Samoa, and Fiji are running tidal pilot programs. Estimated ROI: 15 years vs 25 for traditional grid infrastructure.',
         createdAt: '2024-03-08T09:45:00.000Z',
         updatedAt: '2024-03-08T11:00:00.000Z',
-      },
+      }),
     ],
     outputs: [],
     pipeline: makePipeline('fact_check'),
     createdAt: '2024-03-01T08:00:00.000Z',
     updatedAt: '2024-03-09T11:00:00.000Z',
+    currentRun: null,
   },
 
   {
@@ -278,7 +286,7 @@ export const mockContentCases: ContentCase[] = [
     aiInstructions: 'Focus on actionable advice. Use case studies. Keep posts under 300 words for social.',
     schedule: { frequency: 'weekly', time: '07:00', dayOfWeek: 5, dayOfMonth: null },
     sources: [
-      {
+      src({
         id: 'src-c4-1',
         contentCaseId: 'case-4',
         type: 'url',
@@ -286,12 +294,13 @@ export const mockContentCases: ContentCase[] = [
         content: 'https://stanford.edu/remote-work-2024',
         createdAt: '2024-03-10T09:00:00.000Z',
         updatedAt: null,
-      },
+      }),
     ],
     outputs: [],
     pipeline: makePipeline('research'),
     createdAt: '2024-03-10T08:30:00.000Z',
     updatedAt: '2024-03-10T09:00:00.000Z',
+    currentRun: null,
   },
 
   {
@@ -311,5 +320,6 @@ export const mockContentCases: ContentCase[] = [
     pipeline: makePipeline('idle'),
     createdAt: '2024-03-12T14:00:00.000Z',
     updatedAt: '2024-03-12T14:00:00.000Z',
+    currentRun: null,
   },
 ];

@@ -3,7 +3,25 @@ import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { Input, Textarea } from '../../components/ui/Input';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
-import type { ContentSource, SourceType } from '../../types';
+import type { ContentSource, SourceStatus, SourceType } from '../../types';
+
+// ── Source status badge ───────────────────────────────────
+
+const statusConfig: Record<SourceStatus, { label: string; cls: string }> = {
+  new:     { label: 'New',     cls: 'bg-green-100 text-green-700' },
+  used:    { label: 'Used',    cls: 'bg-surface-container-high text-on-surface-variant' },
+  ignored: { label: 'Ignored', cls: 'bg-surface-container text-outline' },
+  error:   { label: 'Error',   cls: 'bg-error-container/60 text-error' },
+};
+
+function SourceStatusBadge({ status }: { status: SourceStatus }) {
+  const cfg = statusConfig[status];
+  return (
+    <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -250,10 +268,13 @@ function SourceRow({ source, onDelete, onSaveEdit }: SourceRowProps) {
           ) : (
             <>
               <div className="flex items-center gap-2 flex-wrap mb-1">
-                <p className="text-[14px] font-medium text-on-surface">{source.label}</p>
+                <p className={`text-[14px] font-medium ${source.status === 'used' ? 'text-on-surface-variant' : 'text-on-surface'}`}>
+                  {source.label}
+                </p>
                 <span className="text-[10px] uppercase font-bold text-outline bg-surface-container px-1.5 py-0.5 rounded tracking-wider">
                   {source.type}
                 </span>
+                <SourceStatusBadge status={source.status} />
               </div>
 
               {source.type === 'url' ? (
@@ -276,10 +297,13 @@ function SourceRow({ source, onDelete, onSaveEdit }: SourceRowProps) {
                 </div>
               )}
 
-              <div className="flex items-center gap-3 mt-2">
+              <div className="flex items-center gap-3 mt-2 flex-wrap">
                 <span className="text-[11px] text-outline">Added {formatDate(source.createdAt)}</span>
                 {source.updatedAt && (
                   <span className="text-[11px] text-outline">· Edited {formatDate(source.updatedAt)}</span>
+                )}
+                {source.lastUsedAt && (
+                  <span className="text-[11px] text-outline">· Used {formatDate(source.lastUsedAt)}</span>
                 )}
               </div>
             </>
