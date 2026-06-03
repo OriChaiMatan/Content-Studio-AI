@@ -3,6 +3,7 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import cors from 'cors';
 import helmet from 'helmet';
 import { prisma } from './lib/prisma';
+import casesRouter from './api/routes/cases';
 
 const app = express();
 
@@ -31,6 +32,9 @@ app.use(
 // ── Body parsing ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// ── API routes ────────────────────────────────────────────────────────────────
+app.use('/api/cases', casesRouter);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 // Returns 200 when the server is up.

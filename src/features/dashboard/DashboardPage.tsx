@@ -51,7 +51,8 @@ const pipelineStatusIcon: Record<CaseStatus, string> = {
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const cases = useContentCasesStore(s => s.cases);
+  const cases      = useContentCasesStore(s => s.cases);
+  const loading    = useContentCasesStore(s => s.loading);
   const libraryItems = useLibraryStore(s => s.items);
   const user = useSettingsStore(s => s.user);
 
@@ -65,6 +66,14 @@ export function DashboardPage() {
       <TopBar title="Dashboard" />
 
       <main className="flex-1 p-8 space-y-8 overflow-y-auto">
+
+        {/* Loading overlay — shown only while initial fetch is in progress */}
+        {loading && cases.length === 0 && (
+          <div className="flex items-center gap-3 text-on-surface-variant">
+            <span className="material-symbols-outlined animate-spin">refresh</span>
+            <span className="text-[14px]">Loading dashboard…</span>
+          </div>
+        )}
 
         {/* Welcome */}
         <div className="flex items-start justify-between">

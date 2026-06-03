@@ -39,6 +39,7 @@ export function CreateCaseWizard() {
   const createCase = useContentCasesStore(s => s.createCase);
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<WizardFormData>(emptyForm);
+  const [creating, setCreating] = useState(false);
 
   function update<K extends keyof WizardFormData>(key: K, value: WizardFormData[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -52,9 +53,15 @@ export function CreateCaseWizard() {
     if (step > 0) setStep(s => s - 1);
   }
 
-  function handleCreate() {
-    const newCase = createCase(form);
-    navigate(`/cases/${newCase.id}/pipeline`);
+  async function handleCreate() {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const newCase = await createCase(form);
+      navigate(`/cases/${newCase.id}/pipeline`);
+    } finally {
+      setCreating(false);
+    }
   }
 
   const stepProps = { form, update };
@@ -133,9 +140,9 @@ export function CreateCaseWizard() {
                 <Icon name="arrow_forward" size="sm" />
               </Button>
             ) : (
-              <Button onClick={handleCreate} disabled={!form.title.trim()}>
+              <Button onClick={handleCreate} disabled={!form.title.trim() || creating} loading={creating}>
                 <Icon name="rocket_launch" size="sm" />
-                Create &amp; Launch Pipeline
+                {creating ? 'Creating…' : 'Create & Launch Pipeline'}
               </Button>
             )}
           </div>

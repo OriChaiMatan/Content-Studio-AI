@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
 import { CaseStatusBadge, PlatformBadge, OutputStatusBadge } from '../../components/ui/Badge';
@@ -10,12 +11,22 @@ import { useContentCasesStore } from '../../stores/contentCasesStore';
 export function ContentCaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const caseItem = useContentCasesStore(s => s.getCaseById(id ?? ''));
+  const caseItem    = useContentCasesStore(s => s.getCaseById(id ?? ''));
+  const loading     = useContentCasesStore(s => s.loading);
+  const fetchCaseById = useContentCasesStore(s => s.fetchCaseById);
+
+  // If the case isn't in the store yet, try fetching it directly (e.g. after page refresh).
+  useEffect(() => {
+    if (!caseItem && id) fetchCaseById(id);
+  }, [id, caseItem, fetchCaseById]);
 
   if (!caseItem) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-on-surface-variant">Case not found.</p>
+      <div className="flex-1 flex items-center justify-center gap-3 text-on-surface-variant">
+        {loading
+          ? <><span className="material-symbols-outlined animate-spin">refresh</span><span className="text-[14px]">Loading…</span></>
+          : <p className="text-[14px]">Case not found.</p>
+        }
       </div>
     );
   }

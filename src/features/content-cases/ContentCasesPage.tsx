@@ -23,7 +23,8 @@ const statusProgress: Record<CaseStatus, number> = {
 
 export function ContentCasesPage() {
   const navigate = useNavigate();
-  const cases = useContentCasesStore(s => s.cases);
+  const cases   = useContentCasesStore(s => s.cases);
+  const loading = useContentCasesStore(s => s.loading);
   const [statusFilter, setStatusFilter] = useState<CaseStatus | 'all'>('all');
   const [query, setQuery] = useState('');
 
@@ -58,6 +59,14 @@ export function ContentCasesPage() {
       />
 
       <main className="flex-1 p-8 overflow-y-auto">
+        {/* Loading state */}
+        {loading && cases.length === 0 && (
+          <div className="flex items-center justify-center py-24 gap-3 text-on-surface-variant">
+            <span className="material-symbols-outlined animate-spin">refresh</span>
+            <span className="text-[14px]">Loading cases…</span>
+          </div>
+        )}
+
         {/* Status filter chips */}
         <div className="flex flex-wrap gap-2 mb-6">
           {STATUS_FILTERS.map(f => (

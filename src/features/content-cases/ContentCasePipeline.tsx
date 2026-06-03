@@ -124,13 +124,18 @@ function ConnectorLine({ done }: { done: boolean }) {
 export function ContentCasePipeline() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const caseItem = useContentCasesStore(s => s.getCaseById(id ?? ''));
+  const caseItem      = useContentCasesStore(s => s.getCaseById(id ?? ''));
+  const loading       = useContentCasesStore(s => s.loading);
+  const fetchCaseById = useContentCasesStore(s => s.fetchCaseById);
   const advancePipeline = useContentCasesStore(s => s.advancePipeline);
   const runningStep = caseItem?.pipeline.find(s => s.status === 'running');
   const allDone     = caseItem?.pipeline.every(s => s.status === 'completed');
 
+  useEffect(() => {
+    if (!caseItem && id) fetchCaseById(id);
+  }, [id, caseItem, fetchCaseById]);
+
   // Auto-advance: whenever a step is "running", schedule its completion after 3 seconds.
-  // Depends on runningStep.id so it re-fires each time a new step becomes active.
   useEffect(() => {
     if (!runningStep || !id) return;
     const t = setTimeout(() => advancePipeline(id), 3000);
@@ -140,8 +145,11 @@ export function ContentCasePipeline() {
 
   if (!caseItem) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-on-surface-variant">Case not found.</p>
+      <div className="flex-1 flex items-center justify-center gap-3 text-on-surface-variant">
+        {loading
+          ? <><span className="material-symbols-outlined animate-spin">refresh</span><span className="text-[14px]">Loading…</span></>
+          : <p className="text-[14px]">Case not found.</p>
+        }
       </div>
     );
   }

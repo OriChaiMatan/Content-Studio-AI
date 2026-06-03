@@ -196,13 +196,22 @@ function OutputCard({ output, caseId, caseName, isActive, onSelect }: OutputCard
 export function ContentCaseReview() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const caseItem = useContentCasesStore(s => s.getCaseById(id ?? ''));
+  const caseItem      = useContentCasesStore(s => s.getCaseById(id ?? ''));
+  const loading       = useContentCasesStore(s => s.loading);
+  const fetchCaseById = useContentCasesStore(s => s.fetchCaseById);
   const [activePlatform, setActivePlatform] = useState<Platform>('linkedin');
+
+  useEffect(() => {
+    if (!caseItem && id) fetchCaseById(id);
+  }, [id, caseItem, fetchCaseById]);
 
   if (!caseItem) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-on-surface-variant">Case not found.</p>
+      <div className="flex-1 flex items-center justify-center gap-3 text-on-surface-variant">
+        {loading
+          ? <><span className="material-symbols-outlined animate-spin">refresh</span><span className="text-[14px]">Loading…</span></>
+          : <p className="text-[14px]">Case not found.</p>
+        }
       </div>
     );
   }
