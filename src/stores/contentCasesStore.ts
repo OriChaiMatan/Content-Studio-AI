@@ -24,10 +24,10 @@ interface ContentCasesState {
   deleteCase: (id: string) => void;
   getCaseById: (id: string) => ContentCase | undefined;
 
-  // ── Source management (Phase 3 will move these to the API) ────────────────
-  addSource: (caseId: string, source: NewSourceInput) => ContentSource;
-  updateSource: (caseId: string, sourceId: string, updates: { label?: string; content?: string }) => void;
-  deleteSource: (caseId: string, sourceId: string) => void;
+  // ── Source management — API-first, network-error fallback ───────────────────
+  addSource: (caseId: string, source: NewSourceInput) => Promise<ContentSource>;
+  updateSource: (caseId: string, sourceId: string, updates: { label?: string; content?: string }) => Promise<void>;
+  deleteSource: (caseId: string, sourceId: string) => Promise<void>;
 
   // ── Output actions (Phase 5 will move these to the API) ───────────────────
   updateOutputStatus: (caseId: string, outputId: string, status: OutputStatus) => void;
@@ -155,51 +155,103 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
 
   // ── Source management ────────────────────────────────────────────────────────
 
-  addSource: (caseId, sourceInput) => {
-    const now = new Date().toISOString();
-    const newSource: ContentSource = {
-      id: genId('src'),
-      contentCaseId: caseId,
-      type: sourceInput.type,
-      label: sourceInput.label || sourceInput.type,
-      content: sourceInput.content,
-      createdAt: now,
-      updatedAt: null,
-    };
-    set(state => ({
-      cases: state.cases.map(c =>
-        c.id !== caseId ? c : { ...c, sources: [...c.sources, newSource], updatedAt: now },
-      ),
-    }));
-    return newSource;
+  addSource: async (caseId, sourceInput) => {
+    try {
+      const newSource = await api.post<ContentSource>(
+        `/cases/${caseId}/sources`,
+        { type: sourceInput.type, label: sourceInput.label, content: sourceInput.content },
+      );
+      set(state => ({
+        cases: state.cases.map(c =>
+          c.id !== caseId ? c : {
+            ...c,
+            sources: [...c.sources, newSource],
+            updatedAt: new Date().toISOString(),
+          },
+        ),
+      }));
+      return newSource;
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      // Network fallback — keep working offline
+      const now = new Date().toISOString();
+      const local: ContentSource = {
+        id: genId('src'),
+        contentCaseId: caseId,
+        type: sourceInput.type,
+        label: sourceInput.label || sourceInput.type,
+        content: sourceInput.content,
+        createdAt: now,
+        updatedAt: null,
+      };
+      set(state => ({
+        cases: state.cases.map(c =>
+          c.id !== caseId ? c : { ...c, sources: [...c.sources, local], updatedAt: now },
+        ),
+      }));
+      return local;
+    }
   },
 
-  updateSource: (caseId, sourceId, updates) => {
-    const now = new Date().toISOString();
-    set(state => ({
-      cases: state.cases.map(c =>
-        c.id !== caseId ? c : {
-          ...c,
-          sources: c.sources.map(s =>
-            s.id !== sourceId ? s : { ...s, ...updates, updatedAt: now },
-          ),
-          updatedAt: now,
-        },
-      ),
-    }));
+  updateSource: async (caseId, sourceId, updates) => {
+    try {
+      const updated = await api.patch<ContentSource>(
+        `/cases/${caseId}/sources/${sourceId}`,
+        updates,
+      );
+      set(state => ({
+        cases: state.cases.map(c =>
+          c.id !== caseId ? c : {
+            ...c,
+            sources: c.sources.map(s => s.id !== sourceId ? s : updated),
+            updatedAt: new Date().toISOString(),
+          },
+        ),
+      }));
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      // Network fallback
+      const now = new Date().toISOString();
+      set(state => ({
+        cases: state.cases.map(c =>
+          c.id !== caseId ? c : {
+            ...c,
+            sources: c.sources.map(s =>
+              s.id !== sourceId ? s : { ...s, ...updates, updatedAt: now },
+            ),
+            updatedAt: now,
+          },
+        ),
+      }));
+    }
   },
 
-  deleteSource: (caseId, sourceId) => {
-    const now = new Date().toISOString();
-    set(state => ({
-      cases: state.cases.map(c =>
-        c.id !== caseId ? c : {
-          ...c,
-          sources: c.sources.filter(s => s.id !== sourceId),
-          updatedAt: now,
-        },
-      ),
-    }));
+  deleteSource: async (caseId, sourceId) => {
+    try {
+      await api.delete(`/cases/${caseId}/sources/${sourceId}`);
+      set(state => ({
+        cases: state.cases.map(c =>
+          c.id !== caseId ? c : {
+            ...c,
+            sources: c.sources.filter(s => s.id !== sourceId),
+            updatedAt: new Date().toISOString(),
+          },
+        ),
+      }));
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      // Network fallback
+      const now = new Date().toISOString();
+      set(state => ({
+        cases: state.cases.map(c =>
+          c.id !== caseId ? c : {
+            ...c,
+            sources: c.sources.filter(s => s.id !== sourceId),
+            updatedAt: now,
+          },
+        ),
+      }));
+    }
   },
 
   // ── Output actions ───────────────────────────────────────────────────────────

@@ -3,7 +3,8 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import cors from 'cors';
 import helmet from 'helmet';
 import { prisma } from './lib/prisma';
-import casesRouter from './api/routes/cases';
+import casesRouter   from './api/routes/cases';
+import sourcesRouter from './api/routes/sources';
 
 const app = express();
 
@@ -34,7 +35,12 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ── API routes ────────────────────────────────────────────────────────────────
+// Both routers mount at /api/cases. Express routes by segment depth:
+//   casesRouter   → /api/cases, /api/cases/:id           (1 segment)
+//   sourcesRouter → /api/cases/:id/sources, .../sources/:sourceId  (3 segments)
+// No conflicts — /:id only matches a single path segment.
 app.use('/api/cases', casesRouter);
+app.use('/api/cases', sourcesRouter);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 // Returns 200 when the server is up.

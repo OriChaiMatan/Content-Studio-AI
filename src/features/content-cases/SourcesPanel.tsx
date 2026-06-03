@@ -26,7 +26,7 @@ function formatDate(iso: string) {
 // ── Add-source inline form ────────────────────────────────
 
 interface AddFormProps {
-  onAdd: (type: SourceType, label: string, content: string) => void;
+  onAdd: (type: SourceType, label: string, content: string) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -34,10 +34,21 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
   const [type, setType]       = useState<SourceType>('text');
   const [label, setLabel]     = useState('');
   const [content, setContent] = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState<string | null>(null);
 
-  function handleSubmit() {
-    if (!content.trim()) return;
-    onAdd(type, label, content);
+  async function handleSubmit() {
+    if (!content.trim() || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onAdd(type, label, content);
+      // Form is closed by the parent on success
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add source. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -48,7 +59,7 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
           <button
             key={t.value}
             type="button"
-            onClick={() => { setType(t.value); setContent(''); }}
+            onClick={() => { setType(t.value); setContent(''); setError(null); }}
             className={[
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] font-medium transition-colors',
               type === t.value
@@ -62,7 +73,6 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
         ))}
       </div>
 
-      {/* Label */}
       <Input
         label="Label (optional)"
         type="text"
@@ -75,7 +85,6 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
         }
       />
 
-      {/* Content field */}
       {type === 'text' && (
         <Textarea
           label="Content *"
@@ -111,11 +120,21 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
         </div>
       )}
 
+      {/* Error message */}
+      {error && (
+        <div className="flex items-center gap-2 text-[12px] text-error bg-error-container/50 rounded-lg px-3 py-2">
+          <Icon name="error" size="sm" />
+          <span>{error}</span>
+        </div>
+      )}
+
       <div className="flex gap-2 justify-end">
-        <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={!content.trim()}>
+        <Button variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={handleSubmit} disabled={!content.trim() || saving} loading={saving}>
           <Icon name="add" size="sm" />
-          Add Source
+          {saving ? 'Saving…' : 'Add Source'}
         </Button>
       </div>
     </div>
@@ -126,41 +145,69 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
 
 interface SourceRowProps {
   source: ContentSource;
-  caseId: string;
-  onDelete: (id: string) => void;
-  onSaveEdit: (id: string, label: string, content: string) => void;
+  onDelete:   (id: string) => Promise<void>;
+  onSaveEdit: (id: string, label: string, content: string) => Promise<void>;
 }
 
-function SourceRow({ source, caseId: _caseId, onDelete, onSaveEdit }: SourceRowProps) {
-  const [editing, setEditing]   = useState(false);
-  const [editLabel, setEditLabel] = useState(source.label);
+function SourceRow({ source, onDelete, onSaveEdit }: SourceRowProps) {
+  const [editing, setEditing]         = useState(false);
+  const [editLabel, setEditLabel]     = useState(source.label);
   const [editContent, setEditContent] = useState(source.content);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded]       = useState(false);
+  const [saving, setSaving]           = useState(false);
+  const [deleting, setDeleting]       = useState(false);
+  const [saveError, setSaveError]     = useState<string | null>(null);
 
-  function handleSave() {
-    onSaveEdit(source.id, editLabel, editContent);
-    setEditing(false);
+  // Keep local edit state in sync with store updates (e.g. after save roundtrip)
+  // The key on this component resets on source id change; label/content sync on source prop change
+  const isText = source.type === 'text';
+  const isLong = source.content.length > 120;
+
+  async function handleSave() {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSaveEdit(source.id, editLabel, editContent);
+      setEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleCancelEdit() {
     setEditLabel(source.label);
     setEditContent(source.content);
+    setSaveError(null);
     setEditing(false);
   }
 
-  const isText = source.type === 'text';
-  const isLong = source.content.length > 120;
+  async function handleDelete() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await onDelete(source.id);
+      // Component unmounts on success (parent removes it from list)
+    } catch {
+      // Source stays visible if delete fails — user can retry
+      setDeleting(false);
+    }
+  }
 
   return (
-    <div className="border border-outline-variant/30 rounded-xl bg-surface-container-lowest overflow-hidden transition-all hover:shadow-sm">
-      {/* Header row */}
+    <div className={[
+      'border border-outline-variant/30 rounded-xl bg-surface-container-lowest overflow-hidden transition-all hover:shadow-sm',
+      deleting ? 'opacity-50' : '',
+    ].join(' ')}>
       <div className="flex items-start gap-3 p-4">
         {/* Type icon */}
         <div className="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-outline shrink-0 mt-0.5">
           <Icon name={sourceIcon(source.type)} size="sm" />
         </div>
 
-        {/* Content */}
+        {/* Content area */}
         <div className="flex-1 min-w-0">
           {editing ? (
             <div className="space-y-3">
@@ -184,12 +231,20 @@ function SourceRow({ source, caseId: _caseId, onDelete, onSaveEdit }: SourceRowP
                   placeholder={source.type === 'url' ? 'https://…' : 'filename.pdf'}
                 />
               )}
+              {saveError && (
+                <div className="flex items-center gap-2 text-[12px] text-error bg-error-container/50 rounded-lg px-3 py-2">
+                  <Icon name="error" size="sm" />
+                  <span>{saveError}</span>
+                </div>
+              )}
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleSave}>
+                <Button size="sm" onClick={handleSave} loading={saving} disabled={saving}>
                   <Icon name="save" size="sm" />
-                  Save
+                  {saving ? 'Saving…' : 'Save'}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={handleCancelEdit}>Cancel</Button>
+                <Button size="sm" variant="ghost" onClick={handleCancelEdit} disabled={saving}>
+                  Cancel
+                </Button>
               </div>
             </div>
           ) : (
@@ -201,7 +256,6 @@ function SourceRow({ source, caseId: _caseId, onDelete, onSaveEdit }: SourceRowP
                 </span>
               </div>
 
-              {/* Content preview */}
               {source.type === 'url' ? (
                 <p className="text-[12px] text-primary truncate">{source.content}</p>
               ) : source.type === 'pdf' ? (
@@ -222,7 +276,6 @@ function SourceRow({ source, caseId: _caseId, onDelete, onSaveEdit }: SourceRowP
                 </div>
               )}
 
-              {/* Timestamps */}
               <div className="flex items-center gap-3 mt-2">
                 <span className="text-[11px] text-outline">Added {formatDate(source.createdAt)}</span>
                 {source.updatedAt && (
@@ -233,7 +286,7 @@ function SourceRow({ source, caseId: _caseId, onDelete, onSaveEdit }: SourceRowP
           )}
         </div>
 
-        {/* Actions */}
+        {/* Action buttons — hidden while editing */}
         {!editing && (
           <div className="flex items-center gap-1 shrink-0">
             {isText && (
@@ -246,11 +299,15 @@ function SourceRow({ source, caseId: _caseId, onDelete, onSaveEdit }: SourceRowP
               </button>
             )}
             <button
-              onClick={() => onDelete(source.id)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-error-container hover:text-error transition-colors"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-40"
               title="Delete source"
             >
-              <Icon name="delete" size="sm" />
+              {deleting
+                ? <span className="material-symbols-outlined text-sm animate-spin">refresh</span>
+                : <Icon name="delete" size="sm" />
+              }
             </button>
           </div>
         )}
@@ -266,31 +323,34 @@ interface SourcesPanelProps {
 }
 
 export function SourcesPanel({ caseId }: SourcesPanelProps) {
-  const caseItem    = useContentCasesStore(s => s.getCaseById(caseId));
-  const addSource   = useContentCasesStore(s => s.addSource);
+  const caseItem     = useContentCasesStore(s => s.getCaseById(caseId));
+  const addSource    = useContentCasesStore(s => s.addSource);
   const updateSource = useContentCasesStore(s => s.updateSource);
   const deleteSource = useContentCasesStore(s => s.deleteSource);
   const [showForm, setShowForm] = useState(false);
 
   if (!caseItem) return null;
 
-  // Show most recently added sources first
+  // Most recently added first
   const sources = [...caseItem.sources].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
-  function handleAdd(type: SourceType, label: string, content: string) {
-    addSource(caseId, { type, label, content });
+  async function handleAdd(type: SourceType, label: string, content: string) {
+    await addSource(caseId, { type, label, content });
     setShowForm(false);
   }
 
-  function handleSaveEdit(sourceId: string, label: string, content: string) {
-    updateSource(caseId, sourceId, { label, content });
+  async function handleSaveEdit(sourceId: string, label: string, content: string) {
+    await updateSource(caseId, sourceId, { label, content });
+  }
+
+  async function handleDelete(id: string) {
+    await deleteSource(caseId, id);
   }
 
   return (
     <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm relative overflow-hidden">
-      {/* Accent bar */}
       <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
 
       <div className="pl-5 pr-5 pt-5 pb-5">
@@ -349,8 +409,7 @@ export function SourcesPanel({ caseId }: SourcesPanelProps) {
               <SourceRow
                 key={source.id}
                 source={source}
-                caseId={caseId}
-                onDelete={id => deleteSource(caseId, id)}
+                onDelete={handleDelete}
                 onSaveEdit={handleSaveEdit}
               />
             ))}
