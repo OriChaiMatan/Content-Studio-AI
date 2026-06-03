@@ -281,8 +281,9 @@ export function ContentCasePipeline() {
           </div>
 
           {/* Controls */}
-          <div className="mt-8 flex items-center gap-4">
-            {c.status === 'draft' && (
+          <div className="mt-8 flex flex-col gap-4">
+            {/* Initial start — only for brand-new draft cases */}
+            {c.status === 'draft' && !allDone && !runningStep && (
               <Button
                 fullWidth
                 onClick={handleStart}
@@ -294,20 +295,28 @@ export function ContentCasePipeline() {
               </Button>
             )}
 
+            {/* Running message */}
             {runningStep && !allDone && (
-              <div className="flex-1 text-center text-[14px] text-on-surface-variant">
+              <div className="text-center text-[14px] text-on-surface-variant">
                 Processing… simulating AI pipeline in the background.
               </div>
             )}
 
+            {/* Completion banner + Review button */}
             {allDone && (
-              <>
+              <div className="flex items-center gap-4">
                 <div className="flex-1 flex items-center gap-2 bg-green-50 border border-green-300 rounded-xl p-4">
                   <Icon name="check_circle" className="text-green-600" />
                   <div>
                     <p className="text-[14px] font-medium text-green-800">All steps complete!</p>
                     <p className="text-[12px] text-green-700">
-                      {c.outputs.length} draft{c.outputs.length !== 1 ? 's' : ''} generated and ready for review.
+                      {(() => {
+                        const currentRunId = c.currentRun?.id;
+                        const count = currentRunId
+                          ? c.outputs.filter(o => o.pipelineRunId === currentRunId).length
+                          : c.outputs.length;
+                        return `${count} draft${count !== 1 ? 's' : ''} generated and ready for review.`;
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -315,7 +324,35 @@ export function ContentCasePipeline() {
                   <Icon name="rate_review" size="sm" />
                   Review Outputs
                 </Button>
-              </>
+              </div>
+            )}
+
+            {/* Generate New Content — shown after a completed run when new sources exist */}
+            {allDone && !runningStep && hasNewSources && (
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={handleStart}
+                disabled={starting}
+                loading={starting}
+              >
+                <Icon name="autorenew" size="sm" />
+                {starting ? 'Starting new run…' : 'Generate New Content'}
+              </Button>
+            )}
+
+            {/* No new sources message after a completed run */}
+            {allDone && !runningStep && !hasNewSources && c.sources.length > 0 && (
+              <div className="flex items-start gap-3 rounded-xl p-4 border bg-surface-container-low border-outline-variant/30">
+                <Icon name="info" className="text-outline shrink-0 mt-0.5" />
+                <p className="text-[13px] text-on-surface-variant">
+                  No new sources available.{' '}
+                  <button onClick={() => navigate(`/cases/${c.id}`)} className="text-primary underline hover:no-underline">
+                    Add new sources
+                  </button>{' '}
+                  to generate new content.
+                </p>
+              </div>
             )}
           </div>
         </div>

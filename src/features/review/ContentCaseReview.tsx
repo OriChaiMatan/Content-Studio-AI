@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
 import { CaseStatusBadge, PlatformBadge, OutputStatusBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -232,14 +232,27 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
 export function ContentCaseReview() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Optional ?runId= param: if provided, show only that run's outputs.
+  // Used when navigating from the Library to view a specific historical run.
+  const runIdParam = searchParams.get('runId');
+
   const caseItem      = useContentCasesStore(s => s.getCaseById(id ?? ''));
   const loading       = useContentCasesStore(s => s.loading);
   const fetchCaseById = useContentCasesStore(s => s.fetchCaseById);
+  const refreshCase   = useContentCasesStore(s => s.refreshCase);
   const [activePlatform, setActivePlatform] = useState<Platform>('linkedin');
 
+  // When arriving from Library with a specific runId, ensure the full case is loaded.
   useEffect(() => {
-    if (!caseItem && id) fetchCaseById(id);
-  }, [id, caseItem, fetchCaseById]);
+    if (!caseItem && id) {
+      fetchCaseById(id);
+    } else if (caseItem && id && runIdParam) {
+      // Force refresh so approved outputs from older runs are present in the store
+      refreshCase(id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, runIdParam]);
 
   if (!caseItem) {
     return (
@@ -252,11 +265,15 @@ export function ContentCaseReview() {
   }
 
   const c = caseItem;
-  // Only show outputs from the current/most recent run so old approved outputs
-  // from previous runs don't clutter the review view.
-  const currentRunId   = c.currentRun?.id ?? null;
-  const reviewOutputs  = currentRunId
-    ? c.outputs.filter(o => o.pipelineRunId === currentRunId)
+
+  // Determine which run to display:
+  //   • ?runId= query param (from Library "Open Review" link) → show that specific run
+  //   • Otherwise → show the most recent (current) run
+  const targetRunId  = runIdParam ?? c.currentRun?.id ?? null;
+  const isHistorical = runIdParam !== null && runIdParam !== c.currentRun?.id;
+
+  const reviewOutputs = targetRunId
+    ? c.outputs.filter(o => o.pipelineRunId === targetRunId)
     : c.outputs;
 
   const approvedCount = reviewOutputs.filter(o => o.status === 'approved').length;
@@ -289,6 +306,21 @@ export function ContentCaseReview() {
       />
 
       <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Historical run banner */}
+        {isHistorical && (
+          <div className="px-8 py-2.5 bg-secondary-container/40 border-b border-outline-variant flex items-center gap-3 text-[13px] text-on-secondary-container">
+            <Icon name="history" size="sm" />
+            <span>Viewing outputs from a previous run.{' '}
+              <button
+                onClick={() => navigate(`/cases/${c.id}/review`)}
+                className="font-bold underline hover:no-underline"
+              >
+                Switch to current run
+              </button>
+            </span>
+          </div>
+        )}
+
         {/* Progress + source context */}
         <div className="px-8 py-4 bg-surface-container-low border-b border-outline-variant flex items-center gap-6 flex-wrap">
           <div className="flex-1 min-w-[200px]">

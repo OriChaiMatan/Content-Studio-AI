@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
 import { PlatformBadge } from '../../components/ui/Badge';
 import { Icon } from '../../components/ui/Icon';
@@ -46,6 +47,7 @@ function OutputItem({ item }: { item: LibraryItem }) {
 
 function RunCard({ group }: { group: LibraryRunGroup }) {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
 
   const runDate = new Date(group.runDate).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
@@ -98,10 +100,23 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
           </div>
         </div>
 
-        <Icon
-          name={open ? 'expand_less' : 'expand_more'}
-          className="text-outline shrink-0 mt-1"
-        />
+        <div className="flex items-center gap-2 shrink-0 mt-0.5" onClick={e => e.stopPropagation()}>
+          {group.runId && (
+            <button
+              type="button"
+              onClick={() => navigate(`/cases/${group.caseId}/review?runId=${group.runId}`)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-surface-container hover:bg-secondary-container hover:text-on-secondary-container transition-colors"
+              title="Open Review page for this run"
+            >
+              <Icon name="rate_review" size="sm" />
+              Open Review
+            </button>
+          )}
+          <Icon
+            name={open ? 'expand_less' : 'expand_more'}
+            className="text-outline"
+          />
+        </div>
       </button>
 
       {/* Expanded output items */}
