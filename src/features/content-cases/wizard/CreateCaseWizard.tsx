@@ -40,9 +40,11 @@ export function CreateCaseWizard() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<WizardFormData>(emptyForm);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   function update<K extends keyof WizardFormData>(key: K, value: WizardFormData[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
+    setCreateError(null); // clear any previous error on form change
   }
 
   function handleNext() {
@@ -56,9 +58,13 @@ export function CreateCaseWizard() {
   async function handleCreate() {
     if (creating) return;
     setCreating(true);
+    setCreateError(null);
     try {
       const newCase = await createCase(form);
       navigate(`/cases/${newCase.id}/pipeline`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create case. Please try again.';
+      setCreateError(message);
     } finally {
       setCreating(false);
     }
@@ -126,6 +132,14 @@ export function CreateCaseWizard() {
             {step === 4 && <Step5Schedule {...stepProps} />}
             {step === 5 && <Step6Review form={form} onEdit={setStep} />}
           </div>
+
+          {/* Error banner — shown when case creation fails */}
+          {createError && (
+            <div className="mt-4 flex items-start gap-3 bg-error-container/60 border border-error/20 rounded-xl px-4 py-3">
+              <span className="material-symbols-outlined text-error text-base shrink-0 mt-0.5">error</span>
+              <p className="text-[13px] text-on-error-container">{createError}</p>
+            </div>
+          )}
 
           {/* Navigation */}
           <div className="flex justify-between mt-6">

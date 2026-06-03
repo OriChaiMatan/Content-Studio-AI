@@ -71,10 +71,10 @@ export function Step5Schedule({ form, update }: Props) {
                   <button
                     key={day}
                     type="button"
-                    onClick={() => update('schedule', { ...form.schedule, dayOfWeek: i + 1 })}
+                    onClick={() => update('schedule', { ...form.schedule, dayOfWeek: i })}
                     className={[
                       'w-10 h-10 rounded-lg text-[12px] font-bold transition-all',
-                      form.schedule.dayOfWeek === i + 1
+                      form.schedule.dayOfWeek === i
                         ? 'bg-primary text-on-primary'
                         : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high',
                     ].join(' ')}

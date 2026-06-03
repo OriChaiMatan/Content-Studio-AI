@@ -3,7 +3,7 @@ import type {
   ContentCase, ContentSource, OutputStatus, SourceType, WizardFormData, PipelineStep,
 } from '../types';
 import { mockContentCases } from '../data/mockContentCases';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 
 type NewSourceInput = { type: SourceType; label: string; content: string };
 
@@ -58,8 +58,13 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
     try {
       const { cases } = await api.get<{ cases: ContentCase[] }>('/cases');
       set({ cases, loading: false });
-    } catch {
-      // API unavailable — fall back to mock data so the UI stays usable.
+    } catch (err) {
+      // Fall back to mock data only on network errors (backend unreachable).
+      // On ApiError the backend is running — still fall back so the UI works,
+      // but log the error for debugging.
+      if (err instanceof ApiError) {
+        console.warn('[fetchCases] API error', err.status, err.message);
+      }
       set({ cases: mockContentCases, loading: false });
     }
   },
@@ -99,8 +104,14 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
       });
       set(state => ({ cases: [newCase, ...state.cases] }));
       return newCase;
-    } catch {
-      // API unavailable — create locally so the user's work is not lost.
+    } catch (err) {
+      // Only fall back to a local mock case when the backend is genuinely
+      // unreachable (TypeError = network failure, e.g. server not running).
+      // For ApiError (4xx / 5xx) the server IS running — re-throw so the
+      // wizard can surface the real error message to the user.
+      if (err instanceof ApiError) throw err;
+
+      // Network error fallback — lets the wizard still complete offline.
       const now = new Date().toISOString();
       const caseId = genId('case');
       const mockCase: ContentCase = {
