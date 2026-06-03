@@ -372,14 +372,22 @@ export function ContentCaseReview() {
 
         {/* Content area */}
         <div className="flex-1 overflow-y-auto p-8">
-          {c.outputs.length === 0 ? (
+          {reviewOutputs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <Icon name="auto_awesome" size="xl" className="text-outline mb-4" />
-              <p className="text-[16px] font-medium text-on-surface-variant">No outputs generated yet.</p>
-              <p className="text-[14px] text-outline mt-1">Run the pipeline first to generate content.</p>
-              <Button className="mt-6" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
-                Go to Pipeline
-              </Button>
+              <p className="text-[16px] font-medium text-on-surface-variant">
+                {isHistorical ? 'No outputs found for this run.' : 'No outputs generated yet.'}
+              </p>
+              <p className="text-[14px] text-outline mt-1">
+                {isHistorical
+                  ? 'This run may have been cleared or its outputs are unavailable.'
+                  : 'Run the pipeline first to generate content.'}
+              </p>
+              {!isHistorical && (
+                <Button className="mt-6" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
+                  Go to Pipeline
+                </Button>
+              )}
             </div>
           ) : (
             <div className="max-w-3xl mx-auto space-y-4">

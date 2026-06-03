@@ -315,7 +315,7 @@ export function ContentCasePipeline() {
                         const count = currentRunId
                           ? c.outputs.filter(o => o.pipelineRunId === currentRunId).length
                           : c.outputs.length;
-                        return `${count} draft${count !== 1 ? 's' : ''} generated and ready for review.`;
+                        return `${count} output${count !== 1 ? 's' : ''} generated and ready for review.`;
                       })()}
                     </p>
                   </div>

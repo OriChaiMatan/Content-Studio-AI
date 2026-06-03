@@ -1,3 +1,3 @@
 export { mockUser } from './mockUser';
 export { mockContentCases } from './mockContentCases';
-export { mockLibraryItems } from './mockLibraryItems';
+// mockLibraryItems removed — library data is now loaded from the API (libraryStore.fetchLibrary)

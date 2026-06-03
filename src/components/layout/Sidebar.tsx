@@ -67,9 +67,9 @@ export function Sidebar() {
         <button
           onClick={() => navigate('/settings')}
           className="text-on-surface-variant hover:text-primary transition-colors"
-          title="Logout"
+          title="Settings"
         >
-          <Icon name="logout" size="sm" />
+          <Icon name="settings" size="sm" />
         </button>
       </div>
     </aside>

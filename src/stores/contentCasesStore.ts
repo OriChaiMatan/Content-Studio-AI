@@ -77,7 +77,8 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
   },
 
   fetchCaseById: async (id: string) => {
-    // If the case is already in the store, don't re-fetch.
+    // Skip if case is already loaded — avoids redundant requests on remount.
+    // Use refreshCase() when a forced re-fetch is needed (e.g. after approval).
     if (get().cases.find(c => c.id === id)) return;
     try {
       const c = await api.get<ContentCase>(`/cases/${id}`);
