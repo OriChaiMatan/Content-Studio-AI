@@ -244,6 +244,13 @@ model PipelineRun {
   completedAt      DateTime?
   errorMessage     String?       @db.Text
 
+  // ── AI Pipeline Contract artifacts ───────────────────────────────────────────
+  // Populated stage-by-stage as the pipeline advances.
+  // Null until that stage completes. Replaced by real AI responses in Phase 8.
+  researchContext  Json?         // ResearchContext — Stage 1 output
+  factCheckReport  Json?         // FactCheckReport — Stage 2 output
+  contentPackage   Json?         // ContentPackage  — Stage 3 output (all 6 platforms + 2 image prompts)
+
   contentCase      ContentCase   @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
   outputs          ContentOutput[]
   jobs             PipelineJob[]
