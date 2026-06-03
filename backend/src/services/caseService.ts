@@ -42,6 +42,7 @@ function serializeOutput(o: ContentOutput) {
   return {
     id:                 o.id,
     contentCaseId:      o.contentCaseId,
+    pipelineRunId:      o.pipelineRunId,
     platform:           o.platform,
     title:              o.title,
     body:               o.body,

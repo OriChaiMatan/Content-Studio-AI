@@ -89,6 +89,7 @@ export interface PipelineStep {
 export interface ContentOutput {
   id: string;
   contentCaseId: string;
+  pipelineRunId: string | null; // which run produced this output
   platform: Platform;
   title: string;
   body: string;
@@ -142,18 +143,33 @@ export interface ContentCase {
 }
 
 // ── LibraryItem ────────────────────────────────────────────
-// Maps to: library_items view / table (approved outputs surfaced globally)
+// One approved ContentOutput stored permanently in the Library.
+// Each item belongs to exactly one Pipeline Run.
 export interface LibraryItem {
   id: string;
   contentCaseId: string;
   contentCaseName: string;
   outputId: string;
+  pipelineRunId: string | null; // which run produced this item
   platform: Platform;
   title: string;
   body: string;
   status: OutputStatus;
   version: string;
-  date: string;            // ISO 8601
+  date: string;                 // ISO 8601
+}
+
+// ── LibraryRunGroup ─────────────────────────────────────────
+// Library items grouped by Pipeline Run — used for run-based Library display.
+export interface LibraryRunGroup {
+  runId: string | null;         // null for legacy items without a run
+  caseId: string;
+  caseTitle: string;
+  runDate: string;              // ISO 8601
+  approvedCount: number;
+  platforms: Platform[];
+  sourceCount: number;
+  items: LibraryItem[];
 }
 
 // ── User ───────────────────────────────────────────────────

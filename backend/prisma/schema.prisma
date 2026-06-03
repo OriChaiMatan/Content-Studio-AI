@@ -247,6 +247,7 @@ model PipelineRun {
   contentCase      ContentCase   @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
   outputs          ContentOutput[]
   jobs             PipelineJob[]
+  libraryItems     LibraryItem[]
 
   @@index([contentCaseId, startedAt(sort: Desc)])
   @@map("pipeline_runs")
@@ -275,12 +276,14 @@ model PipelineJob {
 }
 
 // LibraryItem — approved outputs surfaced in the global Library.
-// Automatically upserted when a ContentOutput status is set to 'approved'.
-// Removed when an output is rejected or the output is deleted.
+// Created when a ContentOutput is approved; removed on rejection.
+// pipelineRunId links the item to its originating run for run-grouped display.
+// Multiple runs for the same case each produce their own set of LibraryItems.
 model LibraryItem {
   id            String        @id @default(cuid())
   contentCaseId String
   outputId      String        @unique
+  pipelineRunId String?                    // which run produced this item (null for legacy items)
   platform      Platform
   title         String
   body          String        @db.Text
@@ -290,8 +293,10 @@ model LibraryItem {
 
   contentCase   ContentCase   @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
   output        ContentOutput @relation(fields: [outputId], references: [id], onDelete: Cascade)
+  pipelineRun   PipelineRun?  @relation(fields: [pipelineRunId], references: [id], onDelete: SetNull)
 
   @@index([contentCaseId])
+  @@index([pipelineRunId])
   @@index([platform, status])
   @@map("library_items")
 }

@@ -79,6 +79,7 @@ function makeOutputs(caseId: string): ContentOutput[] {
   return platforms.map((platform, i) => ({
     id: `output-${caseId}-${platform}`,
     contentCaseId: caseId,
+    pipelineRunId: `mock-run-${caseId}`,
     platform,
     title: data[platform].title,
     body: data[platform].body,

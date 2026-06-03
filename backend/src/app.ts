@@ -6,6 +6,8 @@ import { prisma } from './lib/prisma';
 import casesRouter    from './api/routes/cases';
 import sourcesRouter  from './api/routes/sources';
 import pipelineRouter from './api/routes/pipeline';
+import outputsRouter  from './api/routes/outputs';
+import libraryRouter  from './api/routes/library';
 
 const app = express();
 
@@ -44,6 +46,10 @@ app.use('/api/cases', casesRouter);
 app.use('/api/cases', sourcesRouter);
 // pipeline routes: /:id/pipeline, /:id/pipeline/start, /:id/pipeline/advance
 app.use('/api/cases', pipelineRouter);
+// output routes: /:caseId/outputs/:outputId, .../status, .../regenerate
+app.use('/api/cases', outputsRouter);
+// library: grouped-by-run view of approved outputs
+app.use('/api/library', libraryRouter);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 // Returns 200 when the server is up.

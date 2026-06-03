@@ -121,8 +121,11 @@ export const pipelineService = {
         data:  { status: 'running', startedAt: new Date() },
       });
 
-      // Delete any previous outputs so the case starts fresh
-      await tx.contentOutput.deleteMany({ where: { contentCaseId: caseId } });
+      // Delete only draft/rejected outputs from previous runs.
+      // Approved outputs are permanently in the Library and must never be removed.
+      await tx.contentOutput.deleteMany({
+        where: { contentCaseId: caseId, status: { not: 'approved' } },
+      });
 
       // Advance case status
       await tx.contentCase.update({

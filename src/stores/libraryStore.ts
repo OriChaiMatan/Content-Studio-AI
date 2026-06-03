@@ -1,56 +1,47 @@
 import { create } from 'zustand';
-import type { LibraryItem, Platform, OutputStatus } from '../types';
-import { mockLibraryItems } from '../data/mockLibraryItems';
-
-interface LibraryFilters {
-  caseId: string;
-  platform: Platform | 'all';
-  status: OutputStatus | 'all';
-  query: string;
-}
+import type { LibraryRunGroup } from '../types';
+import { api } from '../lib/api';
 
 interface LibraryState {
-  items: LibraryItem[];
-  filters: LibraryFilters;
-  viewMode: 'grid' | 'list';
+  runs: LibraryRunGroup[];
+  loading: boolean;
+  query: string;
 
-  setFilter: <K extends keyof LibraryFilters>(key: K, value: LibraryFilters[K]) => void;
-  setViewMode: (mode: 'grid' | 'list') => void;
-  addItem: (item: LibraryItem) => void;
-  filteredItems: () => LibraryItem[];
+  fetchLibrary: () => Promise<void>;
+  setQuery: (q: string) => void;
+  filteredRuns: () => LibraryRunGroup[];
 }
 
 export const useLibraryStore = create<LibraryState>()((set, get) => ({
-  items: mockLibraryItems,
-  filters: { caseId: 'all', platform: 'all', status: 'all', query: '' },
-  viewMode: 'grid',
+  runs:    [],
+  loading: false,
+  query:   '',
 
-  setFilter: (key, value) =>
-    set(state => ({ filters: { ...state.filters, [key]: value } })),
+  fetchLibrary: async () => {
+    set({ loading: true });
+    try {
+      const { runs } = await api.get<{ runs: LibraryRunGroup[] }>('/library');
+      set({ runs, loading: false });
+    } catch {
+      // Silently fail — keep whatever was already loaded
+      set({ loading: false });
+    }
+  },
 
-  setViewMode: (mode) => set({ viewMode: mode }),
+  setQuery: (query) => set({ query }),
 
-  addItem: (item) =>
-    set(state => {
-      // Prevent duplicates — update existing entry if outputId already exists
-      const exists = state.items.some(i => i.outputId === item.outputId);
-      if (exists) {
-        return { items: state.items.map(i => i.outputId === item.outputId ? item : i) };
-      }
-      return { items: [item, ...state.items] };
-    }),
-
-  filteredItems: () => {
-    const { items, filters } = get();
-    return items.filter(item => {
-      if (filters.caseId !== 'all' && item.contentCaseId !== filters.caseId) return false;
-      if (filters.platform !== 'all' && item.platform !== filters.platform) return false;
-      if (filters.status !== 'all' && item.status !== filters.status) return false;
-      if (filters.query) {
-        const q = filters.query.toLowerCase();
-        if (!item.title.toLowerCase().includes(q) && !item.body.toLowerCase().includes(q)) return false;
-      }
-      return true;
-    });
+  filteredRuns: () => {
+    const { runs, query } = get();
+    if (!query) return runs;
+    const q = query.toLowerCase();
+    return runs.filter(r =>
+      r.caseTitle.toLowerCase().includes(q) ||
+      r.items.some(i => i.title.toLowerCase().includes(q) || i.body.toLowerCase().includes(q)),
+    );
   },
 }));
+
+// Load library data on module import
+queueMicrotask(() => {
+  useLibraryStore.getState().fetchLibrary();
+});

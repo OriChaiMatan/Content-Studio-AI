@@ -1,183 +1,206 @@
+import { useState } from 'react';
 import { TopBar } from '../../components/layout/TopBar';
-import { PlatformBadge, OutputStatusBadge } from '../../components/ui/Badge';
+import { PlatformBadge } from '../../components/ui/Badge';
 import { Icon } from '../../components/ui/Icon';
 import { useLibraryStore } from '../../stores/libraryStore';
-import { useContentCasesStore } from '../../stores/contentCasesStore';
-import type { Platform, OutputStatus } from '../../types';
+import type { LibraryRunGroup, LibraryItem } from '../../types';
 
-const PLATFORM_OPTIONS: { value: Platform | 'all'; label: string }[] = [
-  { value: 'all',          label: 'All Types' },
-  { value: 'linkedin',     label: 'LinkedIn' },
-  { value: 'facebook',     label: 'Facebook' },
-  { value: 'instagram',    label: 'Instagram' },
-  { value: 'newsletter',   label: 'Newsletter' },
-  { value: 'podcast',      label: 'Podcast' },
-  { value: 'image_prompt', label: 'Image Prompt' },
-];
+// ── Individual output item (inside an expanded run card) ──
 
-const STATUS_OPTIONS: { value: OutputStatus | 'all'; label: string }[] = [
-  { value: 'all',      label: 'All Status' },
-  { value: 'draft',    label: 'Draft' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-];
+function OutputItem({ item }: { item: LibraryItem }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = item.body.length > 200;
 
-// Green bar = approved, grey = draft/rejected
-function statusBarClass(status: OutputStatus) {
-  return status === 'approved'
-    ? 'border-l-4 border-green-400'
-    : 'border-l-4 border-slate-300';
+  return (
+    <div className="border border-outline-variant/20 rounded-lg bg-surface-container-lowest overflow-hidden">
+      <div className="flex items-start justify-between p-3 gap-3">
+        <div className="flex items-center gap-2 shrink-0">
+          <PlatformBadge platform={item.platform} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-medium text-on-surface truncate">{item.title}</p>
+          <p className={`text-[12px] text-on-surface-variant mt-0.5 ${!expanded && isLong ? 'line-clamp-2' : ''}`}>
+            {item.body}
+          </p>
+          {isLong && (
+            <button onClick={() => setExpanded(e => !e)} className="text-[11px] text-primary mt-1 hover:underline">
+              {expanded ? 'Show less' : 'Show more'}
+            </button>
+          )}
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <button
+            onClick={() => navigator.clipboard?.writeText(item.body)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors"
+            title="Copy to clipboard"
+          >
+            <Icon name="content_copy" size="sm" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-export function LibraryPage() {
-  const { filters, viewMode, setFilter, setViewMode, filteredItems } = useLibraryStore();
-  const cases = useContentCasesStore(s => s.cases);
-  const items = filteredItems();
+// ── Run card ──────────────────────────────────────────────
 
-  const caseOptions = [
-    { value: 'all', label: 'All Cases' },
-    ...cases.map(c => ({ value: c.id, label: c.title })),
-  ];
+function RunCard({ group }: { group: LibraryRunGroup }) {
+  const [open, setOpen] = useState(false);
+
+  const runDate = new Date(group.runDate).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
+  const runTime = new Date(group.runDate).toLocaleTimeString('en-US', {
+    hour: '2-digit', minute: '2-digit',
+  });
+
+  return (
+    <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm overflow-hidden transition-all hover:shadow-md">
+      {/* Card header — always visible */}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full text-left px-5 py-4 flex items-start gap-4"
+      >
+        {/* Run status dot */}
+        <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
+          <Icon name="check_circle" size="sm" className="text-green-700" />
+        </div>
+
+        {/* Run info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <p className="text-[15px] font-medium text-on-surface">{group.caseTitle}</p>
+            <span className="text-[11px] text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full">
+              {runDate} · {runTime}
+            </span>
+          </div>
+
+          {/* Platform chips */}
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {group.platforms.map(p => (
+              <PlatformBadge key={p} platform={p} />
+            ))}
+          </div>
+
+          {/* Stats row */}
+          <div className="flex items-center gap-4 mt-2 text-[11px] text-on-surface-variant">
+            <span className="flex items-center gap-1">
+              <Icon name="check_circle" size="sm" className="text-green-600" />
+              <span><span className="font-bold text-on-surface">{group.approvedCount}</span> approved</span>
+            </span>
+            {group.sourceCount > 0 && (
+              <span className="flex items-center gap-1">
+                <Icon name="article" size="sm" className="text-outline" />
+                <span><span className="font-bold text-on-surface">{group.sourceCount}</span> source{group.sourceCount !== 1 ? 's' : ''}</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        <Icon
+          name={open ? 'expand_less' : 'expand_more'}
+          className="text-outline shrink-0 mt-1"
+        />
+      </button>
+
+      {/* Expanded output items */}
+      {open && (
+        <div className="border-t border-outline-variant/20 px-5 pb-4 pt-3 space-y-2">
+          <p className="text-[11px] text-outline uppercase font-bold tracking-wider mb-2">
+            Approved outputs from this run
+          </p>
+          {group.items.map(item => (
+            <OutputItem key={item.id} item={item} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────
+
+export function LibraryPage() {
+  const { runs, loading, filteredRuns, setQuery, fetchLibrary } = useLibraryStore();
+
+  const displayRuns = filteredRuns();
 
   return (
     <>
       <TopBar
         title="Library"
         searchPlaceholder="Search approved content..."
-        onSearch={q => setFilter('query', q)}
+        onSearch={setQuery}
+        actions={
+          <button
+            onClick={fetchLibrary}
+            disabled={loading}
+            className="text-on-surface-variant hover:text-primary transition-colors"
+            title="Refresh"
+          >
+            <span className={`material-symbols-outlined ${loading ? 'animate-spin' : ''}`}>refresh</span>
+          </button>
+        }
       />
 
-      <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto p-8 bg-surface">
 
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-4 mb-8">
-            {/* Case filter */}
-            <div className="flex items-center gap-2 bg-surface-container px-4 py-2 rounded-lg border border-outline-variant">
-              <span className="text-[14px] font-medium">Filter by Case:</span>
-              <select
-                value={filters.caseId}
-                onChange={e => setFilter('caseId', e.target.value)}
-                className="bg-transparent border-none text-[14px] font-sans pr-4 cursor-pointer"
-              >
-                {caseOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+          {/* Stats bar */}
+          {runs.length > 0 && (
+            <div className="flex items-center gap-6 mb-6 text-[13px] text-on-surface-variant">
+              <span>
+                <span className="font-bold text-on-surface">{runs.length}</span> pipeline run{runs.length !== 1 ? 's' : ''} in library
+              </span>
+              <span>
+                <span className="font-bold text-on-surface">
+                  {runs.reduce((n, r) => n + r.approvedCount, 0)}
+                </span> total approved outputs
+              </span>
+            </div>
+          )}
+
+          {/* Run list */}
+          {loading && runs.length === 0 ? (
+            <div className="flex items-center justify-center py-24 gap-3 text-on-surface-variant">
+              <span className="material-symbols-outlined animate-spin">refresh</span>
+              <span className="text-[14px]">Loading library…</span>
             </div>
 
-            {/* Platform filter */}
-            <div className="flex items-center gap-2 bg-surface-container px-4 py-2 rounded-lg border border-outline-variant">
-              <span className="text-[14px] font-medium">Content Type:</span>
-              <select
-                value={filters.platform}
-                onChange={e => setFilter('platform', e.target.value as Platform | 'all')}
-                className="bg-transparent border-none text-[14px] font-sans pr-4 cursor-pointer"
-              >
-                {PLATFORM_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-
-            {/* Status filter */}
-            <div className="flex items-center gap-2 bg-surface-container px-4 py-2 rounded-lg border border-outline-variant">
-              <span className="text-[14px] font-medium">Status:</span>
-              <select
-                value={filters.status}
-                onChange={e => setFilter('status', e.target.value as OutputStatus | 'all')}
-                className="bg-transparent border-none text-[14px] font-sans pr-4 cursor-pointer"
-              >
-                {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-
-            {/* View mode */}
-            <div className="ml-auto flex gap-2">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-secondary-container text-on-secondary-container' : 'hover:bg-surface-variant/50'}`}
-              >
-                <Icon name="grid_view" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-secondary-container text-on-secondary-container' : 'hover:bg-surface-variant/50'}`}
-              >
-                <Icon name="list" />
-              </button>
-            </div>
-          </div>
-
-          {/* Grid */}
-          <div className={viewMode === 'grid'
-            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-            : 'flex flex-col gap-3'
-          }>
-            {items.map(item => (
-              <div
-                key={item.id}
-                className={`group bg-surface-container-low rounded-xl p-4 flex flex-col gap-4 transition-all border border-outline-variant/30 hover:-translate-y-0.5 hover:shadow-md ${statusBarClass(item.status)}`}
-              >
-                <div className="flex justify-between items-start">
-                  <PlatformBadge platform={item.platform} />
-                  <OutputStatusBadge status={item.status} />
-                </div>
-
-                <div>
-                  <h3 className="text-[16px] font-medium text-on-surface mb-1">{item.title}</h3>
-                  <p className="text-[14px] text-on-surface-variant line-clamp-2">{item.body}</p>
-                </div>
-
-                <div className="mt-auto pt-4 border-t border-outline-variant flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-outline tracking-wider">Case</span>
-                    <span className="text-[14px] font-medium">{item.contentCaseName}</span>
-                  </div>
-                  <div className="flex flex-col text-right">
-                    <span className="text-[10px] uppercase font-bold text-outline tracking-wider">{item.version}</span>
-                    <span className="text-[11px] text-on-surface-variant/60">
-                      {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Hover actions */}
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="flex-1 py-2 bg-primary text-on-primary rounded-lg font-bold text-xs flex items-center justify-center gap-1">
-                    <Icon name="open_in_new" size="sm" />
-                    Open
-                  </button>
-                  <button className="px-3 py-2 border border-outline rounded-lg text-xs font-bold hover:bg-surface-variant/30 transition-colors">
-                    <Icon name="content_copy" size="sm" />
-                  </button>
-                  <button className="px-3 py-2 border border-outline rounded-lg text-xs font-bold hover:bg-surface-variant/30 transition-colors">
-                    <Icon name="ios_share" size="sm" />
-                  </button>
-                </div>
+          ) : displayRuns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
+                <Icon name="auto_stories" size="xl" className="text-outline" />
               </div>
-            ))}
-
-            {/* Empty state / add card */}
-            <div className="border-2 border-dashed border-outline-variant rounded-xl p-4 flex flex-col items-center justify-center gap-4 hover:bg-surface-container/50 cursor-pointer transition-colors min-h-[220px]">
-              <div className="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-outline">
-                <Icon name="note_add" size="lg" />
-              </div>
-              <p className="text-[14px] font-medium text-outline">Add Content to Library</p>
+              <p className="text-[16px] font-medium text-on-surface-variant">
+                {runs.length > 0 ? 'No results for your search' : 'Library is empty'}
+              </p>
+              <p className="text-[14px] text-outline mt-1">
+                {runs.length > 0
+                  ? 'Try a different search term.'
+                  : 'Approve outputs from the Review page to save them here.'}
+              </p>
             </div>
-          </div>
+
+          ) : (
+            <div className="space-y-4 max-w-3xl">
+              {displayRuns.map(group => (
+                <RunCard
+                  key={group.runId ?? `solo-${group.items[0]?.outputId}`}
+                  group={group}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Pagination footer */}
-        <footer className="h-16 px-8 bg-surface-container-low flex items-center justify-between border-t border-outline-variant shrink-0">
+        {/* Footer */}
+        <footer className="h-14 px-8 bg-surface-container-low flex items-center border-t border-outline-variant">
           <p className="text-[11px] text-on-surface-variant">
-            Showing 1–{items.length} of {items.length} items
+            {displayRuns.reduce((n, r) => n + r.approvedCount, 0)} approved outputs across{' '}
+            {displayRuns.length} run{displayRuns.length !== 1 ? 's' : ''}
           </p>
-          <div className="flex items-center gap-2">
-            <button className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-variant transition-colors opacity-30" disabled>
-              <Icon name="chevron_left" size="sm" />
-            </button>
-            <button className="w-8 h-8 rounded-full bg-primary text-on-primary text-xs font-bold">1</button>
-            <button className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-variant transition-colors">
-              <Icon name="chevron_right" size="sm" />
-            </button>
-          </div>
         </footer>
       </div>
     </>

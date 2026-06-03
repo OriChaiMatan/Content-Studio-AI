@@ -19,7 +19,7 @@ const platformIcon: Record<Platform, string> = {
   image_prompt: 'image',
 };
 
-// ── Score pill ─────────────────────────────────────────────
+// ── Score pill ────────────────────────────────────────────
 
 function ScorePill({ label, value, icon }: { label: string; value: number; icon: string }) {
   const color = value >= 90 ? 'text-green-700 bg-green-100' : value >= 75 ? 'text-primary bg-primary-fixed/50' : 'text-outline bg-surface-container';
@@ -31,59 +31,78 @@ function ScorePill({ label, value, icon }: { label: string; value: number; icon:
   );
 }
 
-// ── Output card ────────────────────────────────────────────
+// ── Output card ───────────────────────────────────────────
 
 interface OutputCardProps {
   output: ContentOutput;
   caseId: string;
-  caseName: string;
   isActive: boolean;
   onSelect: () => void;
 }
 
-function OutputCard({ output, caseId, caseName, isActive, onSelect }: OutputCardProps) {
-  const [editing, setEditing] = useState(false);
-  const [body, setBody] = useState(output.body);
+function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
+  const [editing, setEditing]   = useState(false);
+  const [body, setBody]         = useState(output.body);
+  const [approving, setApproving] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+
+  const updateOutputStatus = useContentCasesStore(s => s.updateOutputStatus);
+  const updateOutputBody   = useContentCasesStore(s => s.updateOutputBody);
+  const regenerateOutput   = useContentCasesStore(s => s.regenerateOutput);
+  const refreshCase        = useContentCasesStore(s => s.refreshCase);
+  const fetchLibrary       = useLibraryStore(s => s.fetchLibrary);
 
   // Keep local edit state in sync when the store updates (e.g. after Regenerate)
   useEffect(() => {
     setBody(output.body);
     setEditing(false);
   }, [output.body]);
-  const { updateOutputStatus, updateOutputBody, regenerateOutput } = useContentCasesStore();
-  const addLibraryItem = useLibraryStore(s => s.addItem);
 
-  function handleApprove() {
-    updateOutputStatus(caseId, output.id, 'approved');
-    // Sync to library
-    addLibraryItem({
-      id: `lib-${output.id}`,
-      contentCaseId: caseId,
-      contentCaseName: caseName,
-      outputId: output.id,
-      platform: output.platform,
-      title: output.title,
-      body: output.body,
-      status: 'approved',
-      version: output.version,
-      date: new Date().toISOString(),
-    });
-    setEditing(false);
+  async function handleApprove() {
+    if (approving) return;
+    setApproving(true);
+    try {
+      await updateOutputStatus(caseId, output.id, 'approved');
+      // Refresh case to get updated source statuses
+      await refreshCase(caseId);
+      // Refresh library to include the new LibraryItem
+      await fetchLibrary();
+    } finally {
+      setApproving(false);
+    }
   }
 
-  function handleReject() {
-    updateOutputStatus(caseId, output.id, 'rejected');
-    setEditing(false);
+  async function handleReject() {
+    if (rejecting) return;
+    setRejecting(true);
+    try {
+      await updateOutputStatus(caseId, output.id, 'rejected');
+    } finally {
+      setRejecting(false);
+    }
   }
 
-  function handleSaveEdit() {
-    updateOutputBody(caseId, output.id, body);
-    setEditing(false);
+  async function handleSaveEdit() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await updateOutputBody(caseId, output.id, body);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleRegenerate() {
-    regenerateOutput(caseId, output.id);
-    setEditing(false);
+  async function handleRegenerate() {
+    if (regenerating) return;
+    setRegenerating(true);
+    try {
+      await regenerateOutput(caseId, output.id);
+    } finally {
+      setRegenerating(false);
+    }
   }
 
   const statusBorderColor = {
@@ -92,12 +111,14 @@ function OutputCard({ output, caseId, caseName, isActive, onSelect }: OutputCard
     rejected: 'border-l-error',
   }[output.status];
 
+  const busy = approving || rejecting || saving || regenerating;
+
   return (
     <div
       className={`rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-sm border-l-4 ${statusBorderColor} cursor-pointer transition-all hover:shadow-md ${isActive ? 'ring-2 ring-primary' : ''}`}
       onClick={onSelect}
     >
-      {/* Card header */}
+      {/* Header */}
       <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-outline">
@@ -116,13 +137,13 @@ function OutputCard({ output, caseId, caseName, isActive, onSelect }: OutputCard
       {/* Scores */}
       {output.contentScore !== null && (
         <div className="px-5 pb-3 flex flex-wrap gap-1.5">
-          <ScorePill label="Content"    value={output.contentScore}         icon="star" />
+          <ScorePill label="Content"    value={output.contentScore!}         icon="star" />
           <ScorePill label="Research"   value={output.researchConfidence!}  icon="search" />
           <ScorePill label="Fact Check" value={output.factCheckAccuracy!}   icon="fact_check" />
         </div>
       )}
 
-      {/* Body — collapsed unless active */}
+      {/* Body */}
       <div className="px-5 pb-4">
         {isActive ? (
           editing ? (
@@ -144,7 +165,7 @@ function OutputCard({ output, caseId, caseName, isActive, onSelect }: OutputCard
         )}
       </div>
 
-      {/* Actions — only when active */}
+      {/* Actions — only on active card */}
       {isActive && (
         <div
           className="border-t border-outline-variant/30 px-5 py-3 flex gap-2 flex-wrap"
@@ -152,35 +173,50 @@ function OutputCard({ output, caseId, caseName, isActive, onSelect }: OutputCard
         >
           {editing ? (
             <>
-              <Button size="sm" onClick={handleSaveEdit}>
+              <Button size="sm" onClick={handleSaveEdit} loading={saving} disabled={busy}>
                 <Icon name="save" size="sm" />
-                Save Edit
+                {saving ? 'Saving…' : 'Save Edit'}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setBody(output.body); }}>
+              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setBody(output.body); }} disabled={busy}>
                 Cancel
               </Button>
             </>
           ) : (
             <>
-              <Button size="sm" variant="outline" onClick={() => setEditing(true)} disabled={output.status === 'approved'}>
+              <Button size="sm" variant="outline"
+                onClick={() => setEditing(true)}
+                disabled={output.status === 'approved' || busy}
+              >
                 <Icon name="edit" size="sm" />
                 Edit
               </Button>
-              <Button size="sm" variant="outline" onClick={handleRegenerate}>
+              <Button size="sm" variant="outline"
+                onClick={handleRegenerate}
+                loading={regenerating}
+                disabled={busy}
+              >
                 <Icon name="refresh" size="sm" />
-                Regenerate
+                {regenerating ? 'Regenerating…' : 'Regenerate'}
               </Button>
               <div className="flex-1" />
               {output.status !== 'rejected' && (
-                <Button size="sm" variant="danger" onClick={handleReject}>
+                <Button size="sm" variant="danger"
+                  onClick={handleReject}
+                  loading={rejecting}
+                  disabled={busy}
+                >
                   <Icon name="cancel" size="sm" />
-                  Reject
+                  {rejecting ? 'Rejecting…' : 'Reject'}
                 </Button>
               )}
               {output.status !== 'approved' && (
-                <Button size="sm" onClick={handleApprove}>
+                <Button size="sm"
+                  onClick={handleApprove}
+                  loading={approving}
+                  disabled={busy}
+                >
                   <Icon name="check_circle" size="sm" />
-                  Approve
+                  {approving ? 'Approving…' : 'Approve'}
                 </Button>
               )}
             </>
@@ -191,7 +227,7 @@ function OutputCard({ output, caseId, caseName, isActive, onSelect }: OutputCard
   );
 }
 
-// ── Page ───────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────
 
 export function ContentCaseReview() {
   const { id } = useParams<{ id: string }>();
@@ -210,18 +246,23 @@ export function ContentCaseReview() {
       <div className="flex-1 flex items-center justify-center gap-3 text-on-surface-variant">
         {loading
           ? <><span className="material-symbols-outlined animate-spin">refresh</span><span className="text-[14px]">Loading…</span></>
-          : <p className="text-[14px]">Case not found.</p>
-        }
+          : <p className="text-[14px]">Case not found.</p>}
       </div>
     );
   }
 
   const c = caseItem;
-  const approvedCount = c.outputs.filter(o => o.status === 'approved').length;
-  const totalCount    = c.outputs.length;
+  // Only show outputs from the current/most recent run so old approved outputs
+  // from previous runs don't clutter the review view.
+  const currentRunId   = c.currentRun?.id ?? null;
+  const reviewOutputs  = currentRunId
+    ? c.outputs.filter(o => o.pipelineRunId === currentRunId)
+    : c.outputs;
 
-  // Sort outputs by PLATFORM_ORDER
-  const sortedOutputs = [...c.outputs].sort((a, b) =>
+  const approvedCount = reviewOutputs.filter(o => o.status === 'approved').length;
+  const totalCount    = reviewOutputs.length;
+
+  const sortedOutputs = [...reviewOutputs].sort((a, b) =>
     PLATFORM_ORDER.indexOf(a.platform) - PLATFORM_ORDER.indexOf(b.platform),
   );
 
@@ -248,7 +289,7 @@ export function ContentCaseReview() {
       />
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Sub-header: progress + source context */}
+        {/* Progress + source context */}
         <div className="px-8 py-4 bg-surface-container-low border-b border-outline-variant flex items-center gap-6 flex-wrap">
           <div className="flex-1 min-w-[200px]">
             <div className="flex items-center justify-between text-[13px] text-on-surface-variant mb-1.5">
@@ -262,15 +303,12 @@ export function ContentCaseReview() {
               />
             </div>
           </div>
-
-          {/* Source count used in this generation */}
           {c.sources.length > 0 && (
             <div className="flex items-center gap-2 text-[12px] text-on-surface-variant bg-surface-container px-3 py-1.5 rounded-lg border border-outline-variant/30">
               <Icon name="article" size="sm" className="text-outline" />
               <span>Generated from <span className="font-bold text-on-surface">{c.sources.length}</span> source{c.sources.length !== 1 ? 's' : ''}</span>
             </div>
           )}
-
           {approvedCount === totalCount && totalCount > 0 && (
             <div className="flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-xl">
               <Icon name="celebration" size="sm" />
@@ -313,19 +351,15 @@ export function ContentCaseReview() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto space-y-4">
-              {/* Active platform: full card */}
               {activeOutput && (
                 <OutputCard
                   key={activeOutput.id}
                   output={activeOutput}
                   caseId={c.id}
-                  caseName={c.title}
                   isActive
                   onSelect={() => {}}
                 />
               )}
-
-              {/* Other platforms: compact preview */}
               {sortedOutputs.filter(o => o.platform !== resolvedPlatform).length > 0 && (
                 <div>
                   <h4 className="text-[12px] font-bold uppercase tracking-wider text-outline mb-3">Other Outputs</h4>
@@ -337,7 +371,6 @@ export function ContentCaseReview() {
                           key={output.id}
                           output={output}
                           caseId={c.id}
-                          caseName={c.title}
                           isActive={false}
                           onSelect={() => setActivePlatform(output.platform)}
                         />

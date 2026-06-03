@@ -53,12 +53,12 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const cases      = useContentCasesStore(s => s.cases);
   const loading    = useContentCasesStore(s => s.loading);
-  const libraryItems = useLibraryStore(s => s.items);
+  const libraryRuns  = useLibraryStore(s => s.runs);
   const user = useSettingsStore(s => s.user);
 
   const inReview    = cases.filter(c => c.status === 'in_review').length;
   const inProgress  = cases.filter(c => ['research', 'fact_check', 'generating'].includes(c.status)).length;
-  const approved    = libraryItems.filter(i => i.status === 'approved').length;
+  const approved    = libraryRuns.reduce((n, r) => n + r.approvedCount, 0);
   const recentCases = [...cases].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
 
   return (

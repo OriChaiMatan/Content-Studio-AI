@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  ContentCase, ContentSource, OutputStatus, SourceType, WizardFormData,
+  ContentCase, ContentOutput, ContentSource, OutputStatus, SourceType, WizardFormData,
 } from '../types';
 import { mockContentCases } from '../data/mockContentCases';
 import { api, ApiError } from '../lib/api';
@@ -28,10 +28,13 @@ interface ContentCasesState {
   updateSource: (caseId: string, sourceId: string, updates: { label?: string; content?: string }) => Promise<void>;
   deleteSource: (caseId: string, sourceId: string) => Promise<void>;
 
-  // ── Output actions (Phase 5 will move these to the API) ───────────────────
-  updateOutputStatus: (caseId: string, outputId: string, status: OutputStatus) => void;
-  updateOutputBody: (caseId: string, outputId: string, body: string) => void;
-  regenerateOutput: (caseId: string, outputId: string) => void;
+  // ── Output actions — API-backed ────────────────────────────────────────────
+  updateOutputStatus: (caseId: string, outputId: string, status: OutputStatus) => Promise<ContentOutput>;
+  updateOutputBody: (caseId: string, outputId: string, body: string) => Promise<ContentOutput>;
+  regenerateOutput: (caseId: string, outputId: string) => Promise<ContentOutput>;
+
+  // ── Case refresh — force re-fetch from DB (e.g. after approval changes sources) ──
+  refreshCase: (id: string) => Promise<void>;
 
   // ── Pipeline — API-backed (replaced advancePipeline) ──────────────────────
   // startPipeline: creates PipelineRun with source selection, starts research step.
@@ -263,48 +266,67 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
     }
   },
 
-  // ── Output actions ───────────────────────────────────────────────────────────
+  // ── Output actions — API-backed ──────────────────────────────────────────────
 
-  updateOutputStatus: (caseId, outputId, status) =>
+  updateOutputStatus: async (caseId, outputId, status) => {
+    const updated = await api.patch<ContentOutput>(
+      `/cases/${caseId}/outputs/${outputId}/status`,
+      { status },
+    );
     set(state => ({
       cases: state.cases.map(c =>
         c.id !== caseId ? c : {
           ...c,
-          outputs: c.outputs.map(o =>
-            o.id !== outputId ? o : { ...o, status, reviewedAt: new Date().toISOString() },
-          ),
+          outputs: c.outputs.map(o => o.id !== outputId ? o : updated),
         },
       ),
-    })),
+    }));
+    return updated;
+  },
 
-  updateOutputBody: (caseId, outputId, body) =>
+  updateOutputBody: async (caseId, outputId, body) => {
+    const updated = await api.patch<ContentOutput>(
+      `/cases/${caseId}/outputs/${outputId}`,
+      { body },
+    );
     set(state => ({
       cases: state.cases.map(c =>
         c.id !== caseId ? c : {
           ...c,
-          outputs: c.outputs.map(o => o.id !== outputId ? o : { ...o, body }),
+          outputs: c.outputs.map(o => o.id !== outputId ? o : updated),
         },
       ),
-    })),
+    }));
+    return updated;
+  },
 
-  regenerateOutput: (caseId, outputId) =>
+  regenerateOutput: async (caseId, outputId) => {
+    const updated = await api.post<ContentOutput>(
+      `/cases/${caseId}/outputs/${outputId}/regenerate`,
+      {},
+    );
     set(state => ({
       cases: state.cases.map(c =>
         c.id !== caseId ? c : {
           ...c,
-          outputs: c.outputs.map(o =>
-            o.id !== outputId ? o : {
-              ...o,
-              status: 'draft',
-              body: o.body + '\n\n[Regenerated version — AI would replace this content]',
-              version: bumpVersion(o.version),
-              generatedAt: new Date().toISOString(),
-              reviewedAt: null,
-            },
-          ),
+          outputs: c.outputs.map(o => o.id !== outputId ? o : updated),
         },
       ),
-    })),
+    }));
+    return updated;
+  },
+
+  // Force re-fetch a case from the API — used after approval changes source statuses
+  refreshCase: async (id) => {
+    try {
+      const c = await api.get<ContentCase>(`/cases/${id}`);
+      set(state => ({
+        cases: state.cases.map(existing => existing.id === id ? c : existing),
+      }));
+    } catch {
+      // Silently fail — stale data is acceptable here
+    }
+  },
 
   // ── Pipeline ─────────────────────────────────────────────────────────────────
 
@@ -365,12 +387,6 @@ function _offlineAdvance(
       ),
     }));
   }
-}
-
-function bumpVersion(version: string): string {
-  const match = version.match(/^v(\d+)\.(\d+)\.(\d+)$/);
-  if (!match) return version;
-  return `v${match[1]}.${match[2]}.${parseInt(match[3]) + 1}`;
 }
 
 // Trigger initial data load as soon as the store module is imported.
