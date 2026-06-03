@@ -121,11 +121,10 @@ export const pipelineService = {
         data:  { status: 'running', startedAt: new Date() },
       });
 
-      // Delete only draft/rejected outputs from previous runs.
-      // Approved outputs are permanently in the Library and must never be removed.
-      await tx.contentOutput.deleteMany({
-        where: { contentCaseId: caseId, status: { not: 'approved' } },
-      });
+      // Outputs from previous runs are intentionally preserved.
+      // Each run's outputs (draft, rejected, approved) belong to that run permanently.
+      // The Review page filters by pipelineRunId, so old outputs never appear in the
+      // current-run view. The Library shows only approved outputs regardless.
 
       // Advance case status
       await tx.contentCase.update({

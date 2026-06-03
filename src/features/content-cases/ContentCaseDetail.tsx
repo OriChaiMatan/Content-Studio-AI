@@ -139,7 +139,14 @@ export function ContentCaseDetail() {
                 <Icon name="auto_awesome" className="text-outline" size="sm" />
                 Outputs
               </h4>
-              {c.outputs.length === 0 ? (
+              {(() => {
+                // Only show outputs from the current (most recent) run.
+                // Outputs from older runs are preserved in DB but shown via the Library.
+                const currentRunId = c.currentRun?.id;
+                const currentOutputs = currentRunId
+                  ? c.outputs.filter(o => o.pipelineRunId === currentRunId)
+                  : c.outputs;
+                return currentOutputs.length === 0 ? (
                 <div className="flex flex-col items-center py-6 text-center gap-2">
                   <Icon name="pending" size="xl" className="text-outline" />
                   <p className="text-[13px] text-on-surface-variant">
@@ -150,7 +157,7 @@ export function ContentCaseDetail() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {c.outputs.map(output => (
+                  {currentOutputs.map(output => (
                     <div key={output.id} className="flex items-center gap-2 py-2 border-b border-outline-variant/20 last:border-0">
                       <PlatformBadge platform={output.platform} />
                       <div className="flex-1" />
@@ -164,7 +171,8 @@ export function ContentCaseDetail() {
                     </Button>
                   )}
                 </div>
-              )}
+              );
+              })()}
             </Card>
 
             <Card className="p-5">

@@ -145,7 +145,7 @@ export function DashboardPage() {
                   <p className="text-[13px] text-on-surface-variant mb-4 line-clamp-2">{c.goals}</p>
                   <div className="flex items-center justify-between">
                     <span className="text-[12px] text-on-surface-variant">
-                      {c.outputs.filter(o => o.status === 'draft').length} drafts pending
+                      {c.outputs.filter(o => o.status === 'draft' && (!c.currentRun || o.pipelineRunId === c.currentRun.id)).length} drafts pending
                     </span>
                     <Button size="sm" onClick={(e) => { e.stopPropagation(); navigate(`/cases/${c.id}/review`); }}>
                       Review Now

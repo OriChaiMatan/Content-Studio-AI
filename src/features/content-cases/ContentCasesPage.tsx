@@ -107,7 +107,12 @@ export function ContentCasesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filtered.map(c => {
               const progress = statusProgress[c.status];
-              const approvedCount = c.outputs.filter(o => o.status === 'approved').length;
+              // Count only current-run outputs to avoid accumulating across multiple runs
+              const currentRunId  = c.currentRun?.id;
+              const currentOutputs = currentRunId
+                ? c.outputs.filter(o => o.pipelineRunId === currentRunId)
+                : c.outputs;
+              const approvedCount = currentOutputs.filter(o => o.status === 'approved').length;
 
               return (
                 <div
@@ -144,7 +149,7 @@ export function ContentCasesPage() {
                       </div>
                       <div className="flex items-center gap-1">
                         <Icon name="check_circle" size="sm" className={approvedCount > 0 ? 'text-primary' : 'text-outline'} />
-                        <span>{approvedCount}/{c.outputs.length} approved</span>
+                        <span>{approvedCount}/{currentOutputs.length} approved</span>
                       </div>
                       <div className="flex items-center gap-1 ml-auto">
                         <Icon name="schedule" size="sm" className="text-outline" />
