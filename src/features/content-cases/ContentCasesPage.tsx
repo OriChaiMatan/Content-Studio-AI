@@ -5,7 +5,14 @@ import { CaseStatusBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
-import type { CaseStatus } from '../../types';
+import type { CaseStatus, ContentGoal } from '../../types';
+
+const GOAL_LABELS: Record<ContentGoal, string> = {
+  build_authority: 'Build Authority', generate_leads: 'Generate Leads',
+  increase_sales: 'Increase Sales', educate_audience: 'Educate Audience',
+  grow_community: 'Grow Community', personal_branding: 'Personal Branding',
+  other: 'Other',
+};
 
 const STATUS_FILTERS: { value: CaseStatus | 'all'; label: string }[] = [
   { value: 'all',       label: 'All' },
@@ -139,7 +146,9 @@ export function ContentCasesPage() {
                     </div>
 
                     {/* Goals */}
-                    <p className="text-[13px] text-on-surface-variant line-clamp-2 mb-4">{c.goals || c.targetAudience}</p>
+                    <p className="text-[13px] text-on-surface-variant line-clamp-2 mb-4">
+                      {c.goals || c.targetAudience || GOAL_LABELS[c.contentGoal]}
+                    </p>
 
                     {/* Meta row */}
                     <div className="flex items-center gap-4 text-[12px] text-on-surface-variant border-t border-outline-variant/30 pt-3">

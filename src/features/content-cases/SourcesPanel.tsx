@@ -3,7 +3,55 @@ import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { Input, Textarea } from '../../components/ui/Input';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
-import type { ContentSource, SourceStatus, SourceType } from '../../types';
+import type { ContentSource, SourceStatus, SourceType, SourceIntelligence } from '../../types';
+
+// ── Source Intelligence section ──────────────────────────
+
+function IntelligenceSection({ intel }: { intel: SourceIntelligence }) {
+  const [open, setOpen] = useState(false);
+  const sentimentColor = {
+    positive: 'text-green-700', negative: 'text-error',
+    neutral: 'text-on-surface-variant', mixed: 'text-outline',
+  }[intel.sentiment];
+
+  return (
+    <div className="mt-2 border-t border-outline-variant/20 pt-2">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 text-[11px] text-primary font-medium hover:underline"
+      >
+        <Icon name={open ? 'expand_less' : 'expand_more'} size="sm" />
+        Source Intelligence
+        <span className="text-outline font-normal">· {intel.confidenceScore}% confidence</span>
+      </button>
+      {open && (
+        <div className="mt-2 bg-surface-container-low rounded-lg p-3 space-y-2">
+          <p className="text-[12px] text-on-surface">{intel.summary}</p>
+          {intel.topics.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              <span className="text-[10px] font-bold text-outline uppercase mr-1">Topics:</span>
+              {intel.topics.slice(0, 5).map(t => (
+                <span key={t} className="text-[11px] bg-secondary-container/40 text-on-secondary-container px-1.5 py-0.5 rounded font-medium">{t}</span>
+              ))}
+            </div>
+          )}
+          {intel.keywords.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              <span className="text-[10px] font-bold text-outline uppercase mr-1">Keywords:</span>
+              {intel.keywords.slice(0, 5).map(k => (
+                <span key={k} className="text-[10px] bg-surface-container text-on-surface-variant px-1.5 py-0.5 rounded">{k}</span>
+              ))}
+            </div>
+          )}
+          <p className={`text-[11px] font-medium ${sentimentColor}`}>
+            Sentiment: {intel.sentiment}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Source status badge ───────────────────────────────────
 
@@ -306,6 +354,11 @@ function SourceRow({ source, onDelete, onSaveEdit }: SourceRowProps) {
                   <span className="text-[11px] text-outline">· Used {formatDate(source.lastUsedAt)}</span>
                 )}
               </div>
+
+              {/* Source Intelligence section */}
+              {source.sourceIntelligence && (
+                <IntelligenceSection intel={source.sourceIntelligence} />
+              )}
             </>
           )}
         </div>

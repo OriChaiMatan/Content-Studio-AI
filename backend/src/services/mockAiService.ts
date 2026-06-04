@@ -1,4 +1,5 @@
 import type { ContentCase, ContentSource, PipelineRun } from '@prisma/client';
+import type { SourceIntelligence } from '../schemas/aiContractSchemas';
 import {
   ResearchContextSchema,
   FactCheckReportSchema,
@@ -49,10 +50,42 @@ function industryHashtags(industry: string, title: string): string[] {
 function snippetFromSource(source: ContentSource): string {
   if (source.type === 'url') return `Source: ${source.content}`;
   if (source.type === 'pdf') return `Document: ${source.content}`;
-  // text source: use first 100 chars
   return source.content.length > 100
     ? source.content.slice(0, 100).trimEnd() + '…'
     : source.content;
+}
+
+// Use source intelligence if available; fall back to raw snippet
+function describeSource(source: ContentSource): string {
+  const si = source.sourceIntelligence as SourceIntelligence | null;
+  if (si?.summary) return si.summary;
+  return snippetFromSource(source);
+}
+
+// Extract topics from source intelligence or derive from label
+function sourceTopics(source: ContentSource): string[] {
+  const si = source.sourceIntelligence as SourceIntelligence | null;
+  if (si?.topics?.length) return si.topics;
+  return source.label.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
+}
+
+// Extract claims from source intelligence or derive from content
+function sourceClaims(source: ContentSource): string[] {
+  const si = source.sourceIntelligence as SourceIntelligence | null;
+  if (si?.claims?.length) return si.claims;
+  return source.type === 'text'
+    ? [`From "${source.label}": ${snippetFromSource(source)}`]
+    : [];
+}
+
+// Average confidence from source intelligence; default 80
+function avgConfidence(sources: ContentSource[]): number {
+  const scores = sources
+    .map(s => (s.sourceIntelligence as SourceIntelligence | null)?.confidenceScore)
+    .filter((n): n is number => typeof n === 'number');
+  return scores.length > 0
+    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    : 80;
 }
 
 // ── Stage 1: Research Context ─────────────────────────────────────────────────
@@ -78,23 +111,28 @@ export function generateResearchContext(
       `Processed ${primaryCount} primary source${primaryCount !== 1 ? 's' : ''}` +
       (contextCount > 0 ? ` with ${contextCount} contextual reference${contextCount !== 1 ? 's' : ''} for consistency.` : '.'),
 
+    // Use source intelligence topics to enrich the main topics list
     mainTopics: [
       titleCase(keywords[0] ?? title) + ' landscape overview',
       'Key developments and trends in ' + industry,
       'Implications for ' + targetAudience,
-      ...(keywords.slice(1).map(k => titleCase(k) + ' in context')),
-    ].slice(0, 5),
+      ...primarySources.flatMap(sourceTopics).slice(0, 3).map(t => titleCase(t) + ' analysis'),
+    ].filter((t, i, arr) => arr.indexOf(t) === i).slice(0, 5),
 
     keyInsights: [
       `${titleCase(keywords[0] ?? 'The topic')} is reshaping how ${targetAudience} approach their work.`,
       `Early adopters in ${industry} are already seeing measurable results.`,
-      `The primary sources reveal ${primaryCount} distinct data points supporting the core thesis.`,
+      `Source intelligence across ${primaryCount} primary source${primaryCount !== 1 ? 's' : ''} reveals consistent patterns.`,
       goals ? `The stated goal — "${goals.slice(0, 80)}" — is well-supported by the evidence.` : 'The evidence strongly supports the content goals.',
     ].filter(Boolean).slice(0, 4),
 
-    importantClaims: primarySources.flatMap(s => [
-      s.label ? `From "${s.label}": ${snippetFromSource(s)}` : snippetFromSource(s),
-    ]).slice(0, Math.min(primaryCount + 2, 8)),
+    // Source intelligence claims first; fall back to raw content snippet
+    importantClaims: primarySources
+      .flatMap(s => {
+        const claims = sourceClaims(s);
+        return claims.length > 0 ? claims : [`From "${s.label}": ${describeSource(s)}`];
+      })
+      .slice(0, Math.min(primaryCount * 2, 8)),
 
     suggestedAngles: [
       `The ROI perspective: quantifying ${keywords[0] ?? 'the impact'} for ${targetAudience}`,
@@ -123,7 +161,8 @@ export function generateResearchContext(
       'Ensure industry-specific claims are current at the time of publishing.',
     ],
 
-    confidenceScore: Math.min(95, 80 + primaryCount * 3),
+    // Confidence derived from source intelligence scores; capped at 95
+    confidenceScore: Math.min(95, avgConfidence(primarySources) + primaryCount * 2),
   };
 
   return ResearchContextSchema.parse(context);

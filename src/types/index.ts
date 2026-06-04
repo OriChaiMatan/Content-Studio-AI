@@ -8,6 +8,31 @@ export type Language = 'en' | 'he';
 
 export type SourceType = 'text' | 'url' | 'pdf';
 
+// Simplified wizard — Goal options
+export type ContentGoal =
+  | 'build_authority' | 'generate_leads' | 'increase_sales'
+  | 'educate_audience' | 'grow_community' | 'personal_branding' | 'other';
+
+// Simplified wizard — Content style options
+export type ContentStyle =
+  | 'professional' | 'authoritative' | 'friendly' | 'personal'
+  | 'journalistic' | 'provocative' | 'humorous' | 'other';
+
+// Simplified wizard — which platforms to generate outputs for
+// Note: 'images' maps to the 'image_prompt' platform in the DB
+export type ContentTarget =
+  | 'linkedin' | 'facebook' | 'instagram' | 'newsletter' | 'podcast' | 'images';
+
+// Deterministic mock analysis generated per source on create/edit
+export interface SourceIntelligence {
+  summary:         string;
+  topics:          string[];
+  keywords:        string[];
+  claims:          string[];
+  sentiment:       'positive' | 'negative' | 'neutral' | 'mixed';
+  confidenceScore: number; // 0–100
+}
+
 // Lifecycle of a ContentSource.
 // new     → just added, available as primary material for the next run
 // used    → consumed as primary source; marked used on approval (Phase 5)
@@ -49,6 +74,7 @@ export interface ContentSource {
   status: SourceStatus;     // lifecycle state — starts as 'new'
   usedInRunId: string | null; // run that last consumed this source (set in Phase 5)
   lastUsedAt: string | null;  // ISO 8601 — set in Phase 5
+  sourceIntelligence: SourceIntelligence | null; // deterministic mock analysis
   createdAt: string;          // ISO 8601
   updatedAt: string | null;   // set when a text source is edited; null otherwise
 }
@@ -131,6 +157,13 @@ export interface ContentCase {
   // Schedule (Step 5)
   schedule: Schedule;
 
+  // Simplified wizard fields (new cases)
+  contentGoal:    ContentGoal;
+  goalCustom:     string | null;
+  contentStyle:   ContentStyle;
+  styleCustom:    string | null;
+  contentTargets: ContentTarget[];   // which platforms to generate; empty = all (legacy)
+
   // Relations
   sources: ContentSource[];
   outputs: ContentOutput[];
@@ -190,23 +223,18 @@ export interface User {
   createdAt: string;
 }
 
-// ── Wizard form state (not persisted until submit) ─────────
+// ── Wizard form state — simplified 3-step wizard ──────────
 export interface WizardFormData {
-  // Step 1
-  title: string;
-  language: Language;
-  // Step 2
-  targetAudience: string;
-  industry: string;
-  experienceLevel: ExperienceLevel;
-  // Step 3
-  writingStyle: string;
-  goals: string;
-  aiInstructions: string;
-  // Step 4 — initial sources (optional; server defaults status to 'new')
-  sources: SourceInput[];
-  // Step 5
-  schedule: Schedule;
+  // Step 1: Case Name + Goal
+  title:        string;
+  contentGoal:  ContentGoal;
+  goalCustom:   string;
+  // Step 2: Content Style + Language
+  contentStyle: ContentStyle;
+  styleCustom:  string;
+  language:     Language;
+  // Step 3: Content Targets (required, non-empty)
+  contentTargets: ContentTarget[];
 }
 
 // ── UI helper types ────────────────────────────────────────

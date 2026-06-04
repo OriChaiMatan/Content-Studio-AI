@@ -1,6 +1,17 @@
 import { prisma } from '../lib/prisma';
 import { serializeCase } from './caseService';
 import { PIPELINE_STEP_ORDER } from '../schemas/pipelineSchemas';
+
+// Maps ContentTarget values (wizard) → Platform enum values (DB / ContentOutput)
+const TARGET_TO_PLATFORM: Record<string, string> = {
+  linkedin:    'linkedin',
+  facebook:    'facebook',
+  instagram:   'instagram',
+  newsletter:  'newsletter',
+  podcast:     'podcast',
+  images:      'image_prompt',
+};
+const ALL_PLATFORMS = ['linkedin', 'facebook', 'instagram', 'newsletter', 'podcast', 'image_prompt'];
 import {
   ResearchContextSchema,
   FactCheckReportSchema,
@@ -318,8 +329,18 @@ export const pipelineService = {
         const researchConfidence = rc.success  ? rc.data.confidenceScore               : 88;
         const factCheckAccuracy  = fcr.success ? fcr.data.overallConfidenceScore        : 91;
 
+        // Determine which platforms to generate based on contentTargets.
+        // Empty array = legacy backward compat → generate all 6.
+        const selectedPlatforms =
+          existing.contentTargets.length > 0
+            ? existing.contentTargets
+                .map(t => TARGET_TO_PLATFORM[t])
+                .filter((p): p is string => !!p)
+            : ALL_PLATFORMS;
+
         const outputBodies = packageToOutputs(pkg, existing);
-        const platforms    = Object.keys(outputBodies) as Array<keyof typeof outputBodies>;
+        const platforms = (Object.keys(outputBodies) as Array<keyof typeof outputBodies>)
+          .filter(k => selectedPlatforms.includes(k));
 
         await tx.contentOutput.createMany({
           data: platforms.map(platform => ({

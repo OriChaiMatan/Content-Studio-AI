@@ -25,16 +25,17 @@ type FullCase = Prisma.ContentCaseGetPayload<{ include: typeof caseInclude }>;
 
 export function serializeSource(s: ContentSource) {
   return {
-    id:            s.id,
-    contentCaseId: s.contentCaseId,
-    type:          s.type,
-    label:         s.label,
-    content:       s.content,
-    status:        s.status,
-    usedInRunId:   s.usedInRunId,
-    lastUsedAt:    s.lastUsedAt ? s.lastUsedAt.toISOString() : null,
-    createdAt:     s.createdAt.toISOString(),
-    updatedAt:     s.updatedAt ? s.updatedAt.toISOString() : null,
+    id:                  s.id,
+    contentCaseId:       s.contentCaseId,
+    type:                s.type,
+    label:               s.label,
+    content:             s.content,
+    status:              s.status,
+    usedInRunId:         s.usedInRunId,
+    lastUsedAt:          s.lastUsedAt ? s.lastUsedAt.toISOString() : null,
+    sourceIntelligence:  s.sourceIntelligence ?? null,
+    createdAt:           s.createdAt.toISOString(),
+    updatedAt:           s.updatedAt ? s.updatedAt.toISOString() : null,
   };
 }
 
@@ -94,6 +95,7 @@ export function serializeCase(c: FullCase) {
     title:           c.title,
     status:          c.status,
     language:        c.language,
+    // Legacy fields — present on old cases; empty string on new ones
     targetAudience:  c.targetAudience,
     industry:        c.industry,
     experienceLevel: c.experienceLevel,
@@ -106,6 +108,12 @@ export function serializeCase(c: FullCase) {
       dayOfWeek:   c.scheduleDayOfWeek,
       dayOfMonth:  c.scheduleDayOfMonth,
     },
+    // Simplified wizard fields
+    contentGoal:    c.contentGoal,
+    goalCustom:     c.goalCustom,
+    contentStyle:   c.contentStyle,
+    styleCustom:    c.styleCustom,
+    contentTargets: c.contentTargets,
     sources:    c.sources.map(serializeSource),
     outputs:    c.outputs.map(serializeOutput),
     pipeline:   sortedSteps.map(serializePipelineStep),
@@ -142,24 +150,13 @@ export const caseService = {
           userId:          DEV_USER_ID,
           title:           data.title,
           language:        data.language,
-          targetAudience:  data.targetAudience,
-          industry:        data.industry,
-          experienceLevel: data.experienceLevel,
-          writingStyle:    data.writingStyle,
-          goals:           data.goals,
-          aiInstructions:  data.aiInstructions,
-          scheduleFrequency:  data.schedule.frequency,
-          scheduleTime:       data.schedule.time,
-          scheduleDayOfWeek:  data.schedule.dayOfWeek,
-          scheduleDayOfMonth: data.schedule.dayOfMonth,
-          sources: {
-            create: data.sources.map(s => ({
-              type:    s.type,
-              label:   s.label || s.type,
-              content: s.content,
-              // status defaults to 'new' via schema default
-            })),
-          },
+          // Simplified wizard fields
+          contentGoal:     data.contentGoal,
+          goalCustom:      data.goalCustom || null,
+          contentStyle:    data.contentStyle,
+          styleCustom:     data.styleCustom || null,
+          contentTargets:  data.contentTargets,
+          // Legacy fields default to empty for new wizard cases
           pipelineSteps: {
             create: PIPELINE_STEP_ORDER.map(name => ({
               name,
@@ -177,21 +174,21 @@ export const caseService = {
   async updateCase(id: string, data: UpdateCaseInput) {
     const patch: Prisma.ContentCaseUpdateInput = {};
 
-    if (data.title           !== undefined) patch.title           = data.title;
-    if (data.language        !== undefined) patch.language        = data.language;
+    // Simplified wizard fields
+    if (data.contentGoal    !== undefined) patch.contentGoal    = data.contentGoal;
+    if (data.goalCustom     !== undefined) patch.goalCustom     = data.goalCustom || null;
+    if (data.contentStyle   !== undefined) patch.contentStyle   = data.contentStyle;
+    if (data.styleCustom    !== undefined) patch.styleCustom    = data.styleCustom || null;
+    if (data.contentTargets !== undefined) patch.contentTargets = data.contentTargets;
+    if (data.language       !== undefined) patch.language       = data.language;
+    if (data.title          !== undefined) patch.title          = data.title;
+    // Legacy fields (old wizard — kept for backward compat)
     if (data.targetAudience  !== undefined) patch.targetAudience  = data.targetAudience;
     if (data.industry        !== undefined) patch.industry        = data.industry;
     if (data.experienceLevel !== undefined) patch.experienceLevel = data.experienceLevel;
     if (data.writingStyle    !== undefined) patch.writingStyle    = data.writingStyle;
     if (data.goals           !== undefined) patch.goals           = data.goals;
     if (data.aiInstructions  !== undefined) patch.aiInstructions  = data.aiInstructions;
-
-    if (data.schedule !== undefined) {
-      patch.scheduleFrequency  = data.schedule.frequency;
-      patch.scheduleTime       = data.schedule.time;
-      patch.scheduleDayOfWeek  = data.schedule.dayOfWeek;
-      patch.scheduleDayOfMonth = data.schedule.dayOfMonth;
-    }
 
     const c = await prisma.contentCase.update({
       where: { id },

@@ -128,6 +128,22 @@ export const ImagePromptsSchema = z.object({
 export type ImagePrompts = z.infer<typeof ImagePromptsSchema>;
 
 // Full Content Package
+// ── Source Intelligence ───────────────────────────────────────────────────────
+// Deterministic analysis generated from source content on create/edit.
+
+export const SourceIntelligenceSchema = z.object({
+  summary:         z.string().min(1),
+  topics:          z.array(z.string().min(1)).min(1).max(10),
+  keywords:        z.array(z.string().min(1)).min(1).max(10),
+  claims:          z.array(z.string()).min(0).max(10),
+  sentiment:       z.enum(['positive', 'negative', 'neutral', 'mixed']),
+  confidenceScore: z.number().int().min(0).max(100),
+});
+
+export type SourceIntelligence = z.infer<typeof SourceIntelligenceSchema>;
+
+// ── Content Package ───────────────────────────────────────────────────────────
+
 export const ContentPackageSchema = z.object({
   linkedin:    LinkedInContentSchema,
   facebook:    FacebookContentSchema,

@@ -99,16 +99,13 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
   createCase: async (data: WizardFormData) => {
     try {
       const newCase = await api.post<ContentCase>('/cases', {
-        title:           data.title,
-        language:        data.language,
-        targetAudience:  data.targetAudience,
-        industry:        data.industry,
-        experienceLevel: data.experienceLevel,
-        writingStyle:    data.writingStyle,
-        goals:           data.goals,
-        aiInstructions:  data.aiInstructions,
-        sources:         data.sources,
-        schedule:        data.schedule,
+        title:          data.title,
+        contentGoal:    data.contentGoal,
+        goalCustom:     data.goalCustom,
+        contentStyle:   data.contentStyle,
+        styleCustom:    data.styleCustom,
+        language:       data.language,
+        contentTargets: data.contentTargets,
       });
       set(state => ({ cases: [newCase, ...state.cases] }));
       return newCase;
@@ -124,20 +121,19 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
       const caseId = genId('case');
       const mockCase: ContentCase = {
         id: caseId,
-        title: data.title,
-        status: 'draft',
-        language: data.language,
-        targetAudience: data.targetAudience,
-        industry: data.industry,
-        experienceLevel: data.experienceLevel,
-        writingStyle: data.writingStyle,
-        goals: data.goals,
-        aiInstructions: data.aiInstructions,
-        schedule: data.schedule,
-        sources: data.sources.map(s => ({
-          ...s, id: genId('src'), contentCaseId: caseId, createdAt: now, updatedAt: null,
-          status: 'new' as const, usedInRunId: null, lastUsedAt: null,
-        })),
+        title:          data.title,
+        status:         'draft',
+        language:       data.language,
+        contentGoal:    data.contentGoal,
+        goalCustom:     data.goalCustom || null,
+        contentStyle:   data.contentStyle,
+        styleCustom:    data.styleCustom || null,
+        contentTargets: data.contentTargets,
+        // Legacy fields default to empty for new wizard cases
+        targetAudience: '', industry: '', experienceLevel: 'intermediate',
+        writingStyle: '', goals: '', aiInstructions: '',
+        schedule: { frequency: 'manual', time: null, dayOfWeek: null, dayOfMonth: null },
+        sources: [],
         outputs: [],
         pipeline: [
           { id: genId('step'), name: 'research',         status: 'idle', startedAt: null, completedAt: null, summary: null, confidence: null },
@@ -194,6 +190,7 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
         status: 'new',
         usedInRunId: null,
         lastUsedAt: null,
+        sourceIntelligence: null,  // will be generated when API is available
         createdAt: now,
         updatedAt: null,
       };

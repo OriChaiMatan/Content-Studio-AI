@@ -25,6 +25,29 @@ enum SourceType {
   pdf
 }
 
+// What the user wants to achieve with this Content Case
+enum ContentGoal {
+  build_authority
+  generate_leads
+  increase_sales
+  educate_audience
+  grow_community
+  personal_branding
+  other
+}
+
+// Tone/voice for content generation
+enum ContentStyle {
+  professional
+  authoritative
+  friendly
+  personal
+  journalistic
+  provocative
+  humorous
+  other
+}
+
 // Lifecycle of a ContentSource within its Case.
 // new     → just added, available as primary material for the next pipeline run
 // used    → consumed as primary source in a completed run that was approved (Phase 5)
@@ -141,6 +164,16 @@ model ContentCase {
   scheduleDayOfWeek  Int?              // 0–6 for weekly; null otherwise
   scheduleDayOfMonth Int?              // 1–31 for monthly; null otherwise
 
+  // ── Simplified wizard fields ────────────────────────────────────────────────
+  // Collected in the 3-step wizard. Old cases default to first option / empty.
+  contentGoal    ContentGoal  @default(build_authority)
+  goalCustom     String?                   // free text when goal = 'other'
+  contentStyle   ContentStyle @default(professional)
+  styleCustom    String?                   // free text when style = 'other'
+  // Which platforms the pipeline generates outputs for.
+  // Empty [] = legacy backward compat (generate all 6). New cases must be non-empty.
+  contentTargets String[]     @default([])
+
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
@@ -173,6 +206,9 @@ model ContentSource {
   status        SourceStatus  @default(new)
   usedInRunId   String?                 // ID of the run that last consumed this source (set in Phase 5)
   lastUsedAt    DateTime?               // timestamp of last use (set in Phase 5)
+
+  // Deterministic mock analysis generated on create/edit. Null for legacy sources.
+  sourceIntelligence Json?
 
   createdAt     DateTime      @default(now())
   updatedAt     DateTime?               // null until a text source is edited

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
 import { CaseStatusBadge, PlatformBadge, OutputStatusBadge } from '../../components/ui/Badge';
@@ -7,12 +7,42 @@ import { Icon } from '../../components/ui/Icon';
 import { Card } from '../../components/ui/Card';
 import { SourcesPanel } from './SourcesPanel';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
+import { api } from '../../lib/api';
+import type { ContentGoal, ContentStyle, ContentTarget, Language, ContentCase } from '../../types';
+
+// ── Human-readable labels for new enum fields ─────────────
+
+const GOAL_LABELS: Record<ContentGoal, string> = {
+  build_authority: 'Build Authority', generate_leads: 'Generate Leads',
+  increase_sales: 'Increase Sales', educate_audience: 'Educate Audience',
+  grow_community: 'Grow Community', personal_branding: 'Personal Branding',
+  other: 'Other',
+};
+
+const STYLE_LABELS: Record<ContentStyle, string> = {
+  professional: 'Professional', authoritative: 'Authoritative',
+  friendly: 'Friendly', personal: 'Personal', journalistic: 'Journalistic',
+  provocative: 'Provocative', humorous: 'Humorous', other: 'Other',
+};
+
+const TARGET_LABELS: Record<ContentTarget, string> = {
+  linkedin: 'LinkedIn', facebook: 'Facebook', instagram: 'Instagram',
+  newsletter: 'Newsletter', podcast: 'Podcast', images: 'Images',
+};
+
+const TARGET_ICONS: Record<ContentTarget, string> = {
+  linkedin: 'work', facebook: 'groups', instagram: 'photo_camera',
+  newsletter: 'email', podcast: 'mic', images: 'image',
+};
 
 export function ContentCaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const caseItem    = useContentCasesStore(s => s.getCaseById(id ?? ''));
-  const loading     = useContentCasesStore(s => s.loading);
+  const caseItem      = useContentCasesStore(s => s.getCaseById(id ?? ''));
+  const loading       = useContentCasesStore(s => s.loading);
+  const refreshCase   = useContentCasesStore(s => s.refreshCase);
+  const [editingSettings, setEditingSettings] = useState(false);
+  const [savingSettings,  setSavingSettings]  = useState(false);
   const fetchCaseById = useContentCasesStore(s => s.fetchCaseById);
 
   // If the case isn't in the store yet, try fetching it directly (e.g. after page refresh).
@@ -84,52 +114,54 @@ export function ContentCaseDetail() {
         {/* ── 2-column: config + outputs/pipeline ─────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* Left: Audience + Writing style */}
+          {/* Left: Case Settings */}
           <div className="lg:col-span-2 space-y-5">
 
-            <Card accent className="p-5">
-              <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Icon name="groups" className="text-outline" size="sm" />
-                Audience
-              </h4>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <p className="text-[11px] text-outline uppercase font-bold tracking-wider">Target</p>
-                  <p className="text-[14px] text-on-surface mt-1">{c.targetAudience}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] text-outline uppercase font-bold tracking-wider">Industry</p>
-                  <p className="text-[14px] text-on-surface mt-1">{c.industry}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] text-outline uppercase font-bold tracking-wider">Level</p>
-                  <p className="text-[14px] text-on-surface mt-1 capitalize">{c.experienceLevel}</p>
-                </div>
-              </div>
-            </Card>
+            {/* ── Case Settings (new wizard fields) ────────────── */}
+            <CaseSettingsCard
+              c={c}
+              editing={editingSettings}
+              saving={savingSettings}
+              onEdit={() => setEditingSettings(true)}
+              onCancel={() => setEditingSettings(false)}
+              onSave={async (updates) => {
+                setSavingSettings(true);
+                try {
+                  await api.patch<ContentCase>(`/cases/${c.id}`, updates);
+                  await refreshCase(c.id);
+                  setEditingSettings(false);
+                } catch { /* silently fail */ }
+                finally { setSavingSettings(false); }
+              }}
+            />
 
-            <Card accent className="p-5">
-              <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Icon name="edit_note" className="text-outline" size="sm" />
-                Writing Style & Goals
-              </h4>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-[11px] text-outline uppercase font-bold tracking-wider">Style</p>
-                  <p className="text-[14px] text-on-surface mt-1">{c.writingStyle}</p>
+            {/* Legacy: show only if case has old-wizard data */}
+            {(c.targetAudience || c.industry) && (
+              <Card accent className="p-5">
+                <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Icon name="groups" className="text-outline" size="sm" />
+                  Audience
+                </h4>
+                <div className="grid grid-cols-3 gap-4">
+                  {c.targetAudience && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Target</p><p className="text-[14px] text-on-surface mt-1">{c.targetAudience}</p></div>}
+                  {c.industry && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Industry</p><p className="text-[14px] text-on-surface mt-1">{c.industry}</p></div>}
+                  {c.experienceLevel && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Level</p><p className="text-[14px] text-on-surface mt-1 capitalize">{c.experienceLevel}</p></div>}
                 </div>
-                <div>
-                  <p className="text-[11px] text-outline uppercase font-bold tracking-wider">Goals</p>
-                  <p className="text-[14px] text-on-surface mt-1">{c.goals}</p>
+              </Card>
+            )}
+            {(c.writingStyle || c.goals) && (
+              <Card accent className="p-5">
+                <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Icon name="edit_note" className="text-outline" size="sm" />
+                  Writing Style & Goals
+                </h4>
+                <div className="space-y-3">
+                  {c.writingStyle && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Style</p><p className="text-[14px] text-on-surface mt-1">{c.writingStyle}</p></div>}
+                  {c.goals && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Goals</p><p className="text-[14px] text-on-surface mt-1">{c.goals}</p></div>}
+                  {c.aiInstructions && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">AI Instructions</p><p className="text-[14px] text-on-surface mt-1 bg-surface-container-low rounded-lg p-3 italic">{c.aiInstructions}</p></div>}
                 </div>
-                {c.aiInstructions && (
-                  <div>
-                    <p className="text-[11px] text-outline uppercase font-bold tracking-wider">AI Instructions</p>
-                    <p className="text-[14px] text-on-surface mt-1 bg-surface-container-low rounded-lg p-3 italic">{c.aiInstructions}</p>
-                  </div>
-                )}
-              </div>
-            </Card>
+              </Card>
+            )}
           </div>
 
           {/* Right: Outputs + Pipeline */}
@@ -241,5 +273,160 @@ export function ContentCaseDetail() {
 
       </main>
     </>
+  );
+}
+
+// ── Case Settings Card ────────────────────────────────────
+// Shows new simplified wizard fields with inline editing.
+
+interface CaseSettingsCardProps {
+  c: ContentCase;
+  editing: boolean;
+  saving: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: (updates: Partial<ContentCase>) => Promise<void>;
+}
+
+function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: CaseSettingsCardProps) {
+  const [goal,    setGoal]    = useState<ContentGoal>(c.contentGoal);
+  const [style,   setStyle]   = useState<ContentStyle>(c.contentStyle);
+  const [lang,    setLang]    = useState<Language>(c.language);
+  const [targets, setTargets] = useState<ContentTarget[]>(c.contentTargets);
+
+  function toggleTarget(t: ContentTarget) {
+    setTargets(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+  }
+
+  const allTargets: { value: ContentTarget; icon: string }[] = [
+    { value: 'linkedin', icon: 'work' }, { value: 'facebook', icon: 'groups' },
+    { value: 'instagram', icon: 'photo_camera' }, { value: 'newsletter', icon: 'email' },
+    { value: 'podcast', icon: 'mic' }, { value: 'images', icon: 'image' },
+  ];
+
+  function handleEdit() {
+    setGoal(c.contentGoal); setStyle(c.contentStyle);
+    setLang(c.language);    setTargets(c.contentTargets);
+    onEdit();
+  }
+
+  return (
+    <Card accent className="p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
+          <Icon name="tune" className="text-outline" size="sm" />
+          Case Settings
+        </h4>
+        {!editing && (
+          <button onClick={handleEdit} className="text-[12px] text-primary font-medium flex items-center gap-1 hover:underline">
+            <Icon name="edit" size="sm" />Edit
+          </button>
+        )}
+      </div>
+
+      {!editing ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-4">
+            <div>
+              <p className="text-[11px] text-outline uppercase font-bold tracking-wider">Goal</p>
+              <p className="text-[14px] text-on-surface mt-1">
+                {GOAL_LABELS[c.contentGoal]}{c.goalCustom ? ` — ${c.goalCustom}` : ''}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-outline uppercase font-bold tracking-wider">Style</p>
+              <p className="text-[14px] text-on-surface mt-1">
+                {STYLE_LABELS[c.contentStyle]}{c.styleCustom ? ` — ${c.styleCustom}` : ''}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-outline uppercase font-bold tracking-wider">Language</p>
+              <p className="text-[14px] text-on-surface mt-1">{c.language === 'en' ? 'English' : 'Hebrew'}</p>
+            </div>
+          </div>
+          <div>
+            <p className="text-[11px] text-outline uppercase font-bold tracking-wider mb-1.5">Content Targets</p>
+            <div className="flex flex-wrap gap-1.5">
+              {c.contentTargets.length > 0 ? c.contentTargets.map(t => (
+                <span key={t} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary-container text-[12px] font-medium">
+                  <Icon name={TARGET_ICONS[t]} size="sm" />
+                  {TARGET_LABELS[t]}
+                </span>
+              )) : (
+                <span className="text-[13px] text-outline">All platforms (legacy)</span>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Goal select */}
+          <div>
+            <p className="text-[12px] font-medium text-on-surface-variant mb-1.5">Goal</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(Object.entries(GOAL_LABELS) as [ContentGoal, string][]).map(([v, l]) => (
+                <button key={v} type="button" onClick={() => setGoal(v)}
+                  className={`px-3 py-2 rounded-lg border text-[12px] font-medium text-left transition-all ${goal===v ? 'border-primary bg-secondary-container/40 text-primary' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Style select */}
+          <div>
+            <p className="text-[12px] font-medium text-on-surface-variant mb-1.5">Content Style</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(Object.entries(STYLE_LABELS) as [ContentStyle, string][]).map(([v, l]) => (
+                <button key={v} type="button" onClick={() => setStyle(v)}
+                  className={`px-3 py-2 rounded-lg border text-[12px] font-medium text-left transition-all ${style===v ? 'border-primary bg-secondary-container/40 text-primary' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Language toggle */}
+          <div>
+            <p className="text-[12px] font-medium text-on-surface-variant mb-1.5">Language</p>
+            <div className="flex gap-2">
+              {(['en', 'he'] as Language[]).map(v => (
+                <button key={v} type="button" onClick={() => setLang(v)}
+                  className={`px-4 py-2 rounded-lg border text-[12px] font-medium transition-all ${lang===v ? 'border-primary bg-secondary-container/40 text-primary' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'}`}>
+                  {v === 'en' ? 'English' : 'Hebrew (עברית)'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Content Targets */}
+          <div>
+            <p className="text-[12px] font-medium text-on-surface-variant mb-1.5">Content Targets</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {allTargets.map(({ value: t, icon }) => {
+                const sel = targets.includes(t);
+                return (
+                  <button key={t} type="button" onClick={() => toggleTarget(t)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[12px] font-medium transition-all ${sel ? 'border-primary bg-secondary-container/40 text-primary' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'}`}>
+                    <Icon name={icon} size="sm" />
+                    {TARGET_LABELS[t]}
+                  </button>
+                );
+              })}
+            </div>
+            {targets.length === 0 && <p className="text-[11px] text-error mt-1">Select at least one target</p>}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button size="sm" variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Button>
+            <Button size="sm" onClick={() => onSave({ contentGoal: goal, contentStyle: style, language: lang, contentTargets: targets })}
+              loading={saving} disabled={saving || targets.length === 0}>
+              <Icon name="save" size="sm" />
+              {saving ? 'Saving…' : 'Save Settings'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
