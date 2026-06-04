@@ -58,11 +58,15 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
 
   return (
     <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm overflow-hidden transition-all hover:shadow-md">
-      {/* Card header — always visible */}
-      <button
-        type="button"
+      {/* Card header — always visible.
+          NOTE: converted from <button> to <div role="button"> to avoid nesting
+          the "Open Review" <button> inside another <button> (invalid HTML). */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen(o => !o)}
-        className="w-full text-left px-5 py-4 flex items-start gap-4"
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => !o); } }}
+        className="w-full text-left px-5 py-4 flex items-start gap-4 cursor-pointer select-none"
       >
         {/* Run status dot */}
         <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
@@ -117,7 +121,7 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
             className="text-outline"
           />
         </div>
-      </button>
+      </div>
 
       {/* Expanded output items */}
       {open && (

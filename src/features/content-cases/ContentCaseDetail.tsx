@@ -36,20 +36,31 @@ const TARGET_ICONS: Record<ContentTarget, string> = {
 };
 
 export function ContentCaseDetail() {
+  // ── ALL hooks must be called unconditionally before any early return ──────────
+
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+
+  // Store selectors
   const caseItem      = useContentCasesStore(s => s.getCaseById(id ?? ''));
   const loading       = useContentCasesStore(s => s.loading);
   const refreshCase   = useContentCasesStore(s => s.refreshCase);
+  const fetchCaseById = useContentCasesStore(s => s.fetchCaseById);
+  const deleteCase    = useContentCasesStore(s => s.deleteCase);
+
+  // Local state
   const [editingSettings, setEditingSettings] = useState(false);
   const [savingSettings,  setSavingSettings]  = useState(false);
-  const fetchCaseById = useContentCasesStore(s => s.fetchCaseById);
+  const [confirmDelete,   setConfirmDelete]   = useState(false);
+  const [deleting,        setDeleting]        = useState(false);
+  const [deleteError,     setDeleteError]     = useState<string | null>(null);
 
-  // If the case isn't in the store yet, try fetching it directly (e.g. after page refresh).
+  // Effects
   useEffect(() => {
     if (!caseItem && id) fetchCaseById(id);
   }, [id, caseItem, fetchCaseById]);
 
+  // ── Early return — safe now that all hooks are above ─────────────────────────
   if (!caseItem) {
     return (
       <div className="flex-1 flex items-center justify-center gap-3 text-on-surface-variant">
@@ -63,10 +74,6 @@ export function ContentCaseDetail() {
 
   const c = caseItem;
   const canReview = c.status === 'in_review' || c.status === 'completed';
-  const deleteCase = useContentCasesStore(s => s.deleteCase);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting]           = useState(false);
-  const [deleteError, setDeleteError]     = useState<string | null>(null);
 
   async function handleDeleteCase() {
     setDeleting(true);
