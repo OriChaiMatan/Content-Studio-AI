@@ -355,9 +355,11 @@ function SourceRow({ source, onDelete, onSaveEdit }: SourceRowProps) {
                 )}
               </div>
 
-              {/* Source Intelligence section */}
-              {source.sourceIntelligence && (
+              {/* Source Intelligence section — always shown; null = legacy source */}
+              {source.sourceIntelligence ? (
                 <IntelligenceSection intel={source.sourceIntelligence} />
+              ) : (
+                <p className="text-[11px] text-outline mt-2 italic">Analysis not available</p>
               )}
             </>
           )}

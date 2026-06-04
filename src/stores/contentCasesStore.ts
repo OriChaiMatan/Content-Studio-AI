@@ -20,7 +20,7 @@ interface ContentCasesState {
   // ── Case CRUD ─────────────────────────────────────────────────────────────
   createCase: (data: WizardFormData) => Promise<ContentCase>;
   updateCase: (id: string, partial: Partial<ContentCase>) => void;
-  deleteCase: (id: string) => void;
+  deleteCase: (id: string) => Promise<void>;  // calls DELETE /api/cases/:id
   getCaseById: (id: string) => ContentCase | undefined;
 
   // ── Source management — API-first, network-error fallback ───────────────────
@@ -156,8 +156,12 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
       ),
     })),
 
-  deleteCase: (id) =>
-    set(state => ({ cases: state.cases.filter(c => c.id !== id) })),
+  deleteCase: async (id) => {
+    // Calls the API first; cascade deletes all related records server-side.
+    // Only removes from local store on success.
+    await api.delete(`/cases/${id}`);
+    set(state => ({ cases: state.cases.filter(c => c.id !== id) }));
+  },
 
   // ── Source management ────────────────────────────────────────────────────────
 

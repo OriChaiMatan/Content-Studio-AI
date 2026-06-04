@@ -75,6 +75,23 @@ export function DashboardPage() {
           </div>
         )}
 
+        {/* First-use empty state */}
+        {!loading && cases.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-center max-w-md mx-auto">
+            <div className="w-20 h-20 rounded-full bg-surface-container flex items-center justify-center mb-6">
+              <Icon name="auto_stories" size="xl" className="text-outline" />
+            </div>
+            <h3 className="text-[22px] font-serif text-on-surface mb-3">Welcome to Content Studio AI</h3>
+            <p className="text-[14px] text-on-surface-variant mb-8 leading-relaxed">
+              Create your first Content Case to start collecting sources, running your AI pipeline, and generating structured content across all your channels.
+            </p>
+            <Button onClick={() => navigate('/cases/new')} size="lg">
+              <Icon name="add" size="sm" />
+              Create Your First Content Case
+            </Button>
+          </div>
+        )}
+
         {/* Welcome */}
         <div className="flex items-start justify-between">
           <div>
@@ -91,7 +108,8 @@ export function DashboardPage() {
           </Button>
         </div>
 
-        {/* Stats */}
+        {/* Stats + sections — only shown when there are cases */}
+        {cases.length > 0 && (<>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon="folder_open"  label="Total Cases"   value={cases.length}  sub="All time" />
           <StatCard icon="rate_review"  label="In Review"     value={inReview}       sub="Awaiting approval"   accent="bg-secondary" />
@@ -210,6 +228,7 @@ export function DashboardPage() {
             </table>
           </div>
         </section>
+        </>)} {/* end cases.length > 0 */}
       </main>
     </>
   );

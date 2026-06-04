@@ -63,13 +63,50 @@ export function ContentCaseDetail() {
 
   const c = caseItem;
   const canReview = c.status === 'in_review' || c.status === 'completed';
+  const deleteCase = useContentCasesStore(s => s.deleteCase);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting]           = useState(false);
+  const [deleteError, setDeleteError]     = useState<string | null>(null);
+
+  async function handleDeleteCase() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteCase(c.id);
+      navigate('/cases');
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete case. Please try again.');
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
 
   return (
     <>
       <TopBar
         title={c.title}
         actions={
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            {/* Delete confirmation inline in header */}
+            {confirmDelete ? (
+              <div className="flex items-center gap-2 bg-error-container/60 border border-error/20 rounded-xl px-3 py-1.5">
+                <span className="text-[12px] text-error font-medium">Delete this case?</span>
+                <Button variant="danger" size="sm" onClick={handleDeleteCase} loading={deleting} disabled={deleting}>
+                  Confirm
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="text-on-surface-variant hover:text-error transition-colors p-2 rounded-lg hover:bg-error-container/30"
+                title="Delete case"
+              >
+                <Icon name="delete" size="sm" />
+              </button>
+            )}
             <Button variant="secondary" size="sm" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
               <Icon name={c.status === 'draft' ? 'play_arrow' : 'schema'} size="sm" />
               {c.status === 'draft' ? 'Start Pipeline' : 'Pipeline'}
@@ -85,6 +122,12 @@ export function ContentCaseDetail() {
       />
 
       <main className="flex-1 p-8 overflow-y-auto space-y-6">
+        {deleteError && (
+          <div className="flex items-center gap-3 bg-error-container/60 border border-error/20 rounded-xl px-4 py-3">
+            <Icon name="error" className="text-error shrink-0" size="sm" />
+            <p className="text-[13px] text-on-error-container">{deleteError}</p>
+          </div>
+        )}
 
         {/* ── Header card ─────────────────────────────── */}
         <div className="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant/30 shadow-sm flex items-start justify-between gap-4">

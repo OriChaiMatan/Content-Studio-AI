@@ -43,10 +43,11 @@ interface OutputCardProps {
 function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
   const [editing, setEditing]   = useState(false);
   const [body, setBody]         = useState(output.body);
-  const [approving, setApproving] = useState(false);
-  const [rejecting, setRejecting] = useState(false);
-  const [saving,    setSaving]    = useState(false);
+  const [approving, setApproving]       = useState(false);
+  const [rejecting, setRejecting]       = useState(false);
+  const [saving,    setSaving]          = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [actionError, setActionError]   = useState<string | null>(null);
 
   const updateOutputStatus = useContentCasesStore(s => s.updateOutputStatus);
   const updateOutputBody   = useContentCasesStore(s => s.updateOutputBody);
@@ -63,12 +64,13 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
   async function handleApprove() {
     if (approving) return;
     setApproving(true);
+    setActionError(null);
     try {
       await updateOutputStatus(caseId, output.id, 'approved');
-      // Refresh case to get updated source statuses
       await refreshCase(caseId);
-      // Refresh library to include the new LibraryItem
       await fetchLibrary();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Unable to approve. Please try again.');
     } finally {
       setApproving(false);
     }
@@ -77,8 +79,11 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
   async function handleReject() {
     if (rejecting) return;
     setRejecting(true);
+    setActionError(null);
     try {
       await updateOutputStatus(caseId, output.id, 'rejected');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Unable to reject. Please try again.');
     } finally {
       setRejecting(false);
     }
@@ -87,9 +92,12 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
   async function handleSaveEdit() {
     if (saving) return;
     setSaving(true);
+    setActionError(null);
     try {
       await updateOutputBody(caseId, output.id, body);
       setEditing(false);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Unable to save. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -98,8 +106,11 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
   async function handleRegenerate() {
     if (regenerating) return;
     setRegenerating(true);
+    setActionError(null);
     try {
       await regenerateOutput(caseId, output.id);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Unable to regenerate. Please try again.');
     } finally {
       setRegenerating(false);
     }
@@ -164,6 +175,17 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
           <p className="text-[13px] text-on-surface-variant line-clamp-3">{output.body}</p>
         )}
       </div>
+
+      {/* Action error banner */}
+      {isActive && actionError && (
+        <div className="mx-5 mb-2 flex items-center gap-2 bg-error-container/50 border border-error/20 rounded-lg px-3 py-2">
+          <Icon name="error" size="sm" className="text-error shrink-0" />
+          <p className="text-[12px] text-on-error-container">{actionError}</p>
+          <button onClick={() => setActionError(null)} className="ml-auto text-outline hover:text-on-surface">
+            <Icon name="close" size="sm" />
+          </button>
+        </div>
+      )}
 
       {/* Actions — only on active card */}
       {isActive && (

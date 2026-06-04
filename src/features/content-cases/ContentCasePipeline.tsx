@@ -51,6 +51,7 @@ function StepCard({ step }: { step: PipelineStep }) {
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
           {step.status === 'running'   ? <span className="material-symbols-outlined animate-spin">{meta.icon}</span> :
            step.status === 'completed' ? <Icon name="check" /> :
+           step.status === 'error'     ? <Icon name="error_outline" /> :
            <Icon name={meta.icon} />}
         </div>
         <div className="flex-1">
@@ -65,6 +66,13 @@ function StepCard({ step }: { step: PipelineStep }) {
                 <div className="h-full bg-primary rounded-full animate-pulse w-2/3" />
               </div>
               <p className="text-[12px] text-on-surface-variant mt-2">Processing…</p>
+            </div>
+          )}
+
+          {step.status === 'error' && step.summary && (
+            <div className="mt-4 bg-error-container/40 border border-error/20 rounded-lg p-4">
+              <p className="text-[12px] font-medium text-error mb-1">Step failed</p>
+              <p className="text-[12px] text-on-surface">{step.summary}</p>
             </div>
           )}
           {step.status === 'completed' && step.summary && (
@@ -124,6 +132,7 @@ export function ContentCasePipeline() {
 
   const runningStep   = caseItem?.pipeline.find(s => s.status === 'running');
   const allDone       = caseItem?.pipeline.every(s => s.status === 'completed');
+  const hasErrorStep  = caseItem?.pipeline.some(s => s.status === 'error') ?? false;
   const newSources    = caseItem?.sources.filter(s => s.status === 'new') ?? [];
   const usedSources   = caseItem?.sources.filter(s => s.status === 'used') ?? [];
   const hasNewSources = newSources.length > 0;
@@ -324,6 +333,29 @@ export function ContentCasePipeline() {
                   <Icon name="rate_review" size="sm" />
                   Review Outputs
                 </Button>
+              </div>
+            )}
+
+            {/* Error recovery — shown when any step failed */}
+            {hasErrorStep && !runningStep && (
+              <div className="flex items-center gap-4">
+                <div className="flex-1 flex items-start gap-3 bg-error-container/50 border border-error/20 rounded-xl p-4">
+                  <Icon name="warning" className="text-error shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[14px] font-medium text-error">Pipeline step failed</p>
+                    <p className="text-[12px] text-on-surface-variant mt-0.5">
+                      {hasNewSources
+                        ? 'Start a new run to try again with the available sources.'
+                        : 'Add new sources, then start a new run to try again.'}
+                    </p>
+                  </div>
+                </div>
+                {hasNewSources && (
+                  <Button variant="secondary" onClick={handleStart} disabled={starting} loading={starting}>
+                    <Icon name="refresh" size="sm" />
+                    {starting ? 'Starting…' : 'Retry'}
+                  </Button>
+                )}
               </div>
             )}
 
