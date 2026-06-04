@@ -40,11 +40,19 @@ function topicFromTitle(title: string): string[] {
     .slice(0, 4);
 }
 
+// Language-agnostic fallbacks guaranteed to be valid (no spaces, length > 2)
+const HASHTAG_FALLBACKS = ['#ContentStrategy', '#Insights', '#AI'];
+
 function industryHashtags(industry: string, title: string): string[] {
-  const keywords = [...topicFromTitle(title), ...topicFromTitle(industry)]
+  // Strip non-alphanumeric chars — for non-Latin scripts (e.g. Hebrew) all
+  // characters are removed, leaving '#' which is filtered by the length guard.
+  const extracted = [...topicFromTitle(title), ...topicFromTitle(industry)]
     .slice(0, 5)
-    .map(w => `#${w.replace(/[^a-zA-Z0-9]/g, '')}`);
-  return [...new Set(keywords)].filter(h => h.length > 1);
+    .map(w => `#${w.replace(/[^a-zA-Z0-9]/g, '')}`)
+    .filter(h => h.length > 2); // '#' + at least 1 char
+
+  // Fallbacks guarantee ≥ 2 valid hashtags even when all input is non-Latin
+  return [...new Set([...extracted, ...HASHTAG_FALLBACKS])].slice(0, 6);
 }
 
 function snippetFromSource(source: ContentSource): string {
@@ -255,11 +263,15 @@ export function generateContentPackage(
       '',
       confidenceLine,
     ].filter(l => l !== undefined).join('\n').trim(),
-    hashtags: [
-      ...hashtags,
-      '#Insights',
-      `#${industry.split(/\s|&/)[0].replace(/[^a-zA-Z0-9]/g, '')}`,
-    ].filter(h => h.length > 1).slice(0, 7),
+    hashtags: (() => {
+      // industryHashtags() already guarantees ≥ 2 via HASHTAG_FALLBACKS.
+      // Strip the raw industry tag attempt — it produces '#' for non-Latin scripts.
+      const industrySlug = industry.split(/\s|&/)[0].replace(/[^a-zA-Z0-9]/g, '');
+      const extra = industrySlug.length > 0 ? [`#${industrySlug}`] : [];
+      return [...new Set([...hashtags, ...extra])]
+        .filter(h => h.length > 2)   // '#' (length 1) and '#x' (length 2) are rejected
+        .slice(0, 7);
+    })(),
   });
 
   // ── Facebook ────────────────────────────────────────────────────────────────
