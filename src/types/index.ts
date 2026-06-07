@@ -23,14 +23,44 @@ export type ContentStyle =
 export type ContentTarget =
   | 'linkedin' | 'facebook' | 'instagram' | 'newsletter' | 'podcast' | 'images';
 
-// Deterministic mock analysis generated per source on create/edit
+// A structured claim the source makes (Phase 8 new shape).
+export interface Claim {
+  text:                 string;
+  type:                 'announcement' | 'statistic' | 'prediction' | 'opinion' | 'definition';
+  subject?:             string;
+  verifiable:           boolean;
+  extractionConfidence: number;
+  verificationStatus:   'unverified';
+}
+
+// A named entity referenced by the source.
+export interface Entity {
+  name: string;
+  type: 'company' | 'person' | 'product' | 'technology' | 'location' | 'organization';
+}
+
+// Source analysis output. Tolerant of legacy records:
+// legacy used `topics`, `confidenceScore`, `claims: string[]`.
+// All new fields are optional so old records render without crashing.
 export interface SourceIntelligence {
-  summary:         string;
-  topics:          string[];
-  keywords:        string[];
-  claims:          string[];
-  sentiment:       'positive' | 'negative' | 'neutral' | 'mixed';
-  confidenceScore: number; // 0–100
+  summary:                  string;
+  // New shape
+  mainTopics?:              string[];
+  claims?:                  Claim[] | string[];   // Claim[] (new) or string[] (legacy)
+  entities?:                Entity[];
+  importanceScore?:         number;
+  contentAngles?:           string[];
+  language?:                string;
+  analysisConfidenceScore?: number;
+  analysisVersion?:         string;
+  truncated?:               boolean;
+  analyzedAt?:              string;
+  // Legacy shape (still present on old records)
+  topics?:                  string[];
+  confidenceScore?:         number;
+  // Common
+  keywords:                 string[];
+  sentiment:                'positive' | 'negative' | 'neutral' | 'mixed';
 }
 
 // Lifecycle of a ContentSource.
@@ -75,9 +105,20 @@ export interface ContentSource {
   usedInRunId: string | null; // run that last consumed this source (set in Phase 5)
   lastUsedAt: string | null;  // ISO 8601 — set in Phase 5
   sourceIntelligence: SourceIntelligence | null; // deterministic mock analysis
+  // URL content extraction (Phase 8.5) — populated for url sources only.
+  extractedTitle?: string | null;
+  extractedText?: string | null;
+  extractionStatus?: ExtractionStatus | null; // 'success' | 'failed' | 'skipped' | 'pending'
+  extractionError?: string | null;
+  extractedAt?: string | null;
   createdAt: string;          // ISO 8601
   updatedAt: string | null;   // set when a text source is edited; null otherwise
 }
+
+// Outcome of URL content extraction for a source.
+// success → readable text extracted; failed → could not extract (fell back to
+// URL+label analysis); skipped → not a url source; pending → not yet run.
+export type ExtractionStatus = 'success' | 'failed' | 'skipped' | 'pending';
 
 // Minimal source shape sent from the wizard (server infers all lifecycle fields).
 export interface SourceInput {

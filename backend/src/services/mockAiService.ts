@@ -1,5 +1,4 @@
 import type { ContentCase, ContentSource, PipelineRun } from '@prisma/client';
-import type { SourceIntelligence } from '../schemas/aiContractSchemas';
 import {
   ResearchContextSchema,
   FactCheckReportSchema,
@@ -63,37 +62,114 @@ function snippetFromSource(source: ContentSource): string {
     : source.content;
 }
 
-// Use source intelligence if available; fall back to raw snippet
+// Shape-tolerant view of sourceIntelligence.
+// Supports BOTH the new Phase 8 shape and legacy records:
+//   topics → mainTopics, confidenceScore → analysisConfidenceScore,
+//   claims: string[] (legacy) → claims: Claim[] (new).
+type LegacySI = {
+  summary?: string;
+  topics?: string[];                 // legacy
+  mainTopics?: string[];             // new
+  claims?: string[] | { text: string }[]; // legacy string[] OR new Claim[]
+  entities?: { name: string }[];     // new
+  confidenceScore?: number;          // legacy
+  analysisConfidenceScore?: number;  // new
+};
+
+function readSI(source: ContentSource): LegacySI | null {
+  return (source.sourceIntelligence as LegacySI | null) ?? null;
+}
+
+// Use source intelligence summary if available; fall back to raw snippet
 function describeSource(source: ContentSource): string {
-  const si = source.sourceIntelligence as SourceIntelligence | null;
+  const si = readSI(source);
   if (si?.summary) return si.summary;
   return snippetFromSource(source);
 }
 
-// Extract topics from source intelligence or derive from label
+// Extract topics — prefers mainTopics (new), falls back to topics (legacy)
 function sourceTopics(source: ContentSource): string[] {
-  const si = source.sourceIntelligence as SourceIntelligence | null;
-  if (si?.topics?.length) return si.topics;
+  const si = readSI(source);
+  const topics = si?.mainTopics ?? si?.topics;
+  if (topics?.length) return topics;
   return source.label.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
 }
 
-// Extract claims from source intelligence or derive from content
+// Extract claim text — handles Claim[] (new) and string[] (legacy)
 function sourceClaims(source: ContentSource): string[] {
-  const si = source.sourceIntelligence as SourceIntelligence | null;
-  if (si?.claims?.length) return si.claims;
+  const si = readSI(source);
+  if (si?.claims?.length) {
+    return si.claims.map(c => (typeof c === 'string' ? c : c.text));
+  }
   return source.type === 'text'
     ? [`From "${source.label}": ${snippetFromSource(source)}`]
     : [];
 }
 
-// Average confidence from source intelligence; default 80
+// Average analysis confidence — prefers analysisConfidenceScore (new),
+// falls back to confidenceScore (legacy); default 80
 function avgConfidence(sources: ContentSource[]): number {
   const scores = sources
-    .map(s => (s.sourceIntelligence as SourceIntelligence | null)?.confidenceScore)
+    .map(s => {
+      const si = readSI(s);
+      return si?.analysisConfidenceScore ?? si?.confidenceScore;
+    })
     .filter((n): n is number => typeof n === 'number');
   return scores.length > 0
     ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
     : 80;
+}
+
+// Named entities from sourceIntelligence (new shape only). Used to enrich copy.
+function sourceEntities(sources: ContentSource[]): string[] {
+  const names = sources.flatMap(s => readSI(s)?.entities ?? []).map(e => e.name).filter(Boolean);
+  return [...new Set(names)];
+}
+
+// ── Case-field derivation (Phase 8.5 fix) ─────────────────────────────────────
+// The simplified wizard leaves targetAudience / industry / goals / writingStyle
+// blank, which produced empty placeholders ("targeting  in the  sector"). These
+// helpers derive safe, non-empty wording from the new fields (contentGoal,
+// contentStyle, title) and source intelligence — never returning "".
+
+const GOAL_PHRASES: Record<string, string> = {
+  build_authority:  'establishing authority',
+  generate_leads:   'generating qualified leads',
+  increase_sales:   'driving sales',
+  educate_audience: 'educating the audience',
+  grow_community:   'growing the community',
+  personal_branding:'building a personal brand',
+  other:            'the content goals',
+};
+
+function caseAudience(c: ContentCase): string {
+  return (c.targetAudience ?? '').trim() || 'your audience';
+}
+
+// Prefer an explicit industry; else a source topic; else a title keyword; else generic.
+function caseSector(c: ContentCase, topics: string[]): string {
+  const ind = (c.industry ?? '').trim();
+  if (ind) return ind;
+  const topic = topics.find(t => t && t.trim());
+  if (topic) return topic.trim();
+  const fromTitle = topicFromTitle(c.title)[0];
+  return fromTitle || 'this space';
+}
+
+function caseGoalText(c: ContentCase): string {
+  const g = (c.goals ?? '').trim();
+  if (g) return g;
+  const custom = (c.goalCustom ?? '').trim();
+  if (custom) return custom;
+  return GOAL_PHRASES[c.contentGoal as unknown as string] ?? 'the content goals';
+}
+
+function caseStyleText(c: ContentCase): string {
+  const w = (c.writingStyle ?? '').trim();
+  if (w) return w;
+  const custom = (c.styleCustom ?? '').trim();
+  if (custom) return custom;
+  return (c.contentStyle as unknown as string) || 'professional';
 }
 
 // ── Stage 1: Research Context ─────────────────────────────────────────────────
@@ -104,7 +180,14 @@ export function generateResearchContext(
   primarySources: ContentSource[],
   contextSources: ContentSource[],
 ): ResearchContext {
-  const { title, industry, targetAudience, goals, language } = caseItem;
+  // Derive safe, non-empty wording from the new wizard fields + source
+  // intelligence (the legacy targetAudience/industry/goals are blank now).
+  const { title, language } = caseItem;
+  const siTopics = primarySources.flatMap(sourceTopics);
+  const targetAudience = caseAudience(caseItem);
+  const industry = caseSector(caseItem, siTopics);
+  const goals = caseGoalText(caseItem);
+  const entities = sourceEntities(primarySources);
   const keywords = topicFromTitle(title);
   const primaryCount = primarySources.length;
   const contextCount = contextSources.length;
@@ -130,8 +213,10 @@ export function generateResearchContext(
     keyInsights: [
       `${titleCase(keywords[0] ?? 'The topic')} is reshaping how ${targetAudience} approach their work.`,
       `Early adopters in ${industry} are already seeing measurable results.`,
-      `Source intelligence across ${primaryCount} primary source${primaryCount !== 1 ? 's' : ''} reveals consistent patterns.`,
-      goals ? `The stated goal — "${goals.slice(0, 80)}" — is well-supported by the evidence.` : 'The evidence strongly supports the content goals.',
+      entities.length > 0
+        ? `Key players referenced: ${entities.slice(0, 4).join(', ')}.`
+        : `Source intelligence across ${primaryCount} primary source${primaryCount !== 1 ? 's' : ''} reveals consistent patterns.`,
+      `The content goal — ${goals.length > 80 ? goals.slice(0, 80) + '…' : goals} — is well-supported by the evidence.`,
     ].filter(Boolean).slice(0, 4),
 
     // Source intelligence claims first; fall back to raw content snippet
@@ -236,7 +321,13 @@ export function generateContentPackage(
   researchContext: ResearchContext,
   factCheckReport: FactCheckReport,
 ): ContentPackage {
-  const { title, industry, targetAudience, writingStyle, goals } = caseItem;
+  // Derive safe, non-empty wording from the new wizard fields (legacy
+  // targetAudience/industry/writingStyle/goals are blank under the new wizard).
+  const { title } = caseItem;
+  const targetAudience = caseAudience(caseItem);
+  const industry = caseSector(caseItem, researchContext.mainTopics);
+  const writingStyle = caseStyleText(caseItem);
+  const goals = caseGoalText(caseItem);
   const hook = researchContext.suggestedHooks[0] ?? `How ${title} is changing ${industry}.`;
   const insight = researchContext.keyInsights[0] ?? `${title} is transforming the ${industry} sector.`;
   const angle = researchContext.suggestedAngles[0] ?? `The impact of ${title} on ${targetAudience}.`;
@@ -335,9 +426,7 @@ export function generateContentPackage(
       '',
       `${writingStyle ? `*Written in ${writingStyle} style.*` : ''}`,
     ].filter(l => l !== undefined).join('\n').trim(),
-    callToAction: goals
-      ? `Ready to act on these insights? ${goals.slice(0, 80)}${goals.length > 80 ? '…' : ''}`
-      : `Reply to this email with your thoughts — we read every response.`,
+    callToAction: `Ready to act on these insights? Reply to this email with your thoughts — we read every response.`,
   });
 
   // ── Podcast ─────────────────────────────────────────────────────────────────
@@ -404,7 +493,7 @@ export function generateContentPackage(
       `[OUTRO]`,
       `That's it for today. If this resonated with you, subscribe and share it with someone in ${industry} who needs to hear it.`,
     ].join('\n'),
-    closing: `Thanks for listening. ${goals ? goals.slice(0, 100) : `We'll be back next week with more insights for ${targetAudience}.`} Until then, take care.`,
+    closing: `Thanks for listening. We'll be back next week with more insights for ${targetAudience}. Until then, take care.`,
   });
 
   // ── Image Prompts ────────────────────────────────────────────────────────────

@@ -14,6 +14,12 @@ function IntelligenceSection({ intel }: { intel: SourceIntelligence }) {
     neutral: 'text-on-surface-variant', mixed: 'text-outline',
   }[intel.sentiment];
 
+  // Shape-tolerant reads — supports both new Phase 8 shape and legacy records.
+  const topics     = intel.mainTopics ?? intel.topics ?? [];
+  const confidence = intel.analysisConfidenceScore ?? intel.confidenceScore;
+  const entities   = intel.entities ?? [];
+  const claimTexts = (intel.claims ?? []).map(c => (typeof c === 'string' ? c : c.text));
+
   return (
     <div className="mt-2 border-t border-outline-variant/20 pt-2">
       <button
@@ -23,19 +29,26 @@ function IntelligenceSection({ intel }: { intel: SourceIntelligence }) {
       >
         <Icon name={open ? 'expand_less' : 'expand_more'} size="sm" />
         Source Intelligence
-        <span className="text-outline font-normal">· {intel.confidenceScore}% confidence</span>
+        {confidence !== undefined && (
+          <span className="text-outline font-normal">· {confidence}% confidence</span>
+        )}
+        {intel.analysisVersion?.startsWith('claude') && (
+          <span className="text-[9px] bg-primary/10 text-primary px-1 py-0.5 rounded uppercase font-bold tracking-wide">AI</span>
+        )}
       </button>
       {open && (
         <div className="mt-2 bg-surface-container-low rounded-lg p-3 space-y-2">
           <p className="text-[12px] text-on-surface">{intel.summary}</p>
-          {intel.topics.length > 0 && (
+
+          {topics.length > 0 && (
             <div className="flex flex-wrap gap-1">
               <span className="text-[10px] font-bold text-outline uppercase mr-1">Topics:</span>
-              {intel.topics.slice(0, 5).map(t => (
+              {topics.slice(0, 5).map(t => (
                 <span key={t} className="text-[11px] bg-secondary-container/40 text-on-secondary-container px-1.5 py-0.5 rounded font-medium">{t}</span>
               ))}
             </div>
           )}
+
           {intel.keywords.length > 0 && (
             <div className="flex flex-wrap gap-1">
               <span className="text-[10px] font-bold text-outline uppercase mr-1">Keywords:</span>
@@ -44,9 +57,37 @@ function IntelligenceSection({ intel }: { intel: SourceIntelligence }) {
               ))}
             </div>
           )}
-          <p className={`text-[11px] font-medium ${sentimentColor}`}>
-            Sentiment: {intel.sentiment}
-          </p>
+
+          {entities.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              <span className="text-[10px] font-bold text-outline uppercase mr-1">Entities:</span>
+              {entities.slice(0, 8).map(e => (
+                <span key={e.name} className="text-[10px] bg-tertiary-fixed/40 text-on-tertiary-fixed px-1.5 py-0.5 rounded" title={e.type}>{e.name}</span>
+              ))}
+            </div>
+          )}
+
+          {claimTexts.length > 0 && (
+            <div>
+              <span className="text-[10px] font-bold text-outline uppercase">Claims:</span>
+              <ul className="mt-1 space-y-0.5">
+                {claimTexts.slice(0, 3).map((c, i) => (
+                  <li key={i} className="text-[11px] text-on-surface-variant pl-3 relative before:content-['•'] before:absolute before:left-0">{c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex items-center gap-4 flex-wrap">
+            <p className={`text-[11px] font-medium ${sentimentColor}`}>
+              Sentiment: {intel.sentiment}
+            </p>
+            {intel.importanceScore !== undefined && (
+              <p className="text-[11px] text-on-surface-variant">
+                Importance: <span className="font-bold text-on-surface">{intel.importanceScore}</span>
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -71,6 +112,41 @@ function SourceStatusBadge({ status }: { status: SourceStatus }) {
   );
 }
 
+// Content-extraction status line (Phase 8.5). Shown for url and pdf sources.
+// Communicates whether readable content was extracted, or analysis fell back to
+// the URL/filename only — never surfaces the raw technical error.
+function ExtractionStatusLine({ source }: { source: ContentSource }) {
+  const status = source.extractionStatus;
+  const isPdf = source.type === 'pdf';
+
+  if (status === 'success') {
+    return (
+      <p className="text-[11px] text-green-700 mt-1 flex items-center gap-1">
+        <Icon name="check_circle" size="sm" />
+        Extracted successfully{source.extractedTitle ? ` — “${source.extractedTitle}”` : ''}
+      </p>
+    );
+  }
+  if (status === 'failed') {
+    return (
+      <p className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
+        <Icon name="info" size="sm" />
+        {isPdf
+          ? 'Couldn’t read this PDF automatically. Analysis is based on the filename only.'
+          : 'Couldn’t read this page automatically. Analysis is based on the URL only.'}
+      </p>
+    );
+  }
+  if (status === 'skipped' || !status) {
+    return (
+      <p className="text-[11px] text-outline mt-1">
+        {isPdf ? 'Analysis based on filename only.' : 'Analysis based on URL only.'}
+      </p>
+    );
+  }
+  return null;
+}
+
 // ── Helpers ───────────────────────────────────────────────
 
 const SOURCE_TYPES: { value: SourceType; label: string; icon: string }[] = [
@@ -92,23 +168,57 @@ function formatDate(iso: string) {
 // ── Add-source inline form ────────────────────────────────
 
 interface AddFormProps {
-  onAdd: (type: SourceType, label: string, content: string) => Promise<void>;
+  onAdd: (type: SourceType, label: string, content: string, fileData?: string) => Promise<void>;
   onCancel: () => void;
 }
+
+// 10 MB — matches backend MAX_FILE_SIZE_BYTES. Larger PDFs are rejected here so
+// we never ship an oversized base64 body the server would only reject anyway.
+const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
 function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
   const [type, setType]       = useState<SourceType>('text');
   const [label, setLabel]     = useState('');
   const [content, setContent] = useState('');
+  const [fileData, setFileData] = useState<string | null>(null); // base64 PDF bytes
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
+  // Read a chosen PDF as base64 and capture its filename as the content.
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setError('Please choose a PDF file.');
+      return;
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      setError('This PDF is larger than 10 MB. Please choose a smaller file.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      // dataURL is "data:application/pdf;base64,XXXX" — keep only the base64 part.
+      const result = String(reader.result);
+      const base64 = result.includes(',') ? result.slice(result.indexOf(',') + 1) : result;
+      setFileData(base64);
+      setContent(file.name);
+    };
+    reader.onerror = () => setError('Could not read the file. Please try again.');
+    reader.readAsDataURL(file);
+  }
+
   async function handleSubmit() {
     if (!content.trim() || saving) return;
+    if (type === 'pdf' && !fileData) {
+      setError('Please choose a PDF file to upload.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await onAdd(type, label, content);
+      await onAdd(type, label, content, type === 'pdf' ? fileData ?? undefined : undefined);
       // Form is closed by the parent on success
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add source. Please try again.');
@@ -125,7 +235,7 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
           <button
             key={t.value}
             type="button"
-            onClick={() => { setType(t.value); setContent(''); setError(null); }}
+            onClick={() => { setType(t.value); setContent(''); setFileData(null); setError(null); }}
             className={[
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] font-medium transition-colors',
               type === t.value
@@ -171,18 +281,21 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
       )}
       {type === 'pdf' && (
         <div className="space-y-3">
-          <div className="border-2 border-dashed border-outline-variant rounded-lg p-6 text-center">
+          <label className="block border-2 border-dashed border-outline-variant rounded-lg p-6 text-center cursor-pointer hover:border-primary/40 transition-colors">
             <Icon name="upload_file" size="xl" className="text-outline mx-auto mb-2" />
-            <p className="text-[14px] text-on-surface-variant mb-1">PDF upload — coming soon</p>
-            <p className="text-[12px] text-outline">Enter the filename below to reference this document</p>
-          </div>
-          <Input
-            label="Filename *"
-            type="text"
-            value={content}
-            onChange={e => setContent(e.target.value)}
-            placeholder="e.g. research-report-2024.pdf"
-          />
+            {content ? (
+              <p className="text-[14px] text-on-surface font-medium mb-1">{content}</p>
+            ) : (
+              <p className="text-[14px] text-on-surface-variant mb-1">Choose a PDF to upload</p>
+            )}
+            <p className="text-[12px] text-outline">PDF only · up to 10 MB · text is extracted automatically</p>
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </label>
         </div>
       )}
 
@@ -211,11 +324,12 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
 
 interface SourceRowProps {
   source: ContentSource;
-  onDelete:   (id: string) => Promise<void>;
-  onSaveEdit: (id: string, label: string, content: string) => Promise<void>;
+  onDelete:     (id: string) => Promise<void>;
+  onSaveEdit:   (id: string, label: string, content: string) => Promise<void>;
+  onManualText: (id: string, text: string) => Promise<void>;
 }
 
-function SourceRow({ source, onDelete, onSaveEdit }: SourceRowProps) {
+function SourceRow({ source, onDelete, onSaveEdit, onManualText }: SourceRowProps) {
   const [editing, setEditing]         = useState(false);
   const [editLabel, setEditLabel]     = useState(source.label);
   const [editContent, setEditContent] = useState(source.content);
@@ -223,6 +337,30 @@ function SourceRow({ source, onDelete, onSaveEdit }: SourceRowProps) {
   const [saving, setSaving]           = useState(false);
   const [deleting, setDeleting]       = useState(false);
   const [saveError, setSaveError]     = useState<string | null>(null);
+
+  // Manual-text replacement (Phase 8.5) for a url/pdf whose extraction failed.
+  const [pasting, setPasting]         = useState(false);
+  const [manualText, setManualText]   = useState('');
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
+
+  const canAddManualText =
+    (source.type === 'url' || source.type === 'pdf') && source.extractionStatus === 'failed';
+
+  async function handleSaveManualText() {
+    if (!manualText.trim() || manualSaving) return;
+    setManualSaving(true);
+    setManualError(null);
+    try {
+      await onManualText(source.id, manualText.trim());
+      setPasting(false);
+      setManualText('');
+    } catch (err) {
+      setManualError(err instanceof Error ? err.message : 'Could not save. Please try again.');
+    } finally {
+      setManualSaving(false);
+    }
+  }
 
   // Keep local edit state in sync with store updates (e.g. after save roundtrip)
   // The key on this component resets on source id change; label/content sync on source prop change
@@ -326,9 +464,15 @@ function SourceRow({ source, onDelete, onSaveEdit }: SourceRowProps) {
               </div>
 
               {source.type === 'url' ? (
-                <p className="text-[12px] text-primary truncate">{source.content}</p>
+                <>
+                  <p className="text-[12px] text-primary truncate">{source.content}</p>
+                  <ExtractionStatusLine source={source} />
+                </>
               ) : source.type === 'pdf' ? (
-                <p className="text-[12px] text-on-surface-variant">{source.content}</p>
+                <>
+                  <p className="text-[12px] text-on-surface-variant truncate">{source.content}</p>
+                  <ExtractionStatusLine source={source} />
+                </>
               ) : (
                 <div>
                   <p className={`text-[12px] text-on-surface-variant ${!expanded && isLong ? 'line-clamp-2' : ''}`}>
@@ -360,6 +504,46 @@ function SourceRow({ source, onDelete, onSaveEdit }: SourceRowProps) {
                 <IntelligenceSection intel={source.sourceIntelligence} />
               ) : (
                 <p className="text-[11px] text-outline mt-2 italic">Analysis not available</p>
+              )}
+
+              {/* Manual text fallback (Phase 8.5) — url/pdf whose extraction failed */}
+              {canAddManualText && (
+                <div className="mt-2">
+                  {pasting ? (
+                    <div className="space-y-2">
+                      <Textarea
+                        value={manualText}
+                        onChange={e => setManualText(e.target.value)}
+                        rows={5}
+                        placeholder="Paste the article or document text here to analyze it directly…"
+                        className="text-[13px]"
+                      />
+                      {manualError && (
+                        <div className="flex items-center gap-2 text-[12px] text-error bg-error-container/50 rounded-lg px-3 py-2">
+                          <Icon name="error" size="sm" />
+                          <span>{manualError}</span>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleSaveManualText} loading={manualSaving} disabled={manualSaving || !manualText.trim()}>
+                          <Icon name="auto_awesome" size="sm" />
+                          {manualSaving ? 'Analyzing…' : 'Analyze pasted text'}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setPasting(false); setManualText(''); setManualError(null); }} disabled={manualSaving}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setPasting(true)}
+                      className="text-[11px] text-primary hover:underline flex items-center gap-1"
+                    >
+                      <Icon name="content_paste" size="sm" />
+                      Add article text manually
+                    </button>
+                  )}
+                </div>
               )}
             </>
           )}
@@ -415,13 +599,18 @@ export function SourcesPanel({ caseId }: SourcesPanelProps) {
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
-  async function handleAdd(type: SourceType, label: string, content: string) {
-    await addSource(caseId, { type, label, content });
+  async function handleAdd(type: SourceType, label: string, content: string, fileData?: string) {
+    await addSource(caseId, { type, label, content, fileData });
     setShowForm(false);
   }
 
   async function handleSaveEdit(sourceId: string, label: string, content: string) {
     await updateSource(caseId, sourceId, { label, content });
+  }
+
+  // Phase 8.5: user pasted readable text for a url/pdf whose extraction failed.
+  async function handleManualText(sourceId: string, text: string) {
+    await updateSource(caseId, sourceId, { manualText: text });
   }
 
   async function handleDelete(id: string) {
@@ -490,6 +679,7 @@ export function SourcesPanel({ caseId }: SourcesPanelProps) {
                 source={source}
                 onDelete={handleDelete}
                 onSaveEdit={handleSaveEdit}
+                onManualText={handleManualText}
               />
             ))}
           </div>

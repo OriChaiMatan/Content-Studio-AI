@@ -210,6 +210,15 @@ model ContentSource {
   // Deterministic mock analysis generated on create/edit. Null for legacy sources.
   sourceIntelligence Json?
 
+  // URL content extraction (Phase 8.5). Populated for url sources only.
+  // extractionStatus values: "pending" | "success" | "failed" | "skipped".
+  // content always remains the original URL; extracted body lives here.
+  extractedTitle    String?
+  extractedText     String?  @db.Text
+  extractionStatus  String?
+  extractionError   String?
+  extractedAt       DateTime?
+
   createdAt     DateTime      @default(now())
   updatedAt     DateTime?               // null until a text source is edited
 

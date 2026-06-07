@@ -5,7 +5,7 @@ import type {
 import { mockContentCases } from '../data/mockContentCases';
 import { api, ApiError } from '../lib/api';
 
-type NewSourceInput = { type: SourceType; label: string; content: string };
+type NewSourceInput = { type: SourceType; label: string; content: string; fileData?: string };
 
 interface ContentCasesState {
   cases: ContentCase[];
@@ -25,7 +25,7 @@ interface ContentCasesState {
 
   // ── Source management — API-first, network-error fallback ───────────────────
   addSource: (caseId: string, source: NewSourceInput) => Promise<ContentSource>;
-  updateSource: (caseId: string, sourceId: string, updates: { label?: string; content?: string }) => Promise<void>;
+  updateSource: (caseId: string, sourceId: string, updates: { label?: string; content?: string; manualText?: string }) => Promise<void>;
   deleteSource: (caseId: string, sourceId: string) => Promise<void>;
 
   // ── Output actions — API-backed ────────────────────────────────────────────
@@ -169,7 +169,12 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
     try {
       const newSource = await api.post<ContentSource>(
         `/cases/${caseId}/sources`,
-        { type: sourceInput.type, label: sourceInput.label, content: sourceInput.content },
+        {
+          type: sourceInput.type,
+          label: sourceInput.label,
+          content: sourceInput.content,
+          ...(sourceInput.fileData ? { fileData: sourceInput.fileData } : {}),
+        },
       );
       set(state => ({
         cases: state.cases.map(c =>

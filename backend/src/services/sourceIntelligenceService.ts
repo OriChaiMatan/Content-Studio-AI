@@ -1,11 +1,12 @@
-import { SourceIntelligenceSchema, type SourceIntelligence } from '../schemas/aiContractSchemas';
+import { SourceIntelligenceSchema, type SourceIntelligence, type Claim, type Entity } from '../schemas/aiContractSchemas';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Source Intelligence Service — deterministic mock analysis
 //
 // No randomness, no AI calls. Produces the same output for the same input.
-// Phase 8 replacement: swap this function for a real AI summarization call.
-// The schema validation, persistence, and UI layers are already in place.
+// This is the PERMANENT FALLBACK behind the Claude Source Analysis Agent
+// (Phase 8). It always produces valid SourceIntelligence so adding a source
+// never fails, even with no API key or when Claude is unavailable.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STOP_WORDS = new Set([
@@ -73,8 +74,8 @@ export function generateSourceIntelligence(
     ? keywords
     : label.split(/\s+/).map(w => w.toLowerCase().replace(/[^a-z]/g, '')).filter(w => w.length > 3).slice(0, 3);
 
-  // ── Claims: sentences from text; references for URL/PDF ──────────────────────
-  const claims =
+  // ── Claims: structured Claim[] (new shape) ───────────────────────────────────
+  const rawClaims =
     type === 'text'
       ? (content.match(/[^.!?]+[.!?]+/g) ?? [])
           .map(s => s.trim())
@@ -83,6 +84,20 @@ export function generateSourceIntelligence(
       : type === 'url'
       ? [`Source references external URL: ${content}`]
       : [`Document "${label || content}" referenced as research material.`];
+
+  const claims: Claim[] = rawClaims.map(text => ({
+    text,
+    type: 'opinion' as const,         // mock cannot classify reliably; conservative default
+    verifiable: type === 'text',      // text claims are at least checkable; url/pdf refs are not
+    extractionConfidence: 60,         // mock extraction is low-confidence by design
+    verificationStatus: 'unverified' as const,
+  }));
+
+  // ── Entities: capitalized tokens treated as generic technology/company terms ──
+  const entities: Entity[] = uniqueCapitalized.slice(0, 6).map(name => ({
+    name,
+    type: 'technology' as const,      // mock cannot distinguish entity types
+  }));
 
   // ── Sentiment: keyword scanning ───────────────────────────────────────────────
   const posScore = POSITIVE_WORDS.filter(w => lowerContent.includes(w)).length;
@@ -93,20 +108,37 @@ export function generateSourceIntelligence(
     posScore === 0 && negScore === 0 ? 'neutral' :
     'mixed';
 
-  // ── Confidence: based on source type and content richness ─────────────────────
-  const confidenceScore =
+  // ── Importance: content richness as a coarse proxy ────────────────────────────
+  const importanceScore =
     type === 'text'
-      ? content.length > 300 ? 88 : content.length > 100 ? 80 : 65
-      : type === 'url' ? 72
-      : 75;
+      ? content.length > 500 ? 70 : content.length > 150 ? 55 : 40
+      : type === 'url' ? 50
+      : 50;
+
+  // ── Analysis extraction confidence (NOT credibility) ──────────────────────────
+  const analysisConfidenceScore =
+    type === 'text'
+      ? content.length > 300 ? 85 : content.length > 100 ? 75 : 60
+      : type === 'url' ? 65
+      : 70;
+
+  // ── Content angles: derived generically from topics ───────────────────────────
+  const contentAngles = topics.slice(0, 2).map(t => `Explore the implications of ${t}`);
 
   const intelligence: SourceIntelligence = {
     summary,
-    topics:          topics.slice(0, 5),
-    keywords:        finalKeywords.length > 0 ? finalKeywords.slice(0, 7) : ['content'],
-    claims:          claims.slice(0, 3),
+    mainTopics:              topics.slice(0, 5),
+    keywords:                finalKeywords.length > 0 ? finalKeywords.slice(0, 7) : ['content'],
+    claims,
+    entities,
     sentiment,
-    confidenceScore,
+    importanceScore,
+    contentAngles,
+    language:                'en',     // mock does not detect language
+    analysisConfidenceScore,
+    analysisVersion:         'mock-2',
+    truncated:               false,
+    analyzedAt:              new Date().toISOString(),
   };
 
   return SourceIntelligenceSchema.parse(intelligence);

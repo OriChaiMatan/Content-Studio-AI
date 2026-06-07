@@ -34,7 +34,10 @@ app.use(
 );
 
 // ── Body parsing ──────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '2mb' }));
+// Limit accommodates base64-encoded PDF uploads (Phase 8.5): a 10 MB PDF is
+// ~13.5 MB base64, so allow headroom above MAX_FILE_SIZE_BYTES. Decoded PDF size
+// is still hard-capped server-side in pdfExtractionService.
+app.use(express.json({ limit: '16mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ── API routes ────────────────────────────────────────────────────────────────

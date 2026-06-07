@@ -34,6 +34,12 @@ export function serializeSource(s: ContentSource) {
     usedInRunId:         s.usedInRunId,
     lastUsedAt:          s.lastUsedAt ? s.lastUsedAt.toISOString() : null,
     sourceIntelligence:  s.sourceIntelligence ?? null,
+    // URL content extraction (Phase 8.5)
+    extractedTitle:      s.extractedTitle ?? null,
+    extractedText:       s.extractedText ?? null,
+    extractionStatus:    s.extractionStatus ?? null,
+    extractionError:     s.extractionError ?? null,
+    extractedAt:         s.extractedAt ? s.extractedAt.toISOString() : null,
     createdAt:           s.createdAt.toISOString(),
     updatedAt:           s.updatedAt ? s.updatedAt.toISOString() : null,
   };

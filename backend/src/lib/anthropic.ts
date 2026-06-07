@@ -1,0 +1,59 @@
+import Anthropic from '@anthropic-ai/sdk';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Anthropic SDK client singleton (Phase 8B)
+//
+// Mirrors the prisma.ts singleton pattern: one client instance survives tsx
+// watch hot-reloads via the Node module cache. The client is created lazily so
+// the server boots fine with SOURCE_ANALYSIS_ENABLED=false and no API key —
+// callers must consult sourceAnalysisConfig.enabled before using it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const globalForAnthropic = globalThis as unknown as {
+  anthropic?: Anthropic;
+};
+
+// Source Analysis configuration, read once from the environment.
+export const sourceAnalysisConfig = {
+  // MUST default to false — Claude is opt-in. With this off, analyze() goes
+  // straight to the deterministic mock and never touches the network.
+  enabled: process.env.SOURCE_ANALYSIS_ENABLED === 'true',
+  apiKey: process.env.ANTHROPIC_API_KEY ?? '',
+  model: process.env.SOURCE_ANALYSIS_MODEL ?? 'claude-sonnet-4-6',
+  maxInputTokens: parseInt(process.env.SOURCE_ANALYSIS_MAX_INPUT_TOKENS ?? '7000', 10),
+  timeoutMs: parseInt(process.env.SOURCE_ANALYSIS_TIMEOUT_MS ?? '30000', 10),
+} as const;
+
+// Returns the shared Anthropic client, or null when analysis is disabled or no
+// API key is configured. Never throws — callers fall back to the mock.
+export function getAnthropicClient(): Anthropic | null {
+  if (!sourceAnalysisConfig.enabled) return null;
+  if (!sourceAnalysisConfig.apiKey) return null;
+
+  if (!globalForAnthropic.anthropic) {
+    globalForAnthropic.anthropic = new Anthropic({
+      apiKey: sourceAnalysisConfig.apiKey,
+      // Per-request timeout is also passed at the call site; this is a backstop.
+      timeout: sourceAnalysisConfig.timeoutMs,
+    });
+  }
+
+  return globalForAnthropic.anthropic;
+}
+
+// ── Debug-only startup log (Phase 8B) ────────────────────────────────────────
+// Reports the resolved config so we can confirm what the running process
+// actually loaded from .env. Never prints the API key itself. Reads the raw
+// env var separately to distinguish "unset" from a value that failed the
+// `=== 'true'` check (e.g. quotes/whitespace).
+console.log(
+  '[anthropic] startup config:',
+  JSON.stringify({
+    SOURCE_ANALYSIS_ENABLED_raw: process.env.SOURCE_ANALYSIS_ENABLED ?? '(unset)',
+    enabledResolved: sourceAnalysisConfig.enabled,
+    apiKeyPresent: sourceAnalysisConfig.apiKey.length > 0,
+    apiKeyLength: sourceAnalysisConfig.apiKey.length,
+    model: sourceAnalysisConfig.model,
+    clientResolved: getAnthropicClient() ? 'client' : 'null',
+  }),
+);
