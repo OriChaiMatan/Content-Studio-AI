@@ -2,30 +2,32 @@ import { prisma } from '../lib/prisma';
 import { serializeCase } from './caseService';
 import { PIPELINE_STEP_ORDER } from '../schemas/pipelineSchemas';
 
-// Maps ContentTarget values (wizard) → Platform enum values (DB / ContentOutput)
-const TARGET_TO_PLATFORM: Record<string, string> = {
-  linkedin:    'linkedin',
-  facebook:    'facebook',
-  instagram:   'instagram',
-  newsletter:  'newsletter',
-  podcast:     'podcast',
-  images:      'image_prompt',
+// Maps ContentTarget values (wizard) → content platform (Phase 9 v2).
+// 'images' is RETIRED as a standalone output: image prompts are embedded inside
+// LinkedIn/Facebook/Instagram. 'images' maps to undefined → no output (no-op).
+const CONTENT_TARGET_TO_PLATFORM: Record<string, ContentPlatform | undefined> = {
+  linkedin:   'linkedin',
+  facebook:   'facebook',
+  instagram:  'instagram',
+  newsletter: 'newsletter',
+  podcast:    'podcast',
+  images:     undefined,
 };
-const ALL_PLATFORMS = ['linkedin', 'facebook', 'instagram', 'newsletter', 'podcast', 'image_prompt'];
+const ALL_CONTENT_PLATFORMS: ContentPlatform[] = ['linkedin', 'facebook', 'instagram', 'newsletter', 'podcast'];
 import {
   ResearchContextSchema,
   FactCheckReportSchema,
-  ContentPackageSchema,
   type ResearchContext,
   type FactCheckReport,
-  type ContentPackage,
+  type GeneratedOutput,
+  type ContentPlatform,
 } from '../schemas/aiContractSchemas';
 import {
   generateResearchContext,
   generateFactCheckReport,
-  generateContentPackage,
 } from './mockAiService';
-import { packageToOutputs } from './contentPackageMapper';
+import { buildGeneratorInput } from './generatorInput';
+import { generateMockContent } from './mockContentService';
 
 // ── Source selection ───────────────────────────────────────────────────────────
 
@@ -205,10 +207,19 @@ export const pipelineService = {
     type ContractResult =
       | { ok: true;  researchContext: ResearchContext }
       | { ok: true;  factCheckReport: FactCheckReport }
-      | { ok: true;  contentPackage:  ContentPackage }
+      | { ok: true;  outputs: GeneratedOutput[] }
       | { ok: false; errorMessage: string };
 
     let contractResult: ContractResult;
+
+    // Which platforms to generate (Phase 9 v2). Empty targets = all 5 content
+    // platforms. 'images' maps to nothing (image prompts are embedded).
+    const selectedPlatforms: ContentPlatform[] =
+      existing.contentTargets.length > 0
+        ? existing.contentTargets
+            .map(t => CONTENT_TARGET_TO_PLATFORM[t])
+            .filter((p): p is ContentPlatform => !!p)
+        : ALL_CONTENT_PLATFORMS;
 
     try {
       if (stepName === 'research') {
@@ -225,13 +236,21 @@ export const pipelineService = {
         contractResult = { ok: true, factCheckReport: report };
 
       } else {
-        // content_creation: needs both researchContext and factCheckReport
+        // content_creation (Phase 9 v2): needs both researchContext and factCheckReport.
         const rcParsed  = ResearchContextSchema.safeParse(activeRun.researchContext);
         const fcrParsed = FactCheckReportSchema.safeParse(activeRun.factCheckReport);
         if (!rcParsed.success)  throw new Error(`Research context missing — cannot generate content.`);
         if (!fcrParsed.success) throw new Error(`Fact check report missing — cannot generate content.`);
-        const pkg = generateContentPackage(activeRun, existing, rcParsed.data, fcrParsed.data);
-        contractResult = { ok: true, contentPackage: pkg };
+
+        // Generate selected platforms only, from the projection (no raw articles).
+        // CP-1: deterministic v2 mock (permanent fallback). CP-2 swaps in the
+        // Claude generator with this mock as the fallback.
+        const runSources = [...primarySources, ...contextSources];
+        const outputs = selectedPlatforms.map(platform => {
+          const input = buildGeneratorInput(platform, activeRun, existing, runSources);
+          return generateMockContent(input);
+        });
+        contractResult = { ok: true, outputs };
       }
 
     } catch (err) {
@@ -280,13 +299,13 @@ export const pipelineService = {
         confidence = fcr.overallConfidenceScore;
         pRunUpdate.factCheckReport = fcr as unknown as Record<string, unknown>;
 
-      } else if ('contentPackage' in contractResult && contractResult.contentPackage) {
-        const pkg = contractResult.contentPackage;
-        const hCount = pkg.linkedin.hashtags.length;
-        summary =
-          `Generated structured content package: LinkedIn (${hCount} hashtags), Facebook, Instagram (${pkg.instagram.strongLine.split(' ').length}-word strong line), Newsletter, Podcast script (${pkg.podcast.segments.length} segments), and 2 image prompts.`;
+      } else if ('outputs' in contractResult && contractResult.outputs) {
+        const outputs = contractResult.outputs;
+        summary = outputs.length > 0
+          ? `Generated ${outputs.length} content output${outputs.length !== 1 ? 's' : ''}: ${outputs.map(o => o.platform).join(', ')}.`
+          : `No content platforms selected — nothing to generate.`;
         confidence = 88;
-        pRunUpdate.contentPackage = pkg as unknown as Record<string, unknown>;
+        pRunUpdate.contentPackage = { version: 2, outputs } as unknown as Record<string, unknown>;
 
       } else {
         summary = 'Step completed.';
@@ -329,43 +348,30 @@ export const pipelineService = {
         });
 
       } else if (stepName === 'content_creation') {
-        // Transform ContentPackage → 6 ContentOutput records
-        const pkg = (contractResult as { ok: true; contentPackage: ContentPackage }).contentPackage;
-        const fcr = FactCheckReportSchema.safeParse(activeRun.factCheckReport);
-        const rc  = ResearchContextSchema.safeParse(activeRun.researchContext);
+        // Persist v2 GeneratedOutput[] → ContentOutput rows.
+        // body = readyToPublish (editable); breakdown + metadata are read-only JSON.
+        const outputs = (contractResult as { ok: true; outputs: GeneratedOutput[] }).outputs;
 
-        const researchConfidence = rc.success  ? rc.data.confidenceScore               : 88;
-        const factCheckAccuracy  = fcr.success ? fcr.data.overallConfidenceScore        : 91;
+        if (outputs.length > 0) {
+          await tx.contentOutput.createMany({
+            data: outputs.map(o => ({
+              contentCaseId:      caseId,
+              pipelineRunId:      activeRun.id,
+              platform:           o.platform,
+              title:              o.title,
+              body:               o.readyToPublish,
+              status:             'draft',
+              version:            'v2.0.0',
+              contentScore:       o.metadata.contentScore ?? null,
+              researchConfidence: o.metadata.researchConfidence ?? null,
+              factCheckAccuracy:  o.metadata.factCheckAccuracy ?? null,
+              breakdown:          o.breakdown as unknown as ReturnType<typeof JSON.parse>,
+              metadata:           o.metadata as unknown as ReturnType<typeof JSON.parse>,
+            })),
+          });
+        }
 
-        // Determine which platforms to generate based on contentTargets.
-        // Empty array = legacy backward compat → generate all 6.
-        const selectedPlatforms =
-          existing.contentTargets.length > 0
-            ? existing.contentTargets
-                .map(t => TARGET_TO_PLATFORM[t])
-                .filter((p): p is string => !!p)
-            : ALL_PLATFORMS;
-
-        const outputBodies = packageToOutputs(pkg, existing);
-        const platforms = (Object.keys(outputBodies) as Array<keyof typeof outputBodies>)
-          .filter(k => selectedPlatforms.includes(k));
-
-        await tx.contentOutput.createMany({
-          data: platforms.map(platform => ({
-            contentCaseId:      caseId,
-            pipelineRunId:      activeRun.id,
-            platform,
-            title:              outputBodies[platform].title,
-            body:               outputBodies[platform].body,
-            status:             'draft',
-            version:            'v1.0.0',
-            contentScore:       outputBodies[platform].contentScore,
-            researchConfidence,
-            factCheckAccuracy,
-          })),
-        });
-
-        // Complete run
+        // Complete run (even when 0 outputs — e.g. only 'images' was selected).
         await tx.pipelineRun.update({
           where: { id: activeRun.id },
           data:  { status: 'completed', completedAt: now },

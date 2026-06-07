@@ -24,6 +24,21 @@ export const sourceAnalysisConfig = {
   timeoutMs: parseInt(process.env.SOURCE_ANALYSIS_TIMEOUT_MS ?? '30000', 10),
 } as const;
 
+// Content Generator configuration (Phase 9). MUST default disabled — when off,
+// content generation uses the permanent v2 mock. Podcast has a separate flag so
+// long-form generation can be disabled independently (falls back to mock,
+// degraded=true) without affecting the social/newsletter generators.
+export const contentGenerationConfig = {
+  enabled:        process.env.CONTENT_GENERATION_ENABLED === 'true',
+  podcastEnabled: process.env.CONTENT_GENERATION_PODCAST_ENABLED === 'true',
+  model:          process.env.CONTENT_GENERATION_MODEL ?? 'claude-sonnet-4-6',
+  effortSocial:   process.env.CONTENT_GENERATION_EFFORT_SOCIAL ?? 'low',
+  effortLongform: process.env.CONTENT_GENERATION_EFFORT_LONGFORM ?? 'high',
+  timeoutMs:        parseInt(process.env.CONTENT_GENERATION_TIMEOUT_MS ?? '60000', 10),
+  podcastTimeoutMs: parseInt(process.env.CONTENT_GENERATION_PODCAST_TIMEOUT_MS ?? '180000', 10),
+  concurrency:      parseInt(process.env.CONTENT_GENERATION_CONCURRENCY ?? '3', 10),
+} as const;
+
 // Returns the shared Anthropic client, or null when analysis is disabled or no
 // API key is configured. Never throws — callers fall back to the mock.
 export function getAnthropicClient(): Anthropic | null {

@@ -33,6 +33,69 @@ function ScorePill({ label, value, icon }: { label: string; value: number; icon:
 
 // ── Output card ───────────────────────────────────────────
 
+// ── v2 helpers (Phase 9) ──────────────────────────────────
+function isDegraded(output: ContentOutput): boolean {
+  const m = output.metadata;
+  return !!m && (m.degraded === true ||
+    (typeof m.generatorVersion === 'string' && m.generatorVersion.startsWith('mock-fallback')));
+}
+
+function DegradedBadge() {
+  return (
+    <span
+      className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 flex items-center gap-1"
+      title="This output was produced by the fallback generator, not the live generator."
+    >
+      <Icon name="warning" size="sm" /> Generated with fallback
+    </span>
+  );
+}
+
+function humanizeKey(k: string): string {
+  return k.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).trim();
+}
+
+// Generic, read-only renderer for the platform-specific breakdown.
+function BreakdownValue({ value }: { value: unknown }) {
+  if (value == null) return null;
+  if (typeof value === 'string') {
+    return <span dir="auto" className="text-[12px] text-on-surface-variant whitespace-pre-wrap text-start">{value}</span>;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return <span className="text-[12px] text-on-surface-variant">{String(value)}</span>;
+  }
+  if (Array.isArray(value)) {
+    return (
+      <ul className="list-disc ms-5 space-y-0.5">
+        {value.map((v, i) => <li key={i}><BreakdownValue value={v} /></li>)}
+      </ul>
+    );
+  }
+  if (typeof value === 'object') {
+    return (
+      <div className="ms-2 space-y-0.5">
+        {Object.entries(value as Record<string, unknown>).map(([k, v]) => (
+          <div key={k}><span className="text-[11px] font-medium text-outline">{humanizeKey(k)}: </span><BreakdownValue value={v} /></div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+}
+
+function BreakdownView({ breakdown }: { breakdown: Record<string, unknown> }) {
+  return (
+    <div className="space-y-2">
+      {Object.entries(breakdown).map(([k, v]) => (
+        <div key={k}>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-outline mb-0.5">{humanizeKey(k)}</p>
+          <BreakdownValue value={v} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface OutputCardProps {
   output: ContentOutput;
   caseId: string;
@@ -137,7 +200,10 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
           </div>
           <PlatformBadge platform={output.platform} />
         </div>
-        <OutputStatusBadge status={output.status} />
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {isDegraded(output) && <DegradedBadge />}
+          <OutputStatusBadge status={output.status} />
+        </div>
       </div>
 
       {/* Title */}
@@ -154,8 +220,11 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
         </div>
       )}
 
-      {/* Body — RTL/LTR resolved from content (Phase 8.6) */}
+      {/* Ready To Publish — the ONLY editable field (= body). RTL/LTR auto. */}
       <div className="px-5 pb-4">
+        {isActive && (
+          <p className="text-[11px] font-bold uppercase tracking-wider text-outline mb-1">Ready To Publish</p>
+        )}
         {isActive ? (
           editing ? (
             <div onClick={e => e.stopPropagation()}>
@@ -177,6 +246,21 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
           <p dir="auto" className="text-[13px] text-on-surface-variant line-clamp-3 text-start">{output.body}</p>
         )}
       </div>
+
+      {/* Breakdown — read-only, platform-specific (Phase 9 v2). Hidden on legacy
+          v1 outputs (breakdown=null) and only expanded for the active card. */}
+      {isActive && !editing && output.breakdown && Object.keys(output.breakdown).length > 0 && (
+        <div className="px-5 pb-4" onClick={e => e.stopPropagation()}>
+          <details className="rounded-lg border border-outline-variant/40 bg-surface-container-low/40">
+            <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-outline">
+              Breakdown <span className="font-normal normal-case text-on-surface-variant/70">(read-only)</span>
+            </summary>
+            <div className="px-3 pb-3 pt-1 max-h-80 overflow-y-auto">
+              <BreakdownView breakdown={output.breakdown} />
+            </div>
+          </details>
+        </div>
+      )}
 
       {/* Action error banner */}
       {isActive && actionError && (

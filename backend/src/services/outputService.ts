@@ -11,7 +11,10 @@ export function serializeOutput(o: ContentOutput) {
     pipelineRunId:      o.pipelineRunId,
     platform:           o.platform,
     title:              o.title,
-    body:               o.body,
+    body:               o.body,            // = readyToPublish (editable)
+    readyToPublish:     o.body,            // explicit v2 alias
+    breakdown:          o.breakdown ?? null,   // read-only; null on legacy v1
+    metadata:           o.metadata ?? null,
     status:             o.status,
     version:            o.version,
     contentScore:       o.contentScore,

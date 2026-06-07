@@ -243,6 +243,12 @@ model ContentOutput {
   contentScore       Int?         // 0–100 AI quality score; null until AI is connected
   researchConfidence Int?         // 0–100
   factCheckAccuracy  Int?         // 0–100
+  // Content Output v2 (Phase 9). body = readyToPublish (editable). breakdown is
+  // the read-only platform-specific structure; metadata holds hashtags, image
+  // prompts, reading time / duration, generatorVersion, degraded flag, etc.
+  // Null on legacy v1 outputs → consumers fall back to body.
+  breakdown          Json?
+  metadata           Json?
   generatedAt        DateTime     @default(now())
   reviewedAt         DateTime?    // set when status is changed to approved/rejected
 

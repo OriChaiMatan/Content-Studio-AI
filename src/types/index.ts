@@ -151,17 +151,38 @@ export interface PipelineStep {
   confidence: number | null; // 0–100
 }
 
+// ── Content Output v2 metadata (Phase 9) ───────────────────
+export interface OutputMetadata {
+  generatorVersion?: string;        // "mock-2" | "gen-1" | "mock-fallback"
+  model?: string;
+  degraded?: boolean;
+  contentScore?: number | null;
+  researchConfidence?: number | null;
+  factCheckAccuracy?: number | null;
+  hashtags?: string[];
+  imagePrompts?: Array<Record<string, unknown>>;
+  readingTimeMinutes?: number | null;       // newsletter
+  estimatedDurationMinutes?: number | null; // podcast
+  estimatedWordCount?: number | null;       // podcast
+  [key: string]: unknown;
+}
+
 // ── ContentOutput ──────────────────────────────────────────
-// Maps to: content_outputs table
+// Maps to: content_outputs table. v2 adds readyToPublish (= body, editable),
+// breakdown (read-only, platform-specific), and metadata. Legacy v1 rows have
+// breakdown/metadata = null → consumers fall back to body.
 export interface ContentOutput {
   id: string;
   contentCaseId: string;
   pipelineRunId: string | null; // which run produced this output
   platform: Platform;
   title: string;
-  body: string;
+  body: string;                   // = readyToPublish (the editable text)
+  readyToPublish?: string;        // explicit v2 alias of body
+  breakdown?: Record<string, unknown> | null;  // read-only; null on legacy v1
+  metadata?: OutputMetadata | null;
   status: OutputStatus;
-  version: string;                // e.g. "v1.0.0"
+  version: string;                // e.g. "v2.0.0"
   contentScore: number | null;    // 0–100, mock AI quality score
   researchConfidence: number | null;
   factCheckAccuracy: number | null;
