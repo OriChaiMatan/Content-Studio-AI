@@ -19,8 +19,8 @@ function OutputItem({ item }: { item: LibraryItem }) {
           <PlatformBadge platform={item.platform} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-medium text-on-surface truncate">{item.title}</p>
-          <p className={`text-[12px] text-on-surface-variant mt-0.5 ${!expanded && isLong ? 'line-clamp-2' : ''}`}>
+          <p className="text-[13px] font-medium text-on-surface truncate text-start" dir="auto">{item.title}</p>
+          <p dir="auto" className={`text-[12px] text-on-surface-variant mt-0.5 text-start ${!expanded && isLong ? 'line-clamp-2' : ''}`}>
             {item.body}
           </p>
           {isLong && (

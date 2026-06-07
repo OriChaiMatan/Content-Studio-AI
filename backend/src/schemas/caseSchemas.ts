@@ -17,9 +17,18 @@ export const ContentTargetEnum = z.enum([
   'linkedin', 'facebook', 'instagram', 'newsletter', 'podcast', 'images',
 ]);
 
-// ── Create case — simplified 3-step wizard ────────────────────────────────────
-// No sources, no schedule, no audience/industry/style text in creation.
+export const ScheduleFrequencyEnum = z.enum(['manual', 'daily', 'weekly', 'monthly']);
 
+// Schedule config fields, shared by create + update (Phase 8.6 — restored).
+// scheduleTime: "HH:MM"; dayOfWeek 0–6 (weekly); dayOfMonth 1–31 (monthly).
+const scheduleFields = {
+  scheduleFrequency:  ScheduleFrequencyEnum.optional(),
+  scheduleTime:       z.string().regex(/^\d{2}:\d{2}$/, 'Time must be HH:MM').nullable().optional(),
+  scheduleDayOfWeek:  z.number().int().min(0).max(6).nullable().optional(),
+  scheduleDayOfMonth: z.number().int().min(1).max(31).nullable().optional(),
+};
+
+// ── Create case — 3-step wizard (Goal → Style+Targets → Schedule) ─────────────
 export const createCaseSchema = z.object({
   title:          z.string().min(1, 'Case title is required').max(200),
   contentGoal:    ContentGoalEnum.default('build_authority'),
@@ -30,6 +39,7 @@ export const createCaseSchema = z.object({
   contentTargets: z
     .array(ContentTargetEnum)
     .min(1, 'At least one content target must be selected'),
+  ...scheduleFields,
 });
 
 // ── Update case — all fields optional for inline editing ─────────────────────
@@ -45,6 +55,8 @@ export const updateCaseSchema = z.object({
     .array(ContentTargetEnum)
     .min(1, 'At least one content target must be selected')
     .optional(),
+  // Schedule config (Phase 8.6)
+  ...scheduleFields,
   // Legacy fields — kept for backward compat with old wizard-created cases
   targetAudience:  z.string().optional(),
   industry:        z.string().optional(),

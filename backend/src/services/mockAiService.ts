@@ -142,6 +142,16 @@ const GOAL_PHRASES: Record<string, string> = {
   other:            'the content goals',
 };
 
+const GOAL_PHRASES_HE: Record<string, string> = {
+  build_authority:  'ביסוס סמכות מקצועית',
+  generate_leads:   'יצירת לידים',
+  increase_sales:   'הגדלת מכירות',
+  educate_audience: 'חינוך הקהל',
+  grow_community:   'הגדלת הקהילה',
+  personal_branding:'בניית מותג אישי',
+  other:            'יעדי התוכן',
+};
+
 function caseAudience(c: ContentCase): string {
   return (c.targetAudience ?? '').trim() || 'your audience';
 }
@@ -172,6 +182,17 @@ function caseStyleText(c: ContentCase): string {
   return (c.contentStyle as unknown as string) || 'professional';
 }
 
+// Resolve the output language for a run (Phase 8.6): the run's outputLanguage
+// wins; otherwise fall back to the case language; otherwise English.
+function resolveOutputLang(
+  run: { outputLanguage?: string | null },
+  caseItem: { language?: string | null },
+): 'en' | 'he' {
+  if (run.outputLanguage === 'he') return 'he';
+  if (run.outputLanguage === 'en') return 'en';
+  return caseItem.language === 'he' ? 'he' : 'en';
+}
+
 // ── Stage 1: Research Context ─────────────────────────────────────────────────
 
 export function generateResearchContext(
@@ -180,9 +201,15 @@ export function generateResearchContext(
   primarySources: ContentSource[],
   contextSources: ContentSource[],
 ): ResearchContext {
+  // Output language is chosen per run (Phase 8.6). Hebrew runs use a dedicated
+  // Hebrew mock builder; English keeps the existing path.
+  if (resolveOutputLang(run, caseItem) === 'he') {
+    return ResearchContextSchema.parse(hebrewResearchContext(run, caseItem, primarySources, contextSources));
+  }
+
   // Derive safe, non-empty wording from the new wizard fields + source
   // intelligence (the legacy targetAudience/industry/goals are blank now).
-  const { title, language } = caseItem;
+  const { title } = caseItem;
   const siTopics = primarySources.flatMap(sourceTopics);
   const targetAudience = caseAudience(caseItem);
   const industry = caseSector(caseItem, siTopics);
@@ -195,7 +222,7 @@ export function generateResearchContext(
   const context: ResearchContext = {
     runId:    run.id,
     caseId:   caseItem.id,
-    language: language as 'en' | 'he',
+    language: 'en',
 
     summary:
       `Research analysis for "${title}" targeting ${targetAudience} in the ${industry} sector. ` +
@@ -321,6 +348,11 @@ export function generateContentPackage(
   researchContext: ResearchContext,
   factCheckReport: FactCheckReport,
 ): ContentPackage {
+  // Hebrew output uses the dedicated Hebrew mock builder (Phase 8.6).
+  if (resolveOutputLang(run, caseItem) === 'he') {
+    return ContentPackageSchema.parse(hebrewContentPackage(caseItem, researchContext, factCheckReport));
+  }
+
   // Derive safe, non-empty wording from the new wizard fields (legacy
   // targetAudience/industry/writingStyle/goals are blank under the new wizard).
   const { title } = caseItem;
@@ -530,6 +562,206 @@ export function generateContentPackage(
   };
 
   return ContentPackageSchema.parse(package_);
+}
+
+// ── Hebrew mock builders (Phase 8.6) ─────────────────────────────────────────
+// Temporary Hebrew mock copy until the Claude Content Generator replaces the
+// mock. Produces real Hebrew text (not English rendered RTL). Source-derived
+// values (topics, claims, entities) may be Hebrew or English — mixed text is
+// expected and acceptable.
+
+function hebrewResearchContext(
+  run: PipelineRun,
+  caseItem: ContentCase,
+  primarySources: ContentSource[],
+  contextSources: ContentSource[],
+): ResearchContext {
+  const title = caseItem.title;
+  const siTopics = primarySources.flatMap(sourceTopics);
+  const entities = sourceEntities(primarySources);
+  const primaryCount = primarySources.length;
+  const contextCount = contextSources.length;
+  const topic = siTopics[0] || topicFromTitle(title)[0] || title;
+  const firstWord = title.split(/\s+/)[0] || title;
+
+  const mainTopics = [
+    `סקירת נוף בנושא ${topic}`,
+    'התפתחויות ומגמות מרכזיות',
+    'השלכות עבור הקהל',
+    ...siTopics.slice(0, 3).map(t => `ניתוח ${t}`),
+  ].filter((t, i, a) => a.indexOf(t) === i).slice(0, 5);
+
+  const keyInsights = [
+    `${topic} משנה את אופן הפעולה בתחום.`,
+    'מאמצים מוקדמים כבר רואים תוצאות מדידות.',
+    entities.length > 0
+      ? `גורמים מרכזיים שהוזכרו: ${entities.slice(0, 4).join(', ')}.`
+      : `מודיעין המקורות חושף דפוסים עקביים על פני ${primaryCount} מקורות.`,
+    `המטרה — ${GOAL_PHRASES_HE[caseItem.contentGoal as unknown as string] ?? 'יעדי התוכן'} — נתמכת היטב בראיות.`,
+  ].filter(Boolean).slice(0, 4);
+
+  const importantClaims = primarySources
+    .flatMap(s => {
+      const claims = sourceClaims(s);
+      return claims.length > 0 ? claims : [`מתוך "${s.label}": ${describeSource(s)}`];
+    })
+    .slice(0, Math.min(primaryCount * 2, 8));
+
+  return {
+    runId:    run.id,
+    caseId:   caseItem.id,
+    language: 'he',
+    summary:
+      `ניתוח מחקר עבור "${title}". עובדו ${primaryCount} מקורות עיקריים` +
+      (contextCount > 0 ? ` ו-${contextCount} מקורות הקשר נוספים לשמירה על עקביות.` : '.'),
+    mainTopics,
+    keyInsights,
+    importantClaims,
+    suggestedAngles: [
+      `זווית ה-ROI: כימות ההשפעה של ${topic}`,
+      'ציר הזמן לאימוץ: לאן התחום מתקדם בשנה הקרובה',
+      'זווית הסיכון: מה קורה אם לא פועלים עכשיו',
+      'זווית חקר המקרה: ארגונים שכבר רואים תוצאות',
+    ].slice(0, 4),
+    suggestedHooks: [
+      `מה אם אפשר היה להתקדם פי 10 מהר יותר עם ${topic}?`,
+      'התחום נמצא בנקודת מפנה — והנה למה זה חשוב עבורכם.',
+      `רובם לא מבינים כמה מהר ${firstWord} משתנה.`,
+    ],
+    sourceReferences: [
+      ...primarySources.map(s => s.label || s.type),
+      ...contextSources.map(s => `[הקשר] ${s.label || s.type}`),
+    ],
+    contradictions: contextCount > 0
+      ? ['זוהו אי-התאמות קלות בין המקורות העיקריים להקשר ההיסטורי — סומנו לבדיקת עובדות.']
+      : [],
+    risks: [
+      'יש לאמת טענות סטטיסטיות לפני פרסום.',
+      'יש לוודא שטענות ספציפיות לתחום עדכניות במועד הפרסום.',
+    ],
+    confidenceScore: Math.min(95, avgConfidence(primarySources) + primaryCount * 2),
+  };
+}
+
+function hebrewContentPackage(
+  caseItem: ContentCase,
+  rc: ResearchContext,
+  fcr: FactCheckReport,
+): ContentPackage {
+  const title = caseItem.title;
+  const hook = rc.suggestedHooks[0] ?? `כיצד ${title} משנה את התחום.`;
+  const insight = rc.keyInsights[0] ?? `${title} משנה את התחום.`;
+  const angle = rc.suggestedAngles[0] ?? `ההשפעה של ${title}.`;
+  const topic = rc.mainTopics[0] ?? title;
+  const hashtags = ['#תוכן', '#תובנות', '#AI'];
+
+  const confidenceLine = fcr.overallConfidenceScore >= 90
+    ? 'כל הטענות המרכזיות הוצלבו ואומתו.'
+    : 'רוב הטענות אומתו; חלקן דורשות מקורות נוספים.';
+
+  const strongLineRaw = rc.mainTopics[0]
+    ? `${rc.mainTopics[0]} משנה הכול.`
+    : `${title} משנה הכול.`;
+
+  return {
+    linkedin: {
+      title,
+      hook,
+      body: [
+        insight, '', angle, '',
+        'מה זה אומר עבורכם:',
+        rc.mainTopics.slice(0, 3).map((t, i) => `${i + 1}. ${t}`).join('\n'),
+        '', confidenceLine,
+      ].join('\n').trim(),
+      hashtags,
+    },
+    facebook: {
+      title: `${title} — מה שחשוב לדעת`,
+      body: [
+        `עוקבים אחרי מה שקורה עם ${title}? 🚀`, '',
+        insight, '',
+        angle, '',
+        `העמקנו בנושא ${topic} והתוצאות מרתקות.`, '',
+        rc.keyInsights.slice(1, 3).map(i => `✅ ${i}`).join('\n'),
+      ].join('\n'),
+      callToAction: 'מה דעתכם? כתבו תגובה למטה או שתפו עם הרשת שלכם.',
+      imagePromptRef: 'shared_social_image',
+    },
+    instagram: {
+      strongLine: strongLineRaw.length > 120 ? strongLineRaw.slice(0, 117) + '…' : strongLineRaw,
+      caption: [insight, '', `${angle} 👇`, '', hashtags.join(' ')].join('\n'),
+      imagePromptRef: 'instagram_image',
+    },
+    newsletter: {
+      subject: `${title}: מה משתנה ולמה זה חשוב`,
+      previewText: insight.slice(0, 100),
+      body: [
+        'שלום רב,', '',
+        `השבוע אנחנו מסקרים את ${title} — ולמה זה חשוב מתמיד.`, '',
+        '## התמונה הגדולה', insight, '',
+        '## מה מצאנו', rc.mainTopics.map(t => `**${t}**`).join('\n'), '',
+        '## תובנות מרכזיות', rc.keyInsights.map(i => `- ${i}`).join('\n'), '',
+        '## סיכום בדיקת עובדות',
+        `בדקנו ${fcr.claimsChecked} טענות מהמקורות. ${fcr.verifiedClaims.length} אומתו ו-${fcr.uncertainClaims.length} סומנו לבדיקה נוספת.`,
+      ].join('\n').trim(),
+      callToAction: 'מוכנים לפעול על סמך התובנות? השיבו למייל הזה — אנחנו קוראים כל תגובה.',
+    },
+    podcast: {
+      title: `${title} — צלילה לעומק`,
+      intro: [
+        `ברוכים הבאים לפרק היום. אנחנו מדברים על ${title}, ואני מבטיח שלא תרצו לפספס.`,
+        insight,
+        'היום נפרק את זה לגורמים ונבין מה זה אומר בפועל.',
+      ].join(' '),
+      segments: [
+        {
+          title: 'ההקשר',
+          content: [`נתחיל מהתמונה הגדולה. ${rc.summary}`, `${topic} כבר כאן — זו אינה מגמה עתידית.`].join('\n\n'),
+        },
+        {
+          title: 'הממצאים המרכזיים',
+          content: ['הנה מה שהמחקר מראה:', rc.keyInsights.map((i, idx) => `נקודה ${idx + 1}: ${i}`).join('\n\n')].join('\n\n'),
+        },
+        {
+          title: 'בדיקת העובדות',
+          content: [
+            `בדקנו ${fcr.claimsChecked} טענות מהמקורות.`,
+            `- ${fcr.verifiedClaims.length} אומתו ברמת ביטחון גבוהה`,
+            `- ${fcr.uncertainClaims.length} סומנו כלא ודאיות`,
+          ].join('\n'),
+        },
+        {
+          title: 'מה זה אומר עבורכם',
+          content: [angle, 'ההשלכות המעשיות:', rc.suggestedAngles.slice(0, 3).map((a, i) => `${i + 1}. ${a}`).join('\n')].join('\n\n'),
+        },
+      ],
+      fullScript: [
+        '[פתיח]', `ברוכים הבאים לפרק היום. אנחנו מדברים על ${title}.`, insight, '',
+        '[הקשר]', rc.summary, '',
+        '[ממצאים]', rc.keyInsights.map((i, idx) => `נקודה ${idx + 1}: ${i}`).join('\n\n'), '',
+        '[בדיקת עובדות]', `בדקנו ${fcr.claimsChecked} טענות. ${fcr.verifiedClaims.length} אומתו. ${fcr.uncertainClaims.length} לא ודאיות.`, '',
+        '[מה זה אומר]', angle, rc.suggestedAngles.map((a, i) => `${i + 1}. ${a}`).join('\n'), '',
+        '[סיום]', 'תודה שהאזנתם.',
+      ].join('\n'),
+      closing: 'תודה שהאזנתם. נשוב בשבוע הבא עם תובנות נוספות. עד אז, להתראות.',
+    },
+    images: {
+      instagramImage: {
+        prompt: `תמונת עריכה ריבועית המייצגת את ${title}. דגש על ${topic}. ויזואל חד ומושך לפיד אינסטגרם, קומפוזיציה נקייה ומטאפורה ויזואלית חזקה.`,
+        aspectRatio: '1:1',
+        visualStyle: 'אסתטיקה מודרנית ונקייה, פורמט ריבועי המותאם לאינסטגרם',
+        mood: 'מקצועי, מעורר השראה ובולט ויזואלית',
+        negativePrompt: 'מטושטש, עמוס, טקסט על התמונה, איכות נמוכה, סימני מים',
+      },
+      facebookLinkedinImage: {
+        prompt: `תמונת עריכה רוחבית המייצגת את ${title} עבור רשתות מקצועיות. הקשר: ${topic}. קומפוזיציה רחבה המתאימה לפיד של פייסבוק ולינקדאין.`,
+        aspectRatio: '1.91:1',
+        visualStyle: 'אסתטיקה מודרנית ונקייה, פורמט רוחבי לשיתוף ברשתות',
+        mood: 'מקצועי ואמין',
+        negativePrompt: 'פורמט אנכי, מטושטש, טקסט על התמונה, איכות נמוכה, סימני מים',
+      },
+    },
+  };
 }
 
 // ── Re-export schemas for use in pipelineService ─────────────────────────────

@@ -90,7 +90,7 @@ export const pipelineService = {
 
   // ── Start a new pipeline run ─────────────────────────────────────────────────
 
-  async startRun(caseId: string) {
+  async startRun(caseId: string, outputLanguage?: string) {
     const existing = await prisma.contentCase.findUnique({
       where: { id: caseId },
       include: {
@@ -115,12 +115,20 @@ export const pipelineService = {
       } as const;
     }
 
+    // Output language is chosen per run (Phase 8.6). Validate to en|he;
+    // default to the case language for backward compatibility, else English.
+    const resolvedLanguage =
+      outputLanguage === 'en' || outputLanguage === 'he'
+        ? outputLanguage
+        : (existing.language === 'he' ? 'he' : 'en');
+
     const updatedCase = await prisma.$transaction(async tx => {
       await tx.pipelineRun.create({
         data: {
           contentCaseId:   caseId,
           triggeredBy:     'manual',
           status:          'running',
+          outputLanguage:  resolvedLanguage,
           primarySourceIds,
           contextSourceIds,
           sourceCount:     primarySourceIds.length + contextSourceIds.length,

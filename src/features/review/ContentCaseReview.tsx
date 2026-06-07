@@ -142,7 +142,7 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
 
       {/* Title */}
       <div className="px-5 pb-3">
-        <h3 className="text-[15px] font-medium text-on-surface">{output.title}</h3>
+        <h3 className="text-[15px] font-medium text-on-surface" dir="auto">{output.title}</h3>
       </div>
 
       {/* Scores */}
@@ -154,7 +154,7 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
         </div>
       )}
 
-      {/* Body */}
+      {/* Body — RTL/LTR resolved from content (Phase 8.6) */}
       <div className="px-5 pb-4">
         {isActive ? (
           editing ? (
@@ -163,16 +163,18 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
                 value={body}
                 onChange={e => setBody(e.target.value)}
                 rows={12}
+                dir="auto"
+                style={{ unicodeBidi: 'plaintext', textAlign: 'start' }}
                 className="w-full bg-surface-container-low border border-primary rounded-lg text-[13px] text-on-surface px-3 py-2 font-sans resize-y focus:ring-2 focus:ring-primary"
               />
             </div>
           ) : (
-            <pre className="whitespace-pre-wrap text-[13px] text-on-surface font-sans leading-relaxed max-h-64 overflow-y-auto">
+            <pre dir="auto" className="whitespace-pre-wrap text-[13px] text-on-surface font-sans leading-relaxed max-h-64 overflow-y-auto text-start">
               {output.body}
             </pre>
           )
         ) : (
-          <p className="text-[13px] text-on-surface-variant line-clamp-3">{output.body}</p>
+          <p dir="auto" className="text-[13px] text-on-surface-variant line-clamp-3 text-start">{output.body}</p>
         )}
       </div>
 

@@ -264,18 +264,21 @@ export interface User {
   createdAt: string;
 }
 
-// ── Wizard form state — simplified 3-step wizard ──────────
+// ── Wizard form state — 3-step wizard (Phase 8.6) ─────────
 export interface WizardFormData {
   // Step 1: Case Name + Goal
   title:        string;
   contentGoal:  ContentGoal;
   goalCustom:   string;
-  // Step 2: Content Style + Language
+  // Step 2: Content Style + Content Targets
   contentStyle: ContentStyle;
   styleCustom:  string;
-  language:     Language;
-  // Step 3: Content Targets (required, non-empty)
   contentTargets: ContentTarget[];
+  // Step 3: Generate Schedule
+  scheduleFrequency:  ScheduleFrequency;
+  scheduleTime:       string;  // "HH:MM"
+  scheduleDayOfWeek:  number;  // 0–6 (weekly)
+  scheduleDayOfMonth: number;  // 1–31 (monthly)
 }
 
 // ── UI helper types ────────────────────────────────────────

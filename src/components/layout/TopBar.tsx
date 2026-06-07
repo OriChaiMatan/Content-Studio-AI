@@ -24,6 +24,8 @@ export function TopBar({ title, searchPlaceholder, onSearch, actions }: TopBarPr
               value={query}
               onChange={e => { setQuery(e.target.value); onSearch(e.target.value); }}
               placeholder={searchPlaceholder ?? 'Search...'}
+              dir="auto"
+              style={{ unicodeBidi: 'plaintext', textAlign: 'start' }}
               className="bg-transparent border-none text-[14px] w-full font-sans placeholder:text-on-surface-variant/60"
             />
           </div>

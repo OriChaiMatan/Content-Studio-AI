@@ -30,7 +30,8 @@ router.get('/:id/pipeline', async (req: Request, res: Response) => {
 
 router.post('/:id/pipeline/start', async (req: Request, res: Response) => {
   try {
-    const result = await pipelineService.startRun(req.params.id);
+    const outputLanguage = typeof req.body?.outputLanguage === 'string' ? req.body.outputLanguage : undefined;
+    const result = await pipelineService.startRun(req.params.id, outputLanguage);
 
     if (result.type === 'error') {
       const statusCode =

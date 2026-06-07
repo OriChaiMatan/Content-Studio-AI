@@ -129,6 +129,8 @@ export function ContentCasePipeline() {
   const advancePipelineStep = useContentCasesStore(s => s.advancePipelineStep);
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting]     = useState(false);
+  // Output language chosen per run (Phase 8.6). null = use the case default.
+  const [outputLanguage, setOutputLanguage] = useState<'en' | 'he' | null>(null);
 
   const runningStep   = caseItem?.pipeline.find(s => s.status === 'running');
   const allDone       = caseItem?.pipeline.every(s => s.status === 'completed');
@@ -163,12 +165,15 @@ export function ContentCasePipeline() {
 
   const c = caseItem;
 
+  // Default to the case language for backward compatibility, else English.
+  const effectiveLang: 'en' | 'he' = outputLanguage ?? (c.language === 'he' ? 'he' : 'en');
+
   async function handleStart() {
     if (!id || starting) return;
     setStartError(null);
     setStarting(true);
     try {
-      await startPipeline(id);
+      await startPipeline(id, effectiveLang);
     } catch (err) {
       if (err instanceof ApiError) {
         setStartError(err.message);
@@ -291,6 +296,34 @@ export function ContentCasePipeline() {
 
           {/* Controls */}
           <div className="mt-8 flex flex-col gap-4">
+            {/* Output language selector — applies to the next run. Available
+                whenever a run can be triggered, independent of the schedule. */}
+            {!runningStep && hasNewSources && (
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-[13px] font-medium text-on-surface-variant">Output language:</span>
+                <div className="inline-flex rounded-lg border border-outline-variant overflow-hidden">
+                  {([
+                    { value: 'en' as const, label: 'English' },
+                    { value: 'he' as const, label: 'Hebrew (עברית)' },
+                  ]).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setOutputLanguage(opt.value)}
+                      className={[
+                        'px-3 py-1.5 text-[13px] font-medium transition-colors',
+                        effectiveLang === opt.value
+                          ? 'bg-primary text-on-primary'
+                          : 'bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container',
+                      ].join(' ')}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Initial start — only for brand-new draft cases */}
             {c.status === 'draft' && !allDone && !runningStep && (
               <Button

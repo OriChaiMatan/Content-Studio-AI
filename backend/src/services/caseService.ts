@@ -162,6 +162,11 @@ export const caseService = {
           contentStyle:    data.contentStyle,
           styleCustom:     data.styleCustom || null,
           contentTargets:  data.contentTargets,
+          // Schedule config (Phase 8.6) — columns already existed in the schema
+          scheduleFrequency:  data.scheduleFrequency  ?? 'manual',
+          scheduleTime:       data.scheduleTime       ?? null,
+          scheduleDayOfWeek:  data.scheduleDayOfWeek  ?? null,
+          scheduleDayOfMonth: data.scheduleDayOfMonth ?? null,
           // Legacy fields default to empty for new wizard cases
           pipelineSteps: {
             create: PIPELINE_STEP_ORDER.map(name => ({
@@ -188,6 +193,11 @@ export const caseService = {
     if (data.contentTargets !== undefined) patch.contentTargets = data.contentTargets;
     if (data.language       !== undefined) patch.language       = data.language;
     if (data.title          !== undefined) patch.title          = data.title;
+    // Schedule config (Phase 8.6)
+    if (data.scheduleFrequency  !== undefined) patch.scheduleFrequency  = data.scheduleFrequency;
+    if (data.scheduleTime       !== undefined) patch.scheduleTime       = data.scheduleTime;
+    if (data.scheduleDayOfWeek  !== undefined) patch.scheduleDayOfWeek  = data.scheduleDayOfWeek;
+    if (data.scheduleDayOfMonth !== undefined) patch.scheduleDayOfMonth = data.scheduleDayOfMonth;
     // Legacy fields (old wizard — kept for backward compat)
     if (data.targetAudience  !== undefined) patch.targetAudience  = data.targetAudience;
     if (data.industry        !== undefined) patch.industry        = data.industry;

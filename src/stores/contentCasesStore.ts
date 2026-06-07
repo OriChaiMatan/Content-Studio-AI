@@ -40,7 +40,7 @@ interface ContentCasesState {
   // startPipeline: creates PipelineRun with source selection, starts research step.
   //   Re-throws ApiError (e.g. 'no_new_sources') so the UI can surface the message.
   //   Falls back to offline simulation only on network errors.
-  startPipeline: (caseId: string) => Promise<void>;
+  startPipeline: (caseId: string, outputLanguage?: 'en' | 'he') => Promise<void>;
   // advancePipelineStep: advances the active run one step (called by the 3s timer).
   advancePipelineStep: (caseId: string) => Promise<void>;
 
@@ -104,8 +104,12 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
         goalCustom:     data.goalCustom,
         contentStyle:   data.contentStyle,
         styleCustom:    data.styleCustom,
-        language:       data.language,
         contentTargets: data.contentTargets,
+        // Schedule (Phase 8.6) — only send the fields relevant to the frequency.
+        scheduleFrequency:  data.scheduleFrequency,
+        scheduleTime:       data.scheduleFrequency === 'manual' ? null : data.scheduleTime,
+        scheduleDayOfWeek:  data.scheduleFrequency === 'weekly'  ? data.scheduleDayOfWeek  : null,
+        scheduleDayOfMonth: data.scheduleFrequency === 'monthly' ? data.scheduleDayOfMonth : null,
       });
       set(state => ({ cases: [newCase, ...state.cases] }));
       return newCase;
@@ -123,7 +127,7 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
         id: caseId,
         title:          data.title,
         status:         'draft',
-        language:       data.language,
+        language:       'en',
         contentGoal:    data.contentGoal,
         goalCustom:     data.goalCustom || null,
         contentStyle:   data.contentStyle,
@@ -132,7 +136,12 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
         // Legacy fields default to empty for new wizard cases
         targetAudience: '', industry: '', experienceLevel: 'intermediate',
         writingStyle: '', goals: '', aiInstructions: '',
-        schedule: { frequency: 'manual', time: null, dayOfWeek: null, dayOfMonth: null },
+        schedule: {
+          frequency:  data.scheduleFrequency,
+          time:       data.scheduleFrequency === 'manual' ? null : data.scheduleTime,
+          dayOfWeek:  data.scheduleFrequency === 'weekly'  ? data.scheduleDayOfWeek  : null,
+          dayOfMonth: data.scheduleFrequency === 'monthly' ? data.scheduleDayOfMonth : null,
+        },
         sources: [],
         outputs: [],
         pipeline: [
@@ -337,9 +346,10 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
 
   // ── Pipeline ─────────────────────────────────────────────────────────────────
 
-  startPipeline: async (caseId) => {
+  startPipeline: async (caseId, outputLanguage) => {
     try {
-      const updatedCase = await api.post<ContentCase>(`/cases/${caseId}/pipeline/start`, {});
+      const updatedCase = await api.post<ContentCase>(`/cases/${caseId}/pipeline/start`,
+        outputLanguage ? { outputLanguage } : {});
       set(state => ({
         cases: state.cases.map(c => c.id !== caseId ? c : updatedCase),
       }));

@@ -123,7 +123,7 @@ function ExtractionStatusLine({ source }: { source: ContentSource }) {
     return (
       <p className="text-[11px] text-green-700 mt-1 flex items-center gap-1">
         <Icon name="check_circle" size="sm" />
-        Extracted successfully{source.extractedTitle ? ` — “${source.extractedTitle}”` : ''}
+        <span>Extracted successfully{source.extractedTitle ? <> — “<bdi>{source.extractedTitle}</bdi>”</> : ''}</span>
       </p>
     );
   }
@@ -454,7 +454,7 @@ function SourceRow({ source, onDelete, onSaveEdit, onManualText }: SourceRowProp
           ) : (
             <>
               <div className="flex items-center gap-2 flex-wrap mb-1">
-                <p className={`text-[14px] font-medium ${source.status === 'used' ? 'text-on-surface-variant' : 'text-on-surface'}`}>
+                <p dir="auto" className={`text-[14px] font-medium ${source.status === 'used' ? 'text-on-surface-variant' : 'text-on-surface'}`}>
                   {source.label}
                 </p>
                 <span className="text-[10px] uppercase font-bold text-outline bg-surface-container px-1.5 py-0.5 rounded tracking-wider">
@@ -475,7 +475,7 @@ function SourceRow({ source, onDelete, onSaveEdit, onManualText }: SourceRowProp
                 </>
               ) : (
                 <div>
-                  <p className={`text-[12px] text-on-surface-variant ${!expanded && isLong ? 'line-clamp-2' : ''}`}>
+                  <p dir="auto" className={`text-[12px] text-on-surface-variant ${!expanded && isLong ? 'line-clamp-2' : ''}`}>
                     {source.content}
                   </p>
                   {isLong && (

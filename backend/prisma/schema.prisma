@@ -280,6 +280,9 @@ model PipelineRun {
   id               String        @id @default(cuid())
   contentCaseId    String
   triggeredBy      String        @default("manual")   // "manual" | "schedule"
+  // Output language chosen at generation time (Phase 8.6). "en" | "he".
+  // Null on legacy runs → falls back to case.language ?? "en".
+  outputLanguage   String?
   status           JobStatus     @default(running)
   // Source selection snapshot at run time
   primarySourceIds String[]      @default([])          // source IDs with status=new, used as main material

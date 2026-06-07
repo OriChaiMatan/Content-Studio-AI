@@ -5,7 +5,7 @@ import { Button } from '../../../components/ui/Button';
 import { Icon } from '../../../components/ui/Icon';
 import { Input } from '../../../components/ui/Input';
 import { useContentCasesStore } from '../../../stores/contentCasesStore';
-import type { WizardFormData, ContentGoal, ContentStyle, ContentTarget, Language } from '../../../types';
+import type { WizardFormData, ContentGoal, ContentStyle, ContentTarget, ScheduleFrequency } from '../../../types';
 
 // ── Option definitions ────────────────────────────────────
 
@@ -39,7 +39,20 @@ const TARGET_OPTIONS: { value: ContentTarget; label: string; icon: string }[] = 
   { value: 'images',      label: 'Images',      icon: 'image' },
 ];
 
-const STEPS = ['Goal', 'Style & Language', 'Content Targets'];
+const FREQUENCY_OPTIONS: { value: ScheduleFrequency; label: string; sub: string; icon: string }[] = [
+  { value: 'manual',  label: 'Manual only', sub: 'Generate on demand',     icon: 'touch_app' },
+  { value: 'daily',   label: 'Daily',       sub: 'Every day at a set time', icon: 'today' },
+  { value: 'weekly',  label: 'Weekly',      sub: 'A chosen day each week',  icon: 'date_range' },
+  { value: 'monthly', label: 'Monthly',     sub: 'A chosen day each month', icon: 'calendar_month' },
+];
+
+const DAY_OF_WEEK_OPTIONS = [
+  { value: 0, label: 'Sunday' }, { value: 1, label: 'Monday' }, { value: 2, label: 'Tuesday' },
+  { value: 3, label: 'Wednesday' }, { value: 4, label: 'Thursday' }, { value: 5, label: 'Friday' },
+  { value: 6, label: 'Saturday' },
+];
+
+const STEPS = ['Goal', 'Style & Targets', 'Schedule'];
 
 const emptyForm: WizardFormData = {
   title:          '',
@@ -47,18 +60,18 @@ const emptyForm: WizardFormData = {
   goalCustom:     '',
   contentStyle:   'professional',
   styleCustom:    '',
-  language:       'en',
   contentTargets: [],
+  scheduleFrequency:  'manual',
+  scheduleTime:       '09:00',
+  scheduleDayOfWeek:  1,
+  scheduleDayOfMonth: 1,
 };
 
-// ── Step components ───────────────────────────────────────
+type UpdateFn = <K extends keyof WizardFormData>(k: K, v: WizardFormData[K]) => void;
 
-function Step1Goal({
-  form, update,
-}: {
-  form: WizardFormData;
-  update: <K extends keyof WizardFormData>(k: K, v: WizardFormData[K]) => void;
-}) {
+// ── Step 1 — Case Name + Goal ─────────────────────────────
+
+function Step1Goal({ form, update }: { form: WizardFormData; update: UpdateFn }) {
   return (
     <div className="space-y-6">
       <Input
@@ -104,12 +117,16 @@ function Step1Goal({
   );
 }
 
-function Step2StyleLanguage({
-  form, update,
-}: {
-  form: WizardFormData;
-  update: <K extends keyof WizardFormData>(k: K, v: WizardFormData[K]) => void;
-}) {
+// ── Step 2 — Content Style + Content Targets ──────────────
+
+function Step2StyleTargets({ form, update }: { form: WizardFormData; update: UpdateFn }) {
+  function toggleTarget(t: ContentTarget) {
+    const next = form.contentTargets.includes(t)
+      ? form.contentTargets.filter(x => x !== t)
+      : [...form.contentTargets, t];
+    update('contentTargets', next);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
@@ -143,79 +160,117 @@ function Step2StyleLanguage({
       </div>
 
       <div className="flex flex-col gap-2">
-        <label className="text-[14px] font-medium text-on-surface-variant">Language *</label>
+        <label className="text-[14px] font-medium text-on-surface-variant">Content Targets *</label>
+        <p className="text-[12px] text-on-surface-variant -mt-1">
+          Select the platforms to generate content for. At least one required.
+        </p>
         <div className="grid grid-cols-2 gap-3">
-          {([
-            { value: 'en', label: 'English', sub: 'Left-to-right' },
-            { value: 'he', label: 'Hebrew (עברית)', sub: 'Right-to-left' },
-          ] as { value: Language; label: string; sub: string }[]).map(lang => (
-            <button
-              key={lang.value}
-              type="button"
-              onClick={() => update('language', lang.value)}
-              className={[
-                'flex flex-col gap-0.5 px-4 py-3 rounded-xl border-2 text-left transition-all',
-                form.language === lang.value
-                  ? 'border-primary bg-secondary-container/40'
-                  : 'border-outline-variant hover:border-primary/30 hover:bg-surface-container',
-              ].join(' ')}
-            >
-              <span className={`text-[14px] font-bold ${form.language === lang.value ? 'text-primary' : 'text-on-surface'}`}>
-                {lang.label}
-              </span>
-              <span className="text-[11px] text-on-surface-variant">{lang.sub}</span>
-            </button>
-          ))}
+          {TARGET_OPTIONS.map(opt => {
+            const selected = form.contentTargets.includes(opt.value);
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => toggleTarget(opt.value)}
+                className={[
+                  'flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all',
+                  selected
+                    ? 'border-primary bg-secondary-container/40 text-primary'
+                    : 'border-outline-variant text-on-surface-variant hover:border-primary/30 hover:bg-surface-container',
+                ].join(' ')}
+              >
+                <Icon name={opt.icon} size="sm" className={selected ? 'text-primary' : 'text-outline'} />
+                <span className="text-[14px] font-medium">{opt.label}</span>
+                {selected && <Icon name="check_circle" size="sm" className="text-primary ml-auto" filled />}
+              </button>
+            );
+          })}
         </div>
+        {form.contentTargets.length === 0 && (
+          <p className="text-[12px] text-error">Please select at least one target.</p>
+        )}
       </div>
     </div>
   );
 }
 
-function Step3Targets({
-  form, update,
-}: {
-  form: WizardFormData;
-  update: <K extends keyof WizardFormData>(k: K, v: WizardFormData[K]) => void;
-}) {
-  function toggleTarget(t: ContentTarget) {
-    const next = form.contentTargets.includes(t)
-      ? form.contentTargets.filter(x => x !== t)
-      : [...form.contentTargets, t];
-    update('contentTargets', next);
-  }
+// ── Step 3 — Generate Schedule ────────────────────────────
 
+function Step3Schedule({ form, update }: { form: WizardFormData; update: UpdateFn }) {
+  const freq = form.scheduleFrequency;
   return (
-    <div className="space-y-4">
-      <p className="text-[14px] text-on-surface-variant">
-        Select the platforms you want content generated for. At least one required.
-      </p>
-      <div className="grid grid-cols-2 gap-3">
-        {TARGET_OPTIONS.map(opt => {
-          const selected = form.contentTargets.includes(opt.value);
-          return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2">
+        <label className="text-[14px] font-medium text-on-surface-variant">Generate Schedule</label>
+        <p className="text-[12px] text-on-surface-variant -mt-1">
+          When should this case generate new content? You can always use <strong>Generate Now</strong> regardless of this setting.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {FREQUENCY_OPTIONS.map(opt => (
             <button
               key={opt.value}
               type="button"
-              onClick={() => toggleTarget(opt.value)}
+              onClick={() => update('scheduleFrequency', opt.value)}
               className={[
-                'flex items-center gap-3 px-4 py-4 rounded-xl border-2 transition-all',
-                selected
-                  ? 'border-primary bg-secondary-container/40 text-primary'
-                  : 'border-outline-variant text-on-surface-variant hover:border-primary/30 hover:bg-surface-container',
+                'flex flex-col gap-0.5 px-4 py-3 rounded-xl border-2 text-left transition-all',
+                freq === opt.value
+                  ? 'border-primary bg-secondary-container/40'
+                  : 'border-outline-variant hover:border-primary/30 hover:bg-surface-container',
               ].join(' ')}
             >
-              <Icon name={opt.icon} size="sm" className={selected ? 'text-primary' : 'text-outline'} />
-              <span className="text-[14px] font-medium">{opt.label}</span>
-              {selected && (
-                <Icon name="check_circle" size="sm" className="text-primary ml-auto" filled />
-              )}
+              <span className="flex items-center gap-2">
+                <Icon name={opt.icon} size="sm" className={freq === opt.value ? 'text-primary' : 'text-outline'} />
+                <span className={`text-[14px] font-bold ${freq === opt.value ? 'text-primary' : 'text-on-surface'}`}>{opt.label}</span>
+              </span>
+              <span className="text-[11px] text-on-surface-variant">{opt.sub}</span>
             </button>
-          );
-        })}
+          ))}
+        </div>
       </div>
-      {form.contentTargets.length === 0 && (
-        <p className="text-[12px] text-error">Please select at least one target.</p>
+
+      {/* Conditional fields */}
+      {freq !== 'manual' && (
+        <div className="grid grid-cols-2 gap-4">
+          {freq === 'weekly' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[13px] font-medium text-on-surface-variant">Day of week</label>
+              <select
+                value={form.scheduleDayOfWeek}
+                onChange={e => update('scheduleDayOfWeek', Number(e.target.value))}
+                className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-[14px] text-on-surface"
+              >
+                {DAY_OF_WEEK_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+              </select>
+            </div>
+          )}
+          {freq === 'monthly' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[13px] font-medium text-on-surface-variant">Day of month</label>
+              <select
+                value={form.scheduleDayOfMonth}
+                onChange={e => update('scheduleDayOfMonth', Number(e.target.value))}
+                className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-[14px] text-on-surface"
+              >
+                {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[13px] font-medium text-on-surface-variant">Time</label>
+            <Input
+              type="time"
+              value={form.scheduleTime}
+              onChange={e => update('scheduleTime', e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {freq === 'manual' && (
+        <div className="flex items-center gap-2 text-[13px] text-on-surface-variant bg-surface-container rounded-lg px-3 py-2.5">
+          <Icon name="info" size="sm" className="text-outline" />
+          Content will only be generated when you click Generate Now.
+        </div>
       )}
     </div>
   );
@@ -239,8 +294,8 @@ export function CreateCaseWizard() {
   const canNext = step === 0
     ? form.title.trim().length > 0
     : step === 1
-    ? true // style + language always have defaults
-    : form.contentTargets.length > 0; // step 3: must have at least one target
+    ? form.contentTargets.length > 0   // style has a default; targets required
+    : true;                            // step 3 (schedule) always valid
 
   async function handleCreate() {
     if (creating || form.contentTargets.length === 0) return;
@@ -298,8 +353,8 @@ export function CreateCaseWizard() {
           {/* Step content */}
           <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm p-8 min-h-[380px]">
             {step === 0 && <Step1Goal form={form} update={update} />}
-            {step === 1 && <Step2StyleLanguage form={form} update={update} />}
-            {step === 2 && <Step3Targets form={form} update={update} />}
+            {step === 1 && <Step2StyleTargets form={form} update={update} />}
+            {step === 2 && <Step3Schedule form={form} update={update} />}
           </div>
 
           {/* Error banner */}
@@ -323,11 +378,7 @@ export function CreateCaseWizard() {
                 <Icon name="arrow_forward" size="sm" />
               </Button>
             ) : (
-              <Button
-                onClick={handleCreate}
-                disabled={!canNext || creating}
-                loading={creating}
-              >
+              <Button onClick={handleCreate} disabled={!canNext || creating} loading={creating}>
                 <Icon name="rocket_launch" size="sm" />
                 {creating ? 'Creating…' : 'Create Content Case'}
               </Button>
