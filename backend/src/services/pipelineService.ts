@@ -26,8 +26,7 @@ import {
   generateResearchContext,
   generateFactCheckReport,
 } from './mockAiService';
-import { buildGeneratorInput } from './generatorInput';
-import { generateMockContent } from './mockContentService';
+import { contentGeneratorService } from './contentGeneratorService';
 
 // ── Source selection ───────────────────────────────────────────────────────────
 
@@ -243,13 +242,12 @@ export const pipelineService = {
         if (!fcrParsed.success) throw new Error(`Fact check report missing — cannot generate content.`);
 
         // Generate selected platforms only, from the projection (no raw articles).
-        // CP-1: deterministic v2 mock (permanent fallback). CP-2 swaps in the
-        // Claude generator with this mock as the fallback.
+        // Real Claude generation when CONTENT_GENERATION_ENABLED=true, else the
+        // permanent v2 mock. Each generator is isolated and never throws.
         const runSources = [...primarySources, ...contextSources];
-        const outputs = selectedPlatforms.map(platform => {
-          const input = buildGeneratorInput(platform, activeRun, existing, runSources);
-          return generateMockContent(input);
-        });
+        const outputs = await contentGeneratorService.generateAll(
+          selectedPlatforms, activeRun, existing, runSources,
+        );
         contractResult = { ok: true, outputs };
       }
 

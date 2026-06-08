@@ -10,7 +10,8 @@ import Anthropic from '@anthropic-ai/sdk';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const globalForAnthropic = globalThis as unknown as {
-  anthropic?: Anthropic;
+  anthropic?: Anthropic;        // source analysis client (SDK default retries)
+  contentClient?: Anthropic;    // content generation client (no SDK retries)
 };
 
 // Source Analysis configuration, read once from the environment.
@@ -54,6 +55,25 @@ export function getAnthropicClient(): Anthropic | null {
   }
 
   return globalForAnthropic.anthropic;
+}
+
+// Returns the shared Anthropic client for CONTENT generation (Phase 9), or null
+// when content generation is disabled or no API key is set. Reuses the same
+// singleton client; per-request timeouts are passed at the call site. Never
+// throws — callers fall back to the v2 mock.
+export function getContentClient(): Anthropic | null {
+  if (!contentGenerationConfig.enabled) return null;
+  const apiKey = process.env.ANTHROPIC_API_KEY ?? '';
+  if (!apiKey) return null;
+
+  // Dedicated client with maxRetries: 0 — the service does its own bounded
+  // retry, and we must NOT let the SDK's default 2 internal retries multiply a
+  // per-request timeout (the cause of the unbounded podcast run). Isolated from
+  // the source-analysis client so its retry behavior is unchanged.
+  if (!globalForAnthropic.contentClient) {
+    globalForAnthropic.contentClient = new Anthropic({ apiKey, maxRetries: 0 });
+  }
+  return globalForAnthropic.contentClient;
 }
 
 // ── Debug-only startup log (Phase 8B) ────────────────────────────────────────

@@ -1,6 +1,10 @@
 import type { ContentOutput } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import type { UpdateOutputBodyInput, UpdateOutputStatusInput } from '../schemas/outputSchemas';
+import { contentGenerationConfig } from '../lib/anthropic';
+import { buildGeneratorInput } from './generatorInput';
+import { generateContent } from './contentGeneratorService';
+import { CONTENT_PLATFORMS, type ContentPlatform } from '../schemas/aiContractSchemas';
 
 // ── Serializer ────────────────────────────────────────────────────────────────
 
@@ -143,20 +147,63 @@ export const outputService = {
   },
 
   // POST /api/cases/:caseId/outputs/:outputId/regenerate
-  // Reset output to draft with bumped version. Sources are not affected.
+  // Full regenerate of one output (Phase 9 CP-2). Replaces body+breakdown+metadata
+  // ON SUCCESS ONLY, bumps version, returns status to draft. Sources unaffected.
+  // When CONTENT_GENERATION_ENABLED=true and the real generator falls back, the
+  // OLD output is preserved and an error is thrown (route → 500).
   async regenerate(caseId: string, outputId: string) {
     const existing = await prisma.contentOutput.findFirst({
       where: { id: outputId, contentCaseId: caseId },
     });
     if (!existing) return null;
 
+    // v2 generators cover the 5 content platforms only. Legacy image_prompt
+    // outputs cannot be regenerated.
+    if (!(CONTENT_PLATFORMS as readonly string[]).includes(existing.platform)) {
+      throw new Error('This output type cannot be regenerated.');
+    }
+    if (!existing.pipelineRunId) {
+      throw new Error('This output is not linked to a pipeline run and cannot be regenerated.');
+    }
+
+    const [run, caseItem] = await Promise.all([
+      prisma.pipelineRun.findUnique({ where: { id: existing.pipelineRunId } }),
+      prisma.contentCase.findUnique({ where: { id: caseId } }),
+    ]);
+    if (!run || !caseItem) {
+      throw new Error('Cannot regenerate — run or case is missing.');
+    }
+    const runSources = await prisma.contentSource.findMany({
+      where: { id: { in: [...run.primarySourceIds, ...run.contextSourceIds] } },
+    });
+
+    // Build projection (throws if research/fact-check artifacts are missing).
+    let out;
+    try {
+      const input = buildGeneratorInput(existing.platform as ContentPlatform, run, caseItem, runSources);
+      out = await generateContent(input);   // never throws; may fall back
+    } catch {
+      throw new Error('Cannot regenerate — research/fact-check artifacts are missing. The previous output was kept.');
+    }
+
+    // Real-mode + the generator fell back → treat as failure, preserve old output.
+    if (contentGenerationConfig.enabled && out.metadata.generatorVersion === 'mock-fallback') {
+      throw new Error('Regeneration failed — the content generator did not return a valid result. The previous output was kept.');
+    }
+
     const updated = await prisma.contentOutput.update({
       where: { id: outputId },
       data: {
-        status:      'draft',
-        body:        existing.body + '\n\n[Regenerated — AI would replace this content in production]',
-        version:     bumpVersion(existing.version),
-        reviewedAt:  null,
+        status:             'draft',
+        title:              out.title,
+        body:               out.readyToPublish,
+        breakdown:          out.breakdown as unknown as ReturnType<typeof JSON.parse>,
+        metadata:           out.metadata as unknown as ReturnType<typeof JSON.parse>,
+        contentScore:       out.metadata.contentScore ?? null,
+        researchConfidence: out.metadata.researchConfidence ?? null,
+        factCheckAccuracy:  out.metadata.factCheckAccuracy ?? null,
+        version:            bumpVersion(existing.version),
+        reviewedAt:         null,
       },
     });
     return serializeOutput(updated);
