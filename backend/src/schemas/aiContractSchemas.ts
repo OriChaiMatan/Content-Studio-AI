@@ -29,6 +29,138 @@ export const ResearchContextSchema = z.object({
 
 export type ResearchContext = z.infer<typeof ResearchContextSchema>;
 
+// ── Stage 1 v2: Research Synthesis (Phase 10A) ────────────────────────────────
+// Superset of ResearchContextSchema: keeps EVERY v1 field (so existing consumers —
+// fact_check, content_creation, generatorInput — keep parsing it as v1) and adds
+// real cross-source synthesis layers. The synthesis service maps the v2 layers
+// DOWN into the v1 fields, so v1 consumers benefit with no changes.
+
+const GroundingEnum = z.enum(['supported', 'inferred', 'speculative']);
+
+export const CoreSubjectSchema = z.object({
+  name:       z.string().min(1),
+  type:       z.enum(['company', 'person', 'product', 'technology', 'concept', 'trend', 'organization', 'location']),
+  role:       z.string().min(1),
+  sourceRefs: z.array(z.string().min(1)).min(1),
+});
+
+export const KeyFactSchema = z.object({
+  statement:  z.string().min(1),
+  type:       z.enum(['announcement', 'statistic', 'claim', 'definition', 'event', 'opinion', 'prediction']),
+  sourceRefs: z.array(z.string().min(1)).min(1),
+  grounding:  z.enum(['stated', 'implied']),
+  status:     z.enum(['claimed', 'corroborated', 'disputed', 'unverified']),
+  confidence: z.number().int().min(0).max(100),
+});
+
+export const StorySchema = z.object({
+  headline:   z.string().min(1),
+  summary:    z.string().min(1),
+  sourceRefs: z.array(z.string().min(1)).min(0),
+});
+
+export const SourceConnectionSchema = z.object({
+  description: z.string().min(1),
+  sourceRefs:  z.array(z.string().min(1)).min(1),   // ≥2 enforced at top level unless singleSource
+  type:        z.enum(['causal', 'analogical', 'sequential', 'tension', 'convergent', 'enabling']),
+  novelty:     z.number().int().min(0).max(100),
+  confidence:  z.number().int().min(0).max(100),
+  grounding:   GroundingEnum,
+});
+
+export const TensionSchema = z.object({
+  description: z.string().min(1),
+  poles:       z.array(z.string().min(1)).length(2),
+  sourceRefs:  z.array(z.string().min(1)).min(0),
+});
+
+export const SynthesisContradictionSchema = z.object({
+  subject:    z.string().min(1),
+  claimA:     z.string().min(1),
+  claimB:     z.string().min(1),
+  sourceRefs: z.array(z.string().min(1)).min(0),
+  nature:     z.enum(['factual', 'evidentiary', 'scope']),
+  severity:   z.number().int().min(0).max(100),
+  resolution: z.string().min(1),
+});
+
+export const ImplicationSchema = z.object({
+  implication: z.string().min(1),
+  basis:       z.array(z.string().min(1)).min(0),
+  horizon:     z.enum(['now', 'near', 'long']),
+  confidence:  z.number().int().min(0).max(100),
+  speculative: z.boolean(),
+});
+
+// expertPOV (Phase 10A addition): the conclusion a domain expert would draw.
+// NEVER a fact — grounding is restricted to inferred/speculative.
+export const ExpertPOVSchema = z.object({
+  type:      z.enum(['strategic', 'operational', 'prediction', 'practitioner']),
+  statement: z.string().min(1),
+  grounding: z.enum(['inferred', 'speculative']),
+});
+
+export const NonObviousInsightSchema = z.object({
+  insight:     z.string().min(1),
+  reasoning:   z.string().min(1),
+  sourceRefs:  z.array(z.string().min(1)).min(0),
+  novelty:     z.number().int().min(0).max(100),
+  lens:        z.enum(['analogical', 'second-order', 'contrarian', 'absence', 'stakeholder']),
+  speculative: z.boolean(),
+  expertPOV:   ExpertPOVSchema.optional(),
+});
+
+export const ResearchMetaSchema = z.object({
+  sourceCount:         z.number().int().min(0),
+  primarySourceCount:  z.number().int().min(0),
+  contextSourceCount:  z.number().int().min(0),
+  synthesisConfidence: z.number().int().min(0).max(100),
+  singleSource:        z.boolean(),
+  generatorVersion:    z.string().min(1),   // "research-1" | "mock-research" | "mock-fallback"
+  degraded:            z.boolean(),
+  sourceRefMap:        z.array(z.object({
+    ref:      z.string().min(1),
+    sourceId: z.string().min(1),
+    label:    z.string(),
+    role:     z.enum(['primary', 'context']),
+  })).min(0),
+});
+
+export const ResearchSynthesisLayerSchema = z.object({
+  mainStory:                StorySchema,
+  supportingStories:        z.array(StorySchema).min(0),
+  sourceConnections:        z.array(SourceConnectionSchema).min(0),
+  tensions:                 z.array(TensionSchema).min(0),
+  contradictions:           z.array(SynthesisContradictionSchema).min(0),
+  secondOrderImplications:  z.array(ImplicationSchema).min(0),
+  nonObviousInsights:       z.array(NonObviousInsightSchema).min(0),
+  openQuestions:            z.array(z.string().min(1)).min(0),
+});
+
+export const ResearchKnowledgeLayerSchema = z.object({
+  coreSubjects: z.array(CoreSubjectSchema).min(0),
+  keyFacts:     z.array(KeyFactSchema).min(0),
+  timeline:     z.array(z.object({ when: z.string().min(1), event: z.string().min(1), sourceRefs: z.array(z.string()).min(0) })).min(0).optional(),
+});
+
+export const ResearchContextV2Schema = ResearchContextSchema.extend({
+  meta:      ResearchMetaSchema,
+  knowledge: ResearchKnowledgeLayerSchema,
+  synthesis: ResearchSynthesisLayerSchema,
+}).superRefine((rc, ctx) => {
+  // A real cross-source connection must cite ≥2 sources — unless single-source.
+  if (!rc.meta.singleSource) {
+    rc.synthesis.sourceConnections.forEach((c, i) => {
+      if (c.sourceRefs.length < 2) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['synthesis', 'sourceConnections', i, 'sourceRefs'],
+          message: 'A multi-source connection must reference at least 2 sources.' });
+      }
+    });
+  }
+});
+
+export type ResearchContextV2 = z.infer<typeof ResearchContextV2Schema>;
+
 // ── Stage 2: Fact Check Report ────────────────────────────────────────────────
 
 export const FactCheckClaimStatusSchema = z.enum(['verified', 'uncertain', 'conflicting', 'unsupported']);

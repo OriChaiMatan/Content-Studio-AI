@@ -23,10 +23,10 @@ import {
   type ContentPlatform,
 } from '../schemas/aiContractSchemas';
 import {
-  generateResearchContext,
   generateFactCheckReport,
 } from './mockAiService';
 import { contentGeneratorService } from './contentGeneratorService';
+import { researchSynthesisService } from './researchSynthesisService';
 
 // ── Source selection ───────────────────────────────────────────────────────────
 
@@ -222,7 +222,11 @@ export const pipelineService = {
 
     try {
       if (stepName === 'research') {
-        const ctx = generateResearchContext(activeRun, existing, primarySources, contextSources);
+        // Phase 10A: real Claude cross-source synthesis (flag-gated), else v1 mock.
+        // synthesize() never throws and always returns a v1-valid v2 superset.
+        const ctx = await researchSynthesisService.synthesize({
+          run: activeRun, caseItem: existing, primarySources, contextSources,
+        });
         contractResult = { ok: true, researchContext: ctx };
 
       } else if (stepName === 'fact_check') {

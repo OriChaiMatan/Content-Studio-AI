@@ -12,6 +12,7 @@ import Anthropic from '@anthropic-ai/sdk';
 const globalForAnthropic = globalThis as unknown as {
   anthropic?: Anthropic;        // source analysis client (SDK default retries)
   contentClient?: Anthropic;    // content generation client (no SDK retries)
+  researchClient?: Anthropic;   // research synthesis client (no SDK retries)
 };
 
 // Source Analysis configuration, read once from the environment.
@@ -55,6 +56,30 @@ export function getAnthropicClient(): Anthropic | null {
   }
 
   return globalForAnthropic.anthropic;
+}
+
+// Research Synthesis configuration (Phase 10A). MUST default disabled — when off,
+// the research step uses the permanent v1 mock (wrapped as a v2 stub).
+export const researchSynthesisConfig = {
+  enabled:   process.env.RESEARCH_SYNTHESIS_ENABLED === 'true',
+  model:     process.env.RESEARCH_SYNTHESIS_MODEL ?? 'claude-sonnet-4-6',
+  // Synthesis is a reasoning-heavy, large structured output (~60s English, more
+  // for token-heavier Hebrew). 45s/90s timed out; 120s gives headroom on the UI
+  // critical path. Failure still falls back to the v1 mock (degraded), never hangs.
+  timeoutMs: parseInt(process.env.RESEARCH_SYNTHESIS_TIMEOUT_MS ?? '120000', 10),
+} as const;
+
+// Research synthesis client (Phase 10A). Own gate + dedicated client with
+// maxRetries: 0 (the service does bounded retries; the SDK must not multiply the
+// per-request timeout on the UI critical path). Null when disabled / no key.
+export function getResearchClient(): Anthropic | null {
+  if (!researchSynthesisConfig.enabled) return null;
+  const apiKey = process.env.ANTHROPIC_API_KEY ?? '';
+  if (!apiKey) return null;
+  if (!globalForAnthropic.researchClient) {
+    globalForAnthropic.researchClient = new Anthropic({ apiKey, maxRetries: 0 });
+  }
+  return globalForAnthropic.researchClient;
 }
 
 // Returns the shared Anthropic client for CONTENT generation (Phase 9), or null
