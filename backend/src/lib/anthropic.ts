@@ -63,10 +63,12 @@ export function getAnthropicClient(): Anthropic | null {
 export const researchSynthesisConfig = {
   enabled:   process.env.RESEARCH_SYNTHESIS_ENABLED === 'true',
   model:     process.env.RESEARCH_SYNTHESIS_MODEL ?? 'claude-sonnet-4-6',
-  // Synthesis is a reasoning-heavy, large structured output (~60s English, more
-  // for token-heavier Hebrew). 45s/90s timed out; 120s gives headroom on the UI
-  // critical path. Failure still falls back to the v1 mock (degraded), never hangs.
-  timeoutMs: parseInt(process.env.RESEARCH_SYNTHESIS_TIMEOUT_MS ?? '120000', 10),
+  // Synthesis is a reasoning-heavy, large structured output. Latency scales with
+  // language (Hebrew is token-dense) AND source count: ~60-70s for English, but
+  // Hebrew with 4 sources + the primaryAngle nomination exceeds 120s and timed
+  // out → mock fallback (degraded). 240s lets the single attempt complete on the
+  // UI critical path; failure still falls back to the v1 mock, never hangs.
+  timeoutMs: parseInt(process.env.RESEARCH_SYNTHESIS_TIMEOUT_MS ?? '240000', 10),
 } as const;
 
 // Research synthesis client (Phase 10A). Own gate + dedicated client with

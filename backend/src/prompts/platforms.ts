@@ -43,13 +43,17 @@ const imagePromptRequired = ['prompt', 'aspectRatio', 'visualStyle', 'mood', 'ne
 
 function img(raw: unknown, role: 'primary' | 'alternative') {
   const o = (raw ?? {}) as Record<string, unknown>;
+  // Default the decorative fields (schema requires each ≥1 char). Claude
+  // intermittently returns them empty, which would fail validation and force an
+  // avoidable mock fallback — these defaults keep a valid image prompt without
+  // touching the core `prompt`. Same pattern as the aspectRatio default.
   return {
     role,
     prompt:         String(o.prompt ?? ''),
-    aspectRatio:    String(o.aspectRatio ?? '1:1'),
-    visualStyle:    String(o.visualStyle ?? ''),
-    mood:           String(o.mood ?? ''),
-    negativePrompt: String(o.negativePrompt ?? ''),
+    aspectRatio:    String(o.aspectRatio ?? '') || '1:1',
+    visualStyle:    String(o.visualStyle ?? '') || 'clean editorial photography',
+    mood:           String(o.mood ?? '') || 'professional',
+    negativePrompt: String(o.negativePrompt ?? '') || 'low quality, blurry, distorted, watermark, text artifacts',
   };
 }
 
@@ -80,7 +84,7 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
     instruction: [
       'PLATFORM: LinkedIn. Purpose: authority, insight, and professional discussion.',
       'Tone: credible and substantive. NO emoji by default. Not clickbait.',
-      'HARD LENGTH: the assembled post (hook + context + insight + numbered takeaways + cta + hashtags) MUST be between 650 and 1400 characters. Keep sections concise so the total stays in range.',
+      'HARD LENGTH: the assembled post (hook + context + insight + numbered takeaways + cta + hashtags) must be 650–1400 characters. TARGET ~950–1150 characters and NEVER exceed ~1250 in your own estimate — the 1400 ceiling is a hard cutoff, so leave margin. Per-section budget: hook ≤100 chars (one line); context ≤2 sentences; insight ≤2 sentences; exactly 3 takeaways of ≤1 line (~110 chars) each (4 only if each is very short); cta ≤100 chars. Be concise — every section must earn its length.',
       'Return the breakdown: hook, context, insight, takeaways (3–5), cta, hashtags (0–3), imagePrompt (1).',
     ].join('\n'),
     tool: {
@@ -116,9 +120,13 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
       const len = readyToPublish.length;
       if (len < 650 || len > 1400) {
         throw new Error(
-          `LinkedIn assembled post is ${len} characters; it must be 650–1400. ` +
-          `Rewrite the hook/context/insight/takeaways so the full post lands within 650–1400 characters ` +
-          `(${len < 650 ? 'add more substance' : 'make it more concise'}).`,
+          len > 1400
+            ? `LinkedIn assembled post is ${len} characters — OVER the limit (valid 650–1400; aim for ~1100, NOT the 1400 ceiling). ` +
+              `Cut at least ${len - 1100} characters: tighten the hook to one line, context to ≤2 sentences, insight to ≤2 sentences, ` +
+              `use 3–4 takeaways of ≤1 line each, and a short cta. Preserve the PRIMARY ANGLE thesis and the synthesis-driven narrative — ` +
+              `remove wordiness and repetition, NOT the core story.`
+            : `LinkedIn assembled post is ${len} characters — UNDER the minimum (valid 650–1400; aim for ~1100). ` +
+              `Add 1–2 substantive sentences to context or insight while keeping the same PRIMARY ANGLE.`,
         );
       }
       return GeneratedOutputSchema.parse({

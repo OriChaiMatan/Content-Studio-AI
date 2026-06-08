@@ -1,6 +1,7 @@
 import type { ContentCase, ContentSource, PipelineRun } from '@prisma/client';
 import {
   ResearchContextSchema,
+  ResearchContextV2Schema,
   FactCheckReportSchema,
   type GeneratorInput,
   type ContentPlatform,
@@ -90,6 +91,11 @@ export function buildGeneratorInput(
   const rc = ResearchContextSchema.parse(run.researchContext);
   const fcr = FactCheckReportSchema.parse(run.factCheckReport);
 
+  // Phase 10B — surface the narrative spine when the research is a v2 synthesis.
+  // Backward-compatible: v1-only runs have no primaryAngle → flat-menu behavior.
+  const rcV2 = ResearchContextV2Schema.safeParse(run.researchContext);
+  const primaryAngle = rcV2.success ? rcV2.data.synthesis.primaryAngle : undefined;
+
   return {
     contract: {
       platform,
@@ -115,6 +121,7 @@ export function buildGeneratorInput(
       contradictions:  rc.contradictions,
       risks:           rc.risks,
       confidenceScore: rc.confidenceScore,
+      primaryAngle,
     },
     facts: {
       verified:    fcr.verifiedClaims.slice(0, 15).map(c => ({ claim: c.claim, confidenceScore: c.confidenceScore })),

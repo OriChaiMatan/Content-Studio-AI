@@ -126,6 +126,31 @@ export const ResearchMetaSchema = z.object({
   })).min(0),
 });
 
+// Primary Angle (Phase 10B): the single narrative spine the generators build
+// around. Authored once at research-finalize time, persisted in the synthesis
+// layer, projected into every platform's GeneratorInput. grounding sets the
+// wording register (assert/hedge/speculate) — an uncertain pillar changes HOW
+// the thesis is stated, never whether it is the spine.
+export const PrimaryAngleSchema = z.object({
+  thesis:    z.string().min(1),   // the one-sentence narrative spine, in output language
+  reframe:   z.string().min(1),   // the "the real story is X, not Y" hook seed
+  kind:      z.enum(['connection', 'tension', 'contradiction', 'insight', 'implication', 'single-source-insight']),
+  grounding: z.enum(['factual', 'inferred', 'speculative']),
+  synthesisBasis: z.object({
+    sourceRefs: z.array(z.string().min(1)).min(0),
+    excerpt:    z.string().min(1),
+  }),
+  tensionPoles: z.object({ a: z.string().min(1), b: z.string().min(1) }).optional(),
+  expertPOV:    ExpertPOVSchema.optional(),
+  supportingFacts: z.array(z.string()).min(0),
+  uncertaintyHandling: z.object({
+    register:     z.enum(['assert', 'hedge', 'speculate']),
+    hedgedClaims: z.array(z.string()).min(0),
+  }),
+  confidence: z.number().int().min(0).max(100),
+});
+export type PrimaryAngle = z.infer<typeof PrimaryAngleSchema>;
+
 export const ResearchSynthesisLayerSchema = z.object({
   mainStory:                StorySchema,
   supportingStories:        z.array(StorySchema).min(0),
@@ -135,6 +160,7 @@ export const ResearchSynthesisLayerSchema = z.object({
   secondOrderImplications:  z.array(ImplicationSchema).min(0),
   nonObviousInsights:       z.array(NonObviousInsightSchema).min(0),
   openQuestions:            z.array(z.string().min(1)).min(0),
+  primaryAngle:             PrimaryAngleSchema.optional(),   // Phase 10B
 });
 
 export const ResearchKnowledgeLayerSchema = z.object({
@@ -450,6 +476,7 @@ export const GeneratorInputSchema = z.object({
     contradictions:  z.array(z.string()),
     risks:           z.array(z.string()),
     confidenceScore: z.number().int().min(0).max(100),
+    primaryAngle:    PrimaryAngleSchema.optional(),   // Phase 10B — the narrative spine
   }),
   facts: z.object({
     verified:    z.array(z.object({ claim: z.string(), confidenceScore: z.number().int().optional() })).max(15),

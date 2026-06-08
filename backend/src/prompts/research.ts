@@ -5,7 +5,12 @@ import {
   ResearchSynthesisLayerSchema,
   ResearchKnowledgeLayerSchema,
   type ResearchContextV2,
+  type PrimaryAngle,
 } from '../schemas/aiContractSchemas';
+
+type SynthesisLayer = ResearchContextV2['synthesis'];
+type KnowledgeLayer = ResearchContextV2['knowledge'];
+type Meta          = ResearchContextV2['meta'];
 import { generateResearchContext } from '../services/mockAiService';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,6 +67,7 @@ export function researchSystem(lang: 'en' | 'he'): string {
     '- Label grounding honestly: "supported" (stated by sources), "inferred" (reasoned), "speculative" (a leap). Speculative leaps are valuable but MUST be labeled.',
     '- Optionally add expertPOV to a non-obvious insight: the conclusion a domain expert would draw (strategic/operational/prediction/practitioner). expertPOV is NEVER a fact — its grounding must be "inferred" or "speculative".',
     '- For contradictions, present BOTH sides and do not pick a winner; the disagreement itself is the story.',
+    '- primaryAngle: nominate the SINGLE strongest, most interesting thesis as the narrative spine for downstream content. It must be a synthesized angle (a connection / tension / contradiction / non-obvious insight) — NOT a restatement of the loudest single source. Write thesis + a "reframe" hook seed ("the real story is X, not the obvious Y"), cite the sourceRefs it rests on, and label grounding (factual / inferred / speculative). A speculative spine is allowed and often best — just label it.',
     `- Write all natural-language text in ${language}. Proper nouns / product / company names may stay in their original language.`,
     '- Return ONLY the structured result via the tool. No prose, no markdown.',
   ].join('\n');
@@ -146,8 +152,16 @@ export const RESEARCH_TOOL: Anthropic.Tool = {
         speculative: { type: 'boolean' }, expertPOV: { type: 'object', properties: expertPOVProps, required: ['type','statement','grounding'] } },
         required: ['insight','reasoning','sourceRefs','novelty','lens','speculative'] } },
       openQuestions: { type: 'array', items: { type: 'string' } },
+      // Phase 10B — nominate the SINGLE strongest thesis as the narrative spine.
+      primaryAngle: { type: 'object', properties: {
+        thesis:    { type: 'string', description: 'One-sentence narrative spine — the most interesting non-obvious story, not a source summary.' },
+        reframe:   { type: 'string', description: 'A "the real story is X, not the obvious Y" hook seed for writers.' },
+        basisKind: { type: 'string', enum: ['connection','tension','contradiction','insight','implication'] },
+        sourceRefs:{ type: 'array', items: { type: 'string' } },
+        grounding: { type: 'string', enum: ['factual','inferred','speculative'] },
+      }, required: ['thesis','reframe','basisKind','sourceRefs','grounding'] },
     },
-    required: ['singleSource','synthesisConfidence','mainStory','sourceConnections','nonObviousInsights','openQuestions'],
+    required: ['singleSource','synthesisConfidence','mainStory','sourceConnections','nonObviousInsights','openQuestions','primaryAngle'],
   },
 };
 
@@ -159,6 +173,142 @@ function clampMin(arr: string[], min: number, max: number, fallback: string[]): 
   if (out.length >= min) return out;
   for (const f of fallback) { if (out.length >= min) break; if (!out.includes(f)) out.push(f); }
   return out.slice(0, max);
+}
+
+// ── Primary Angle selection (Phase 10B) ───────────────────────────────────────
+// Deterministic: assemble the narrative spine from Claude's nomination when it
+// is present + valid, else fall back to a priority ladder over the synthesis.
+// No extra Claude call. Always returns a usable angle (never throws).
+type Register = PrimaryAngle['uncertaintyHandling']['register'];
+const registerFor = (g: PrimaryAngle['grounding']): Register =>
+  g === 'speculative' ? 'speculate' : g === 'inferred' ? 'hedge' : 'assert';
+
+export function selectPrimaryAngle(
+  raw: Record<string, unknown>,
+  synthesis: SynthesisLayer,
+  knowledge: KnowledgeLayer,
+  meta: Meta,
+): PrimaryAngle {
+  const validRefs = new Set(meta.sourceRefMap.map(r => r.ref));
+  const keep = (refs: unknown): string[] => (Array.isArray(refs) ? refs.map(String).filter(r => validRefs.has(r)) : []);
+  // Facts whose sourceRefs intersect the basis — the concrete material that substantiates the thesis.
+  const factsFor = (refs: string[]): string[] => {
+    const set = new Set(refs);
+    const hits = knowledge.keyFacts.filter(f => f.sourceRefs.some(r => set.has(r))).map(f => f.statement);
+    return dedupe(hits.length ? hits : knowledge.keyFacts.map(f => f.statement)).slice(0, 6);
+  };
+  const insightByText = (t: string) => synthesis.nonObviousInsights.find(n => n.insight === t);
+
+  // 1) Claude's nomination (assembled, not trusted blindly).
+  const nom = raw.primaryAngle as Record<string, unknown> | undefined;
+  if (nom && typeof nom.thesis === 'string' && typeof nom.reframe === 'string') {
+    const basisKind = String(nom.basisKind ?? 'insight');
+    const kind: PrimaryAngle['kind'] =
+      basisKind === 'tension' ? 'tension'
+      : basisKind === 'contradiction' ? 'contradiction'
+      : basisKind === 'implication' ? 'implication'
+      : basisKind === 'connection' ? 'connection'
+      : 'insight';
+    let refs = keep(nom.sourceRefs);
+    if (meta.singleSource && refs.length > 1) refs = refs.slice(0, 1);
+    const grounding = (['factual','inferred','speculative'].includes(String(nom.grounding)) ? nom.grounding : 'inferred') as PrimaryAngle['grounding'];
+    const matchedInsight = insightByText(String(nom.thesis));
+    const tension = synthesis.tensions[0];
+    const contra = synthesis.contradictions[0];
+    return {
+      thesis:  String(nom.thesis),
+      reframe: String(nom.reframe),
+      kind:    meta.singleSource ? 'single-source-insight' : kind,
+      grounding,
+      synthesisBasis: { sourceRefs: refs, excerpt: matchedInsight?.reasoning || String(nom.thesis) },
+      tensionPoles:
+        kind === 'tension' && tension ? { a: tension.poles[0], b: tension.poles[1] }
+        : kind === 'contradiction' && contra ? { a: contra.claimA, b: contra.claimB }
+        : undefined,
+      expertPOV: matchedInsight?.expertPOV,
+      supportingFacts: factsFor(refs.length ? refs : meta.sourceRefMap.map(r => r.ref)),
+      uncertaintyHandling: { register: registerFor(grounding), hedgedClaims: [] },
+      confidence: Math.min(meta.synthesisConfidence, meta.singleSource ? 60 : 100),
+    };
+  }
+
+  // 2) Deterministic priority ladder.
+  // Single source: an internal insight, never a fabricated cross-source claim.
+  if (meta.singleSource) {
+    const ins = synthesis.nonObviousInsights[0];
+    const grounding: PrimaryAngle['grounding'] = ins?.speculative ? 'speculative' : 'inferred';
+    const refs = (ins?.sourceRefs ?? meta.sourceRefMap.slice(0, 1).map(r => r.ref)).slice(0, 1);
+    return {
+      thesis: ins?.insight ?? synthesis.mainStory.summary,
+      reframe: synthesis.mainStory.headline,
+      kind: 'single-source-insight', grounding,
+      synthesisBasis: { sourceRefs: refs, excerpt: ins?.reasoning || ins?.insight || synthesis.mainStory.summary },
+      expertPOV: ins?.expertPOV,
+      supportingFacts: factsFor(refs),
+      uncertaintyHandling: { register: registerFor(grounding), hedgedClaims: [] },
+      confidence: Math.min(meta.synthesisConfidence, 60),
+    };
+  }
+  // Contradiction → the measurement-gap story.
+  const contra = synthesis.contradictions[0];
+  if (contra) {
+    const grounding: PrimaryAngle['grounding'] = contra.nature === 'factual' ? 'factual' : 'inferred';
+    return {
+      thesis: `The real story is the gap between competing claims about ${contra.subject} — and which evidence we should trust.`,
+      reframe: `${contra.subject}: "${contra.claimA}" vs. "${contra.claimB}"`,
+      kind: 'contradiction', grounding,
+      synthesisBasis: { sourceRefs: contra.sourceRefs, excerpt: contra.resolution || `${contra.claimA} vs ${contra.claimB}` },
+      tensionPoles: { a: contra.claimA, b: contra.claimB },
+      supportingFacts: factsFor(contra.sourceRefs),
+      uncertaintyHandling: { register: 'hedge', hedgedClaims: [contra.claimA, contra.claimB] },
+      confidence: meta.synthesisConfidence,
+    };
+  }
+  // Tension → the competing-forces story.
+  const tension = synthesis.tensions[0];
+  if (tension) {
+    return {
+      thesis: tension.description,
+      reframe: `${tension.poles[0]} vs. ${tension.poles[1]}`,
+      kind: 'tension', grounding: 'inferred',
+      synthesisBasis: { sourceRefs: tension.sourceRefs, excerpt: tension.description },
+      tensionPoles: { a: tension.poles[0], b: tension.poles[1] },
+      supportingFacts: factsFor(tension.sourceRefs),
+      uncertaintyHandling: { register: 'hedge', hedgedClaims: [] },
+      confidence: meta.synthesisConfidence,
+    };
+  }
+  // Strongest non-obvious insight (prefer ≥2 refs, expertPOV-bearing, higher novelty).
+  const ranked = [...synthesis.nonObviousInsights].sort((a, b) => {
+    const score = (n: typeof a) => (n.sourceRefs.length >= 2 ? 40 : 0) + (n.expertPOV ? 30 : 0) + Math.round((n.novelty ?? 0) / 5);
+    return score(b) - score(a);
+  });
+  const top = ranked[0];
+  if (top) {
+    const grounding: PrimaryAngle['grounding'] = top.speculative ? 'speculative' : 'inferred';
+    return {
+      thesis: top.insight,
+      reframe: top.insight,
+      kind: top.sourceRefs.length >= 2 ? 'connection' : 'insight', grounding,
+      synthesisBasis: { sourceRefs: top.sourceRefs, excerpt: top.reasoning || top.insight },
+      expertPOV: top.expertPOV,
+      supportingFacts: factsFor(top.sourceRefs.length ? top.sourceRefs : meta.sourceRefMap.map(r => r.ref)),
+      uncertaintyHandling: { register: registerFor(grounding), hedgedClaims: [] },
+      confidence: meta.synthesisConfidence,
+    };
+  }
+  // Last resort: a connection, else the main story itself.
+  const conn = synthesis.sourceConnections[0];
+  const refs = conn ? conn.sourceRefs : synthesis.mainStory.sourceRefs;
+  return {
+    thesis: conn?.description ?? synthesis.mainStory.summary,
+    reframe: synthesis.mainStory.headline,
+    kind: conn ? 'connection' : 'insight', grounding: 'inferred',
+    synthesisBasis: { sourceRefs: refs, excerpt: conn?.description ?? synthesis.mainStory.summary },
+    supportingFacts: factsFor(refs.length ? refs : meta.sourceRefMap.map(r => r.ref)),
+    uncertaintyHandling: { register: 'hedge', hedgedClaims: [] },
+    confidence: meta.synthesisConfidence,
+  };
 }
 
 /** Validate Claude's synthesis output and assemble the v1-valid v2 superset. */
@@ -207,6 +357,9 @@ export function finalizeSynthesis(raw: Record<string, unknown>, input: Synthesis
     ...synthesis.tensions.map(t => t.description),
   ];
 
+  // Phase 10B — choose the narrative spine and attach it to the synthesis layer.
+  const primaryAngle = selectPrimaryAngle(raw, synthesis, knowledge, meta);
+
   const v2: ResearchContextV2 = {
     runId:    input.run.id,
     caseId:   input.caseItem.id,
@@ -223,7 +376,7 @@ export function finalizeSynthesis(raw: Record<string, unknown>, input: Synthesis
     confidenceScore: meta.synthesisConfidence,
     meta,
     knowledge,
-    synthesis,
+    synthesis: { ...synthesis, primaryAngle },
   };
 
   return ResearchContextV2Schema.parse(v2);
@@ -233,6 +386,19 @@ export function finalizeSynthesis(raw: Record<string, unknown>, input: Synthesis
 export function buildV2Stub(input: SynthesisInput, generatorVersion: string, degraded: boolean): ResearchContextV2 {
   const v1 = generateResearchContext(input.run, input.caseItem, input.primarySources, input.contextSources);
   const singleSource = input.sourceRefs.length <= 1;
+  // Phase 10B — degraded spine from the mock's top angle/insight. Inferred,
+  // hedged, capped confidence; no fabricated cross-source basis.
+  const spineText = v1.suggestedAngles[0] ?? v1.keyInsights[0] ?? v1.summary;
+  const degradedAngle: PrimaryAngle = {
+    thesis: spineText,
+    reframe: v1.suggestedHooks[0] ?? spineText,
+    kind: singleSource ? 'single-source-insight' : 'insight',
+    grounding: 'inferred',
+    synthesisBasis: { sourceRefs: [], excerpt: spineText },
+    supportingFacts: dedupe(v1.importantClaims).slice(0, 6),
+    uncertaintyHandling: { register: 'hedge', hedgedClaims: [] },
+    confidence: Math.min(v1.confidenceScore, 55),
+  };
   const v2: ResearchContextV2 = {
     ...v1,
     meta: {
@@ -255,6 +421,7 @@ export function buildV2Stub(input: SynthesisInput, generatorVersion: string, deg
         sourceRefs: [], novelty: 30, lens: 'second-order' as const, speculative: false,
       })),
       openQuestions: v1.risks,
+      primaryAngle: degradedAngle,
     },
   };
   return ResearchContextV2Schema.parse(v2);
