@@ -34,7 +34,9 @@ export const contentGenerationConfig = {
   enabled:        process.env.CONTENT_GENERATION_ENABLED === 'true',
   podcastEnabled: process.env.CONTENT_GENERATION_PODCAST_ENABLED === 'true',
   model:          process.env.CONTENT_GENERATION_MODEL ?? 'claude-sonnet-4-6',
-  effortSocial:   process.env.CONTENT_GENERATION_EFFORT_SOCIAL ?? 'low',
+  // Phase 10E.4 — social bumped low→medium: thesis-driven argument needs more
+  // interpretive reasoning than a low-effort summary. Still fast (social 60s timeout).
+  effortSocial:   process.env.CONTENT_GENERATION_EFFORT_SOCIAL ?? 'medium',
   effortLongform: process.env.CONTENT_GENERATION_EFFORT_LONGFORM ?? 'high',
   timeoutMs:        parseInt(process.env.CONTENT_GENERATION_TIMEOUT_MS ?? '60000', 10),
   podcastTimeoutMs: parseInt(process.env.CONTENT_GENERATION_PODCAST_TIMEOUT_MS ?? '180000', 10),

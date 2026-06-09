@@ -120,7 +120,7 @@ export function generateMockContent(input: GeneratorInput): GeneratedOutput {
     // Phase 10D.0 — preserve upstream research degradation through the mock path too.
     researchDegraded:         input.contract.researchDegraded === true,
     researchGeneratorVersion: input.contract.researchGeneratorVersion,
-    contentScore: 80,
+    contentScore: null,   // Phase 10E.3 — quality is the measured TPS (set post-generation), not a fixed 80
     researchConfidence: input.research.confidenceScore,
     factCheckAccuracy: input.facts.overallConfidenceScore,
     ...extra,

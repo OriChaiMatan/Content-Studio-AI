@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import type { ContentCase, ContentSource, PipelineRun } from '@prisma/client';
 import { getContentClient, contentGenerationConfig } from '../lib/anthropic';
@@ -5,6 +7,7 @@ import { buildGeneratorInput } from './generatorInput';
 import { generateMockContent } from './mockContentService';
 import { engineSystem, renderContext } from '../prompts/engine.system';
 import { PLATFORM_SPECS } from '../prompts/platforms';
+import { computeThesisPreservation } from './thesisPreservation';
 import type { GeneratedOutput, GeneratorInput, ContentPlatform } from '../schemas/aiContractSchemas';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,6 +45,55 @@ function isTransient(err: unknown): boolean {
   );
 }
 
+// Phase 10E.1 — persistent, structured capture of EVERY terminal content failure
+// (the prior console.warn-only path lost the cause). Appends JSONL to
+// backend/content-failures.log. Distinguishes api/timeout/no-tool/validation/
+// truncation, and records the upstream research version so a content fallback on
+// already-degraded research is unambiguous. Never blocks generation.
+type ContentFailureKind = 'api-error' | 'no-tool-call' | 'validation-failed' | 'max-tokens-truncated';
+const CONTENT_FAILURE_LOG = 'content-failures.log';
+function logContentFailure(
+  input: GeneratorInput, kind: ContentFailureKind, err: unknown, startedAt: number,
+  phase: 'attempt-1' | 'corrective-retry', stopReason?: string | null, note?: string,
+) {
+  const platform = input.contract.platform;
+  const spec = PLATFORM_SPECS[platform];
+  const e = err as { name?: string; status?: number; type?: string; message?: string; request_id?: string; requestID?: string; stack?: string } | null;
+  const isApi = err instanceof Anthropic.APIError;
+  const classification =
+    kind === 'max-tokens-truncated' ? 'max-tokens'
+    : kind === 'no-tool-call' ? 'empty-no-tool-use'
+    : kind === 'validation-failed' ? 'zod-or-length-validation'
+    : err instanceof Anthropic.APIConnectionTimeoutError ? 'timeout'
+    : isApi ? `api-${e?.status ?? '?'}-${e?.type ?? 'unknown'}`
+    : 'unknown-exception';
+  const rec = {
+    ts: new Date().toISOString(),
+    event: 'content_generation_failure',
+    platform, kind, classification, phase,
+    name: e?.name ?? null,
+    status: isApi ? (e?.status ?? null) : null,
+    type: isApi ? (e?.type ?? null) : null,
+    requestId: e?.request_id ?? e?.requestID ?? null,
+    message: kind === 'validation-failed' ? (e?.message ?? null) : (e?.message ?? null),
+    note: note ?? null,
+    elapsedMs: Date.now() - startedAt,
+    model: contentGenerationConfig.model,
+    effort: spec.longform ? contentGenerationConfig.effortLongform : contentGenerationConfig.effortSocial,
+    maxTokens: spec.maxTokens,
+    stopReason: stopReason ?? null,
+    outputLanguage: input.contract.outputLanguage,
+    researchGeneratorVersion: input.contract.researchGeneratorVersion ?? null,
+    researchDegraded: input.contract.researchDegraded ?? null,
+    caseId: input.contract.caseId,
+    runId: input.contract.runId,
+    stack: e?.stack ?? null,
+  };
+  try { fs.appendFileSync(path.resolve(process.cwd(), CONTENT_FAILURE_LOG), JSON.stringify(rec) + '\n'); } catch { /* never block on logging */ }
+  const { stack: _omit, ...slim } = rec;
+  console.warn('[contentGen] FAILURE ' + JSON.stringify(slim));
+}
+
 function extractToolInput(message: Anthropic.Message, toolName: string): Record<string, unknown> | null {
   for (const block of message.content) {
     if (block.type === 'tool_use' && block.name === toolName) {
@@ -51,12 +103,16 @@ function extractToolInput(message: Anthropic.Message, toolName: string): Record<
   return null;
 }
 
-// One Claude call for a platform. Throws on API/timeout; returns raw tool input.
+// Phase 10E.5 — callClaude now surfaces stop_reason so the caller can detect
+// max_tokens truncation (a silent quality-collapse risk) and never accept it.
+type CallResult = { raw: Record<string, unknown> | null; stopReason: string | null };
+
+// One Claude call for a platform. Throws on API/timeout.
 async function callClaude(
   client: Anthropic,
   input: GeneratorInput,
   corrective: string | undefined,
-): Promise<Record<string, unknown> | null> {
+): Promise<CallResult> {
   const platform = input.contract.platform;
   const spec = PLATFORM_SPECS[platform];
   const system = `${engineSystem(input.contract.outputLanguage)}\n\n${spec.instruction}`;
@@ -69,8 +125,6 @@ async function callClaude(
   }
 
   const timeout = spec.longform ? contentGenerationConfig.podcastTimeoutMs : contentGenerationConfig.timeoutMs;
-  // Effort (GA on the content model) — social = low, long-form = high. Validated
-  // against the SDK's allowed set; unknown values are dropped (no API error).
   const effort = resolveEffort(spec.longform ? contentGenerationConfig.effortLongform : contentGenerationConfig.effortSocial);
 
   const message = await client.messages.create(
@@ -86,14 +140,26 @@ async function callClaude(
     { timeout },
   );
 
-  if (message.stop_reason === 'max_tokens') {
-    console.warn(`[contentGen:${platform}] response hit max_tokens — output may be truncated.`);
-  }
-  return extractToolInput(message, spec.tool.name);
+  return { raw: extractToolInput(message, spec.tool.name), stopReason: message.stop_reason ?? null };
 }
 
-/** Generate one platform's output. NEVER throws — always returns a v2 output. */
+/** Generate one platform's output, then attach the Thesis Preservation Score
+ * (10E.2). NEVER throws — always returns a v2 output. */
 export async function generateContent(input: GeneratorInput): Promise<GeneratedOutput> {
+  const out = await produce(input);
+  // Phase 10E.2 — measure how much of the winning thesis survived (deterministic,
+  // no extra Claude call). Computed for every path (claude-gen-1 / mock / fallback)
+  // so a mock fallback visibly scores low.
+  const tps = computeThesisPreservation(input, out);
+  if (tps) {
+    const md = out.metadata as { thesisPreservation?: unknown; contentScore?: number | null };
+    md.thesisPreservation = tps;
+    md.contentScore = tps.score;   // Phase 10E.3 — quality = measured TPS, not a confidence average
+  }
+  return out;
+}
+
+async function produce(input: GeneratorInput): Promise<GeneratedOutput> {
   const platform = input.contract.platform;
   const spec = PLATFORM_SPECS[platform];
 
@@ -113,53 +179,64 @@ export async function generateContent(input: GeneratorInput): Promise<GeneratedO
     return generateMockContent(input);
   }
 
-  try {
-    // Attempt 1 (with one transient retry).
-    let raw: Record<string, unknown> | null;
+  const startedAt = Date.now();
+
+  // ONE corrective retry, shared by validation-failure AND truncation. Phase 10E.5:
+  // a retry that is STILL truncated (max_tokens) or invalid → visible mock-fallback —
+  // a truncated newsletter is NEVER silently accepted.
+  async function correctiveRetry(correctiveMsg: string, reason: 'validation-failed' | 'max-tokens-truncated'): Promise<GeneratedOutput> {
+    let r2: CallResult;
     try {
-      raw = await callClaude(client, input, undefined);
+      r2 = await callClaude(client!, input, correctiveMsg);
     } catch (err) {
-      // Do NOT transient-retry long-form (podcast): a timeout retry would double
-      // the wall-clock. With maxRetries:0 + the per-request timeout, one attempt
-      // is bounded to ~1× CONTENT_GENERATION_PODCAST_TIMEOUT_MS → then fallback.
-      if (isTransient(err) && !spec.longform) raw = await callClaude(client, input, undefined);
-      else throw err;
+      if (isTransient(err) && !spec.longform) { try { r2 = await callClaude(client!, input, correctiveMsg); } catch (e2) { logContentFailure(input, 'api-error', e2, startedAt, 'corrective-retry'); return mockFallback(input); } }
+      else { logContentFailure(input, 'api-error', err, startedAt, 'corrective-retry'); return mockFallback(input); }
     }
-    if (!raw) {
-      console.warn(`[contentGen:${platform}] no tool call returned — using mock fallback.`);
+    if (!r2.raw) { logContentFailure(input, 'no-tool-call', null, startedAt, 'corrective-retry', r2.stopReason); return mockFallback(input); }
+    if (r2.stopReason === 'max_tokens') { logContentFailure(input, 'max-tokens-truncated', null, startedAt, 'corrective-retry', r2.stopReason); return mockFallback(input); }
+    try {
+      return spec.finalize(r2.raw, input);
+    } catch (retryErr) {
+      logContentFailure(input, 'validation-failed', retryErr, startedAt, 'corrective-retry', r2.stopReason, `was: ${reason}`);
       return mockFallback(input);
     }
+  }
 
+  try {
+    // Attempt 1 (with one transient retry for fast transient failures, social only).
+    let r1: CallResult;
+    try {
+      r1 = await callClaude(client, input, undefined);
+    } catch (err) {
+      if (isTransient(err) && !spec.longform) r1 = await callClaude(client, input, undefined);
+      else throw err;
+    }
+    if (!r1.raw) {
+      logContentFailure(input, 'no-tool-call', null, startedAt, 'attempt-1', r1.stopReason);
+      return mockFallback(input);
+    }
+    // Phase 10E.5 — truncation is a FAILURE, never silently accepted as claude-gen-1.
+    if (r1.stopReason === 'max_tokens') {
+      console.warn(`[contentGen:${platform}] output truncated (max_tokens) — retrying for a complete, concise version.`);
+      return correctiveRetry(
+        `Your previous output was TRUNCATED — it hit the token limit and was cut off mid-way. Produce a COMPLETE version: finish every field, no mid-sentence cutoffs, and be more CONCISE to fit within the limit while keeping the thesis-driven argument.`,
+        'max-tokens-truncated',
+      );
+    }
     // Validate; ONE corrective retry on validation failure.
     try {
-      return spec.finalize(raw, input);
+      return spec.finalize(r1.raw, input);
     } catch (validationErr) {
       const detail = validationErr instanceof Error ? validationErr.message : String(validationErr);
       console.warn(`[contentGen:${platform}] validation failed (attempt 1): ${detail}`);
-      const corrective =
+      return correctiveRetry(
         `Your previous output did not satisfy the schema:\n${detail}\n` +
-        `Call ${spec.tool.name} again with corrected values that satisfy all field and array-size constraints.`;
-      let retryRaw: Record<string, unknown> | null;
-      try {
-        retryRaw = await callClaude(client, input, corrective);
-      } catch (err) {
-        if (isTransient(err) && !spec.longform) retryRaw = await callClaude(client, input, corrective);
-        else throw err;
-      }
-      if (!retryRaw) return mockFallback(input);
-      try {
-        return spec.finalize(retryRaw, input);
-      } catch (retryErr) {
-        const d2 = retryErr instanceof Error ? retryErr.message : String(retryErr);
-        console.warn(`[contentGen:${platform}] validation failed again: ${d2} — using mock fallback.`);
-        return mockFallback(input);
-      }
+        `Call ${spec.tool.name} again with corrected values that satisfy all field and array-size constraints.`,
+        'validation-failed',
+      );
     }
   } catch (err) {
-    let detail: string;
-    if (err instanceof Anthropic.APIError) detail = `${err.name} status=${err.status} type=${err.type ?? 'n/a'}: ${err.message}`;
-    else detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    console.warn(`[contentGen:${platform}] Claude call failed (${detail}) — using mock fallback.`);
+    logContentFailure(input, 'api-error', err, startedAt, 'attempt-1');
     return mockFallback(input);
   }
 }

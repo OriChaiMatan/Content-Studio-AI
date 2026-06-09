@@ -68,6 +68,24 @@ function ResearchDegradedBadge() {
   );
 }
 
+// Phase 10E.2 — how much of the winning thesis survived into this content.
+function ThesisPreservationBadge({ output }: { output: ContentOutput }) {
+  const tp = output.metadata?.thesisPreservation;
+  if (!tp) return null;
+  const tone = tp.score >= 75 ? 'bg-green-100 text-green-700'
+    : tp.score >= 55 ? 'bg-amber-100 text-amber-800'
+    : 'bg-red-100 text-red-800';
+  const title =
+    `Thesis Preservation ${tp.score}/100 — how much of the winning thesis survived into this content.\n` +
+    `presence ${tp.thesisPresence} · spine ${tp.spinePosition} · cross-source ${tp.crossSource} · ` +
+    `sharpness ${tp.editorialSharpness} · register ${tp.registerFidelity} · non-flattening ${tp.nonFlattening}`;
+  return (
+    <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${tone} flex items-center gap-1`} title={title}>
+      TPS {tp.score}
+    </span>
+  );
+}
+
 function humanizeKey(k: string): string {
   return k.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).trim();
 }
@@ -220,6 +238,7 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {isResearchDegraded(output) && <ResearchDegradedBadge />}
           {isDegraded(output) && <DegradedBadge />}
+          <ThesisPreservationBadge output={output} />
           <OutputStatusBadge status={output.status} />
         </div>
       </div>
@@ -232,9 +251,9 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
       {/* Scores */}
       {output.contentScore !== null && (
         <div className="px-5 pb-3 flex flex-wrap gap-1.5">
-          <ScorePill label="Content"    value={output.contentScore!}         icon="star" />
-          <ScorePill label="Research"   value={output.researchConfidence!}  icon="search" />
-          <ScorePill label="Fact Check" value={output.factCheckAccuracy!}   icon="fact_check" />
+          <ScorePill label="Quality (TPS)" value={output.contentScore!}      icon="star" />
+          <ScorePill label="Research conf." value={output.researchConfidence!} icon="search" />
+          <ScorePill label="Fact Check conf." value={output.factCheckAccuracy!} icon="fact_check" />
         </div>
       )}
 

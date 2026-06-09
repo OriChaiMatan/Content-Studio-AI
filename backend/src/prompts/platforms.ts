@@ -69,7 +69,11 @@ function baseMeta(input: GeneratorInput, extra: Record<string, unknown> = {}) {
     // Phase 10D.0 — carry upstream research degradation onto the output.
     researchDegraded:         input.contract.researchDegraded === true,
     researchGeneratorVersion: input.contract.researchGeneratorVersion,
-    contentScore:     Math.max(70, Math.round((input.research.confidenceScore + input.facts.overallConfidenceScore) / 2)),
+    // Phase 10E.3 — contentScore is NO LONGER a research/fact-check confidence
+    // average (which never measured the prose). It is set post-generation to the
+    // measured Thesis Preservation Score. researchConfidence / factCheckAccuracy
+    // remain as honest INPUT-confidence signals, kept separate from quality.
+    contentScore:     null,
     researchConfidence: input.research.confidenceScore,
     factCheckAccuracy:  input.facts.overallConfidenceScore,
     ...extra,
@@ -87,6 +91,7 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
     instruction: [
       'PLATFORM: LinkedIn. Purpose: authority, insight, and professional discussion.',
       'Tone: credible and substantive. NO emoji by default. Not clickbait.',
+      'STRUCTURE AS AN ARGUMENT: hook = the thesis reframed in one sharp line; context = the MINIMUM setup; insight = the core argument (WHY the thesis holds across the sources + its implication); takeaways = consequences/so-what, NOT a list of source facts.',
       'HARD LENGTH: the assembled post (hook + context + insight + numbered takeaways + cta + hashtags) must be 650–1400 characters. TARGET ~950–1150 characters and NEVER exceed ~1250 in your own estimate — the 1400 ceiling is a hard cutoff, so leave margin. Per-section budget: hook ≤100 chars (one line); context ≤2 sentences; insight ≤2 sentences; exactly 3 takeaways of ≤1 line (~110 chars) each (4 only if each is very short); cta ≤100 chars. Be concise — every section must earn its length.',
       'Return the breakdown: hook, context, insight, takeaways (3–5), cta, hashtags (0–3), imagePrompt (1).',
     ].join('\n'),
@@ -224,6 +229,7 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
     longform: true,
     instruction: [
       'PLATFORM: Newsletter. Purpose: education and analysis. Analytical, not salesy.',
+      'mainAnalysis must ARGUE the thesis (claim → reasoning → implication) and engage the tension/counter-argument head-on — it is NOT a survey of the topic or a summary of the sources. Open on the thesis; let interpretation drive; cite facts only to earn each claim.',
       'Length: around 600–1200 words (mainAnalysis is the substantial body).',
       'Return the breakdown: subject, previewText, opening, mainAnalysis, practicalTakeaways (1–8), closingInsight, cta. No image prompt.',
     ].join('\n'),

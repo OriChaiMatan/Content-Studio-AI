@@ -171,6 +171,15 @@ export interface OutputMetadata {
   degraded?: boolean;
   researchDegraded?: boolean;         // Phase 10D.0 — built on degraded research
   researchGeneratorVersion?: string;  // Phase 10D.0
+  thesisPreservation?: {              // Phase 10E.2 — did the content keep the winning thesis?
+    score: number;
+    thesisPresence: number;
+    spinePosition: number;
+    crossSource: number;
+    editorialSharpness: number;
+    registerFidelity: number;
+    nonFlattening: number;
+  };
   contentScore?: number | null;
   researchConfidence?: number | null;
   factCheckAccuracy?: number | null;
@@ -198,7 +207,7 @@ export interface ContentOutput {
   metadata?: OutputMetadata | null;
   status: OutputStatus;
   version: string;                // e.g. "v2.0.0"
-  contentScore: number | null;    // 0–100, mock AI quality score
+  contentScore: number | null;    // Phase 10E.3 — measured content quality (= Thesis Preservation Score), not a confidence average
   researchConfidence: number | null;
   factCheckAccuracy: number | null;
   generatedAt: string;            // ISO 8601

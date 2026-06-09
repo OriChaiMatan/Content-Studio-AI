@@ -514,10 +514,24 @@ export const PodcastBreakdownSchema = z.object({
   fullScript:         z.string().min(50),
 });
 
+// Thesis Preservation Score (Phase 10E.2) — deterministic post-generation measure
+// of how much of the winning primaryAngle survives into the final content.
+export const ThesisPreservationSchema = z.object({
+  score:              z.number().int().min(0).max(100),
+  thesisPresence:     z.number().int().min(0).max(100),
+  spinePosition:      z.number().int().min(0).max(100),
+  crossSource:        z.number().int().min(0).max(100),
+  editorialSharpness: z.number().int().min(0).max(100),
+  registerFidelity:   z.number().int().min(0).max(100),
+  nonFlattening:      z.number().int().min(0).max(100),
+});
+export type ThesisPreservation = z.infer<typeof ThesisPreservationSchema>;
+
 export const ContentMetadataSchema = z.object({
   generatorVersion:         z.string().min(1),        // "mock-2" | "gen-1" | "mock-fallback"
   model:                    z.string().optional(),
   degraded:                 z.boolean().default(false),
+  thesisPreservation:       ThesisPreservationSchema.optional(),   // Phase 10E.2
   // Phase 10D.0 — input-degradation propagation. True when the RESEARCH stage
   // this content was built on fell back to mock (even if the generator itself
   // succeeded as claude-gen-1). Surfaced as a distinct "degraded research" badge.

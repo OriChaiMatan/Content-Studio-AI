@@ -42,6 +42,8 @@ export function engineSystem(lang: 'en' | 'he'): string {
     '- When a PRIMARY ANGLE is provided, it is the NARRATIVE SPINE. Build the entire piece around its thesis, and the whole piece must develop THAT story.',
     '- FIRST-PARAGRAPH RULE (critical): the opening must state the SYNTHESIZED INSIGHT — the conclusion that exists ONLY because multiple sources were combined. The first sentence must be IMPOSSIBLE to write from any single source alone. Do NOT open with an announcement, product launch, or the loudest single source as the grammatical subject — never begin with "X announced…", "The WSL…", "Microsoft…", "AI judging…", "AI is changing…", or any single-source recap. Name such a source only AFTER the insight has landed, as supporting evidence.',
     '- Write like a SENIOR ANALYST, not a journalist or news bot: Insight → Evidence, NEVER Evidence → Insight. The reader meets the new combined idea first; the individual source facts come second to substantiate it.',
+    '- ARGUE, DO NOT SUMMARIZE (critical). The piece is an ARGUMENT for the thesis, not a recap of the sources. Every paragraph must ADVANCE the thesis: state a claim, give the reasoning (why it follows from the combined sources), then the implication. Lead with INTERPRETATION; bring in a fact only to earn a claim, then move the argument forward. Do NOT produce a balanced "on one hand / on the other hand" overview, a neutral news summary, or a bulleted fact-dump. Cite the fewest facts needed — interpretation should outweigh recap.',
+    '- OPEN ON THE THESIS: the first 1–2 sentences must state the thesis itself in plain language, reusing its key terms so the reader grasps the core claim immediately — not a teaser, not background, not a source headline.',
     '- THESIS DISCIPLINE (when a THESIS DISCIPLINE block is provided): keep the thesis strong and sharp, but label its confidence honestly. (1) When the angle is inferred or speculative, you MUST weave at least one counter-argument, limitation, or alternative explanation INTO the body as part of the analysis — not as a tacked-on disclaimer. (2) Never present a speculative implication as established fact. (3) Match the allowed wording strength; use the required qualifiers for any claim that runs past the evidence; never use the forbidden phrases; and rewrite any overreach "riskyClaim" using its safer wording. (4) Do NOT collapse into generic neutral hedging or a bland summary — discipline means calibrating the strength of each claim, not deleting the opinion.',
     '- Research facts, claims, and sources are SUPPORT for the angle — use them to substantiate the thesis, not as the headline.',
     '- Fact discipline governs HOW you state a claim (assert / hedge / omit), NOT which story you tell. A thesis resting on an uncertain or inferred claim is still the spine — change the WORDING per its register, never demote the story: assert = state plainly; hedge = "coaches argue…", "early signs suggest…", "reportedly"; speculate = "could…", "one possible implication…", "an emerging question is…".',
@@ -76,10 +78,30 @@ export function renderContext(input: GeneratorInput): string {
     `Say it as: ${register}  (assert = state plainly · hedge = "coaches argue / early signs suggest" · speculate = "could / one possible implication / an emerging question")`,
     pa.uncertaintyHandling.hedgedClaims.length ? `Hedge these specifically:\n${list(pa.uncertaintyHandling.hedgedClaims)}` : '',
     `Substantiate with (SUPPORT only — do not lead with these, and do NOT open the piece with them):\n${list(pa.supportingFacts)}`,
-    `OPENING REQUIREMENT: sentence 1 must express the THESIS above (an insight combining ${pa.synthesisBasis.sourceRefs.length >= 2 ? pa.synthesisBasis.sourceRefs.join('+') : 'the sources'}). It must be impossible to write from any single source alone. Introduce individual source facts (e.g. the announcement) only AFTER the insight, as evidence — never as the first sentence's subject.`,
+    `OPENING REQUIREMENT: state the THESIS in sentence 1, in your own words, REUSING its key terms (an insight combining ${pa.synthesisBasis.sourceRefs.length >= 2 ? pa.synthesisBasis.sourceRefs.join('+') : 'the sources'}) — impossible to write from any single source alone. Then DEVELOP it as an argument (claim → why → implication). Introduce a source fact only AFTER the insight, as evidence — never as the first sentence's subject, never as a list.`,
     ...disciplineBlock(pa, list),
     '',
   ] : [];
+
+  // Phase 10E.4 — when a PRIMARY ANGLE exists, the research menu is SUBORDINATE
+  // support (deduplicated: keyInsights and suggestedAngles overlap, so only the
+  // top supporting points + facts are shown — the generator argues the thesis,
+  // it does not pick from a menu). Without an angle, fall back to the fuller menu.
+  const researchBlock = pa ? [
+    '## SUPPORTING MATERIAL (subordinate to the PRIMARY ANGLE — develop the argument, do NOT list these)',
+    `Supporting points:\n${list(r.keyInsights.slice(0, 5))}`,
+    `Supporting facts (cite sparingly, only to earn a claim):\n${list(r.importantClaims.slice(0, 6))}`,
+    r.contradictions.length ? `Tensions/contradictions to engage (not to avoid):\n${list(r.contradictions.slice(0, 3))}` : '',
+  ] : [
+    '## RESEARCH CONTEXT',
+    `Summary: ${r.summary}`,
+    `Main topics:\n${list(r.mainTopics)}`,
+    `Key insights:\n${list(r.keyInsights)}`,
+    `Important claims:\n${list(r.importantClaims)}`,
+    `Suggested angles:\n${list(r.suggestedAngles)}`,
+    `Suggested hooks:\n${list(r.suggestedHooks)}`,
+    r.contradictions.length ? `Contradictions to avoid:\n${list(r.contradictions)}` : '',
+  ];
 
   return [
     ...spine,
@@ -88,14 +110,7 @@ export function renderContext(input: GeneratorInput): string {
     `Goal: ${b.contentGoal}${b.goalCustom ? ` (${b.goalCustom})` : ''}`,
     `Style: ${b.contentStyle}${b.styleCustom ? ` (${b.styleCustom})` : ''}`,
     '',
-    '## RESEARCH CONTEXT',
-    `Summary: ${r.summary}`,
-    `Main topics:\n${list(r.mainTopics)}`,
-    `Key insights:\n${list(r.keyInsights)}`,
-    `${pa ? 'Supporting facts (substantiate the angle — NOT the headline)' : 'Important claims'}:\n${list(r.importantClaims)}`,
-    `Suggested angles:\n${list(r.suggestedAngles)}`,
-    `Suggested hooks:\n${list(r.suggestedHooks)}`,
-    r.contradictions.length ? `Contradictions to avoid:\n${list(r.contradictions)}` : '',
+    ...researchBlock,
     `Research confidence: ${r.confidenceScore}/100`,
     '',
     '## FACT CHECK (assertion allowlist / denylist)',
