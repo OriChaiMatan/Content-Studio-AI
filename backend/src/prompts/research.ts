@@ -4,8 +4,10 @@ import {
   ResearchContextV2Schema,
   ResearchSynthesisLayerSchema,
   ResearchKnowledgeLayerSchema,
+  ThesisDisciplineSchema,
   type ResearchContextV2,
   type PrimaryAngle,
+  type ThesisDiscipline,
 } from '../schemas/aiContractSchemas';
 
 type SynthesisLayer = ResearchContextV2['synthesis'];
@@ -68,6 +70,7 @@ export function researchSystem(lang: 'en' | 'he'): string {
     '- Optionally add expertPOV to a non-obvious insight: the conclusion a domain expert would draw (strategic/operational/prediction/practitioner). expertPOV is NEVER a fact — its grounding must be "inferred" or "speculative".',
     '- For contradictions, present BOTH sides and do not pick a winner; the disagreement itself is the story.',
     '- primaryAngle: nominate the SINGLE strongest, most interesting thesis as the narrative spine for downstream content. It must be a synthesized angle (a connection / tension / contradiction / non-obvious insight) — NOT a restatement of the loudest single source. Write thesis + a "reframe" hook seed ("the real story is X, not the obvious Y"), cite the sourceRefs it rests on, and label grounding (factual / inferred / speculative). A speculative spine is allowed and often best — just label it.',
+    '- thesisDiscipline (inside primaryAngle): stress-test your own thesis like a senior analyst, NOT a fact-checker. Do not ask "is this true on the internet"; ask "even if the source facts are true, is THIS the best explanation, and how confidently may we state it?". Provide: supportLevel; supportingEvidence (each tagged strong/moderate/weak with refs); assumptions (and the risk if each is wrong); at least one strong counterArgument for any inferred/speculative thesis; alternativeExplanations (ordinary/competing reasons for the same facts, e.g. general industry growth or compliance pressure); overreachWarnings (claims the thesis tempts but the sources do NOT support, each with safer wording); and wordingGuidance (allowedStrength + requiredQualifiers + forbiddenPhrases). Be honest: a great thesis with a named weakness beats an overconfident one.',
     `- Write all natural-language text in ${language}. Proper nouns / product / company names may stay in their original language.`,
     '- Return ONLY the structured result via the tool. No prose, no markdown.',
   ].join('\n');
@@ -153,13 +156,31 @@ export const RESEARCH_TOOL: Anthropic.Tool = {
         required: ['insight','reasoning','sourceRefs','novelty','lens','speculative'] } },
       openQuestions: { type: 'array', items: { type: 'string' } },
       // Phase 10B — nominate the SINGLE strongest thesis as the narrative spine.
+      // Phase 10C — argue it at analyst level via thesisDiscipline.
       primaryAngle: { type: 'object', properties: {
         thesis:    { type: 'string', description: 'One-sentence narrative spine — the most interesting non-obvious story, not a source summary.' },
         reframe:   { type: 'string', description: 'A "the real story is X, not the obvious Y" hook seed for writers.' },
         basisKind: { type: 'string', enum: ['connection','tension','contradiction','insight','implication'] },
         sourceRefs:{ type: 'array', items: { type: 'string' } },
         grounding: { type: 'string', enum: ['factual','inferred','speculative'] },
-      }, required: ['thesis','reframe','basisKind','sourceRefs','grounding'] },
+        thesisDiscipline: { type: 'object', description: 'Stress-test the thesis. NOT fact-check (is it true?) but: even if the facts are true, is THIS the best explanation, and how strongly may we state it?', properties: {
+          supportLevel: { type: 'string', enum: ['strong','moderate','weak'], description: 'How well the sources back the thesis overall.' },
+          supportingEvidence: { type: 'array', items: { type: 'object', properties: {
+            claim: { type: 'string' }, sourceRefs: { type: 'array', items: { type: 'string' } }, strength: { type: 'string', enum: ['strong','moderate','weak'] } }, required: ['claim','sourceRefs','strength'] } },
+          assumptions: { type: 'array', items: { type: 'object', properties: {
+            assumption: { type: 'string' }, whyItMatters: { type: 'string' }, riskIfWrong: { type: 'string' } }, required: ['assumption','whyItMatters','riskIfWrong'] } },
+          counterArguments: { type: 'array', description: 'The strongest objections to the thesis. Provide at least one for any inferred/speculative thesis.', items: { type: 'object', properties: {
+            argument: { type: 'string' }, sourceRefs: { type: 'array', items: { type: 'string' } }, strength: { type: 'string', enum: ['strong','moderate','weak'] } }, required: ['argument','strength'] } },
+          alternativeExplanations: { type: 'array', description: 'Other plausible explanations for the same facts (e.g. ordinary industry growth, compliance pressure).', items: { type: 'object', properties: {
+            explanation: { type: 'string' }, whyPlausible: { type: 'string' } }, required: ['explanation','whyPlausible'] } },
+          overreachWarnings: { type: 'array', description: 'Claims the thesis tempts but the sources do NOT support — with safer wording.', items: { type: 'object', properties: {
+            riskyClaim: { type: 'string' }, saferWording: { type: 'string' }, reason: { type: 'string' } }, required: ['riskyClaim','saferWording','reason'] } },
+          wordingGuidance: { type: 'object', properties: {
+            allowedStrength: { type: 'string', enum: ['assertive','balanced','cautious','speculative'] },
+            requiredQualifiers: { type: 'array', items: { type: 'string' } },
+            forbiddenPhrases: { type: 'array', items: { type: 'string' } } }, required: ['allowedStrength','requiredQualifiers','forbiddenPhrases'] },
+        }, required: ['supportLevel','supportingEvidence','assumptions','counterArguments','alternativeExplanations','overreachWarnings','wordingGuidance'] },
+      }, required: ['thesis','reframe','basisKind','sourceRefs','grounding','thesisDiscipline'] },
     },
     required: ['singleSource','synthesisConfidence','mainStory','sourceConnections','nonObviousInsights','openQuestions','primaryAngle'],
   },
@@ -183,7 +204,7 @@ type Register = PrimaryAngle['uncertaintyHandling']['register'];
 const registerFor = (g: PrimaryAngle['grounding']): Register =>
   g === 'speculative' ? 'speculate' : g === 'inferred' ? 'hedge' : 'assert';
 
-export function selectPrimaryAngle(
+function selectAngleBase(
   raw: Record<string, unknown>,
   synthesis: SynthesisLayer,
   knowledge: KnowledgeLayer,
@@ -311,6 +332,92 @@ export function selectPrimaryAngle(
   };
 }
 
+// ── Thesis discipline (Phase 10C) ─────────────────────────────────────────────
+// Derive counter-arguments deterministically from the synthesis itself: tensions
+// and contradictions ARE the opposing readings; contrarian insights are objections.
+function deriveCounters(synthesis: SynthesisLayer): ThesisDiscipline['counterArguments'] {
+  const out: ThesisDiscipline['counterArguments'] = [];
+  for (const t of synthesis.tensions)
+    out.push({ argument: `Counter-force: ${t.poles[1]} pulls against ${t.poles[0]}.`, sourceRefs: t.sourceRefs, strength: 'moderate' });
+  for (const c of synthesis.contradictions)
+    out.push({ argument: `On ${c.subject}, the opposing reading is: "${c.claimB}".`, sourceRefs: c.sourceRefs, strength: c.nature === 'evidentiary' ? 'strong' : 'moderate' });
+  for (const n of synthesis.nonObviousInsights.filter(n => n.lens === 'contrarian'))
+    out.push({ argument: n.insight, sourceRefs: n.sourceRefs, strength: 'moderate' });
+  return out.slice(0, 3);
+}
+
+const FORBIDDEN = ['definitely', 'guarantees', 'will replace', 'completely solves', 'eliminates entirely', 'destroys', 'proves that', 'inevitably'];
+
+function buildThesisDiscipline(
+  raw: Record<string, unknown>,
+  synthesis: SynthesisLayer,
+  knowledge: KnowledgeLayer,
+  meta: Meta,
+  base: PrimaryAngle,
+): ThesisDiscipline {
+  const validRefs = new Set(meta.sourceRefMap.map(r => r.ref));
+  const keep = (refs: unknown): string[] => (Array.isArray(refs) ? refs.map(String).filter(r => validRefs.has(r)) : []);
+
+  // Wording controls derived from grounding + single-source + register.
+  const allowedStrength: ThesisDiscipline['wordingGuidance']['allowedStrength'] =
+    meta.singleSource ? 'cautious'
+    : base.grounding === 'factual' ? 'assertive'
+    : base.grounding === 'inferred' ? 'balanced'
+    : 'speculative';
+  const requiredQualifiers =
+    base.uncertaintyHandling.register === 'speculate' ? ['could', 'may', 'one possible implication', 'an emerging question']
+    : base.uncertaintyHandling.register === 'hedge' ? ['may', 'appears to', 'early signs suggest']
+    : [];
+  let supportLevel: ThesisDiscipline['supportLevel'] =
+    base.grounding === 'factual' ? 'strong' : base.grounding === 'inferred' ? 'moderate' : 'weak';
+  if (meta.singleSource) supportLevel = supportLevel === 'strong' ? 'moderate' : 'weak';
+
+  // 1) Use Claude's nomination when it validates; sanitize refs, then ensure a
+  //    counter-argument exists for any non-factual thesis.
+  const nom = (raw.primaryAngle as Record<string, unknown> | undefined)?.thesisDiscipline;
+  if (nom && typeof nom === 'object') {
+    const n = nom as Record<string, any>;
+    const sanitized = {
+      ...n,
+      supportingEvidence: Array.isArray(n.supportingEvidence) ? n.supportingEvidence.map((e: any) => ({ ...e, sourceRefs: keep(e?.sourceRefs) })) : [],
+      counterArguments:   Array.isArray(n.counterArguments) ? n.counterArguments.map((c: any) => ({ ...c, sourceRefs: keep(c?.sourceRefs) })) : [],
+      wordingGuidance: {
+        allowedStrength:    n?.wordingGuidance?.allowedStrength ?? allowedStrength,
+        requiredQualifiers: Array.isArray(n?.wordingGuidance?.requiredQualifiers) ? n.wordingGuidance.requiredQualifiers : requiredQualifiers,
+        forbiddenPhrases:   dedupe([...(Array.isArray(n?.wordingGuidance?.forbiddenPhrases) ? n.wordingGuidance.forbiddenPhrases : []), ...FORBIDDEN]),
+      },
+    };
+    const parsed = ThesisDisciplineSchema.safeParse(sanitized);
+    if (parsed.success) {
+      const d = parsed.data;
+      if (base.grounding !== 'factual' && d.counterArguments.length === 0) d.counterArguments = deriveCounters(synthesis);
+      return d;
+    }
+  }
+
+  // 2) Deterministic fallback assembled from the synthesis.
+  return {
+    supportLevel,
+    supportingEvidence: base.supportingFacts.slice(0, 5).map(f => ({ claim: f, sourceRefs: base.synthesisBasis.sourceRefs, strength: 'moderate' as const })),
+    assumptions: [],
+    counterArguments: deriveCounters(synthesis),
+    alternativeExplanations: synthesis.openQuestions.slice(0, 2).map(q => ({ explanation: q, whyPlausible: 'Raised as an open question by the synthesis — a competing reading the thesis does not rule out.' })),
+    overreachWarnings: [],
+    wordingGuidance: { allowedStrength, requiredQualifiers, forbiddenPhrases: FORBIDDEN },
+  };
+}
+
+/** Select the narrative spine (10B) AND attach its analyst-level discipline (10C). */
+export function selectPrimaryAngle(
+  raw: Record<string, unknown>,
+  synthesis: SynthesisLayer,
+  knowledge: KnowledgeLayer,
+  meta: Meta,
+): PrimaryAngle {
+  const base = selectAngleBase(raw, synthesis, knowledge, meta);
+  return { ...base, thesisDiscipline: buildThesisDiscipline(raw, synthesis, knowledge, meta, base) };
+}
+
 /** Validate Claude's synthesis output and assemble the v1-valid v2 superset. */
 export function finalizeSynthesis(raw: Record<string, unknown>, input: SynthesisInput): ResearchContextV2 {
   const validRefs = new Set(input.sourceRefs.map(r => r.ref));
@@ -398,6 +505,16 @@ export function buildV2Stub(input: SynthesisInput, generatorVersion: string, deg
     supportingFacts: dedupe(v1.importantClaims).slice(0, 6),
     uncertaintyHandling: { register: 'hedge', hedgedClaims: [] },
     confidence: Math.min(v1.confidenceScore, 55),
+    // Phase 10C — degraded discipline: weak support, cautious wording, no fabricated counters.
+    thesisDiscipline: {
+      supportLevel: 'weak',
+      supportingEvidence: dedupe(v1.importantClaims).slice(0, 3).map(c => ({ claim: c, sourceRefs: [], strength: 'weak' as const })),
+      assumptions: [],
+      counterArguments: [],
+      alternativeExplanations: [],
+      overreachWarnings: [],
+      wordingGuidance: { allowedStrength: 'cautious', requiredQualifiers: ['may', 'appears to'], forbiddenPhrases: FORBIDDEN },
+    },
   };
   const v2: ResearchContextV2 = {
     ...v1,

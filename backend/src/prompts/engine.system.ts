@@ -1,5 +1,30 @@
 import type { GeneratorInput } from '../schemas/aiContractSchemas';
 
+// Phase 10C — render the analyst-level discipline so the generator labels the
+// strength of each claim, weaves in a counter-argument / alternative, and never
+// asserts an overreach. Returns [] when no discipline is present (back-compat).
+function disciplineBlock(pa: NonNullable<GeneratorInput['research']['primaryAngle']>, list: (a: string[]) => string): string[] {
+  const td = pa.thesisDiscipline;
+  if (!td) return [];
+  const ev = td.supportingEvidence.map(e => `${e.claim} [${e.strength}${e.sourceRefs.length ? ' · ' + e.sourceRefs.join(',') : ''}]`);
+  const ca = td.counterArguments.map(c => `${c.argument} [${c.strength}]`);
+  const alt = td.alternativeExplanations.map(a => `${a.explanation} — why plausible: ${a.whyPlausible}`);
+  const asmp = td.assumptions.map(a => `${a.assumption} — risk if wrong: ${a.riskIfWrong}`);
+  const over = td.overreachWarnings.map(o => `"${o.riskyClaim}" → say instead: "${o.saferWording}"`);
+  return [
+    '',
+    '## THESIS DISCIPLINE (write like a senior analyst — keep the opinion sharp, but label its strength)',
+    `Support level: ${td.supportLevel}  ·  Allowed wording strength: ${td.wordingGuidance.allowedStrength}`,
+    td.wordingGuidance.requiredQualifiers.length ? `Use these qualifiers for any claim that runs past the evidence: ${td.wordingGuidance.requiredQualifiers.join(', ')}` : '',
+    td.wordingGuidance.forbiddenPhrases.length ? `NEVER use these (overconfident / unsupported): ${td.wordingGuidance.forbiddenPhrases.join(', ')}` : '',
+    ev.length   ? `Supporting evidence (strongest first):\n${list(ev)}` : '',
+    asmp.length ? `Key assumptions (hedge if shaky):\n${list(asmp)}` : '',
+    ca.length   ? `Counter-arguments — you MUST weave at least ONE into the body when the thesis is inferred/speculative (not as a disclaimer dump, as part of the analysis):\n${list(ca)}` : '',
+    alt.length  ? `Alternative explanations — acknowledge at least one for the same facts:\n${list(alt)}` : '',
+    over.length ? `Overreach — do NOT assert the risky version; use the safer wording:\n${list(over)}` : '',
+  ];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared engine system prompt (Phase 9 CP-2)
 // Stable per (platform, language) → cached. Platform instructions are appended
@@ -17,6 +42,7 @@ export function engineSystem(lang: 'en' | 'he'): string {
     '- When a PRIMARY ANGLE is provided, it is the NARRATIVE SPINE. Build the entire piece around its thesis, and the whole piece must develop THAT story.',
     '- FIRST-PARAGRAPH RULE (critical): the opening must state the SYNTHESIZED INSIGHT — the conclusion that exists ONLY because multiple sources were combined. The first sentence must be IMPOSSIBLE to write from any single source alone. Do NOT open with an announcement, product launch, or the loudest single source as the grammatical subject — never begin with "X announced…", "The WSL…", "Microsoft…", "AI judging…", "AI is changing…", or any single-source recap. Name such a source only AFTER the insight has landed, as supporting evidence.',
     '- Write like a SENIOR ANALYST, not a journalist or news bot: Insight → Evidence, NEVER Evidence → Insight. The reader meets the new combined idea first; the individual source facts come second to substantiate it.',
+    '- THESIS DISCIPLINE (when a THESIS DISCIPLINE block is provided): keep the thesis strong and sharp, but label its confidence honestly. (1) When the angle is inferred or speculative, you MUST weave at least one counter-argument, limitation, or alternative explanation INTO the body as part of the analysis — not as a tacked-on disclaimer. (2) Never present a speculative implication as established fact. (3) Match the allowed wording strength; use the required qualifiers for any claim that runs past the evidence; never use the forbidden phrases; and rewrite any overreach "riskyClaim" using its safer wording. (4) Do NOT collapse into generic neutral hedging or a bland summary — discipline means calibrating the strength of each claim, not deleting the opinion.',
     '- Research facts, claims, and sources are SUPPORT for the angle — use them to substantiate the thesis, not as the headline.',
     '- Fact discipline governs HOW you state a claim (assert / hedge / omit), NOT which story you tell. A thesis resting on an uncertain or inferred claim is still the spine — change the WORDING per its register, never demote the story: assert = state plainly; hedge = "coaches argue…", "early signs suggest…", "reportedly"; speculate = "could…", "one possible implication…", "an emerging question is…".',
     '- Use ONLY facts present in the provided material. Never invent facts, statistics, names, quotes, dates, or events.',
@@ -51,6 +77,7 @@ export function renderContext(input: GeneratorInput): string {
     pa.uncertaintyHandling.hedgedClaims.length ? `Hedge these specifically:\n${list(pa.uncertaintyHandling.hedgedClaims)}` : '',
     `Substantiate with (SUPPORT only — do not lead with these, and do NOT open the piece with them):\n${list(pa.supportingFacts)}`,
     `OPENING REQUIREMENT: sentence 1 must express the THESIS above (an insight combining ${pa.synthesisBasis.sourceRefs.length >= 2 ? pa.synthesisBasis.sourceRefs.join('+') : 'the sources'}). It must be impossible to write from any single source alone. Introduce individual source facts (e.g. the announcement) only AFTER the insight, as evidence — never as the first sentence's subject.`,
+    ...disciplineBlock(pa, list),
     '',
   ] : [];
 

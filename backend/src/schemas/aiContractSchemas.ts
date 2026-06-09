@@ -126,6 +126,44 @@ export const ResearchMetaSchema = z.object({
   })).min(0),
 });
 
+// Thesis Discipline (Phase 10C): forces the angle to be argued at analyst level.
+// NOT fact-check (truth on the internet) — it asks "even if the facts are true,
+// is our conclusion the best explanation, and how strongly may we state it?".
+const StrengthEnum = z.enum(['strong', 'moderate', 'weak']);
+export const ThesisDisciplineSchema = z.object({
+  supportLevel: StrengthEnum,                          // overall: how well the sources back the thesis
+  supportingEvidence: z.array(z.object({
+    claim:      z.string().min(1),
+    sourceRefs: z.array(z.string().min(1)).min(0),
+    strength:   StrengthEnum,
+  })).min(0),
+  assumptions: z.array(z.object({
+    assumption:  z.string().min(1),
+    whyItMatters: z.string().min(1),
+    riskIfWrong:  z.string().min(1),
+  })).min(0),
+  counterArguments: z.array(z.object({
+    argument:   z.string().min(1),
+    sourceRefs: z.array(z.string().min(1)).min(0).optional(),
+    strength:   StrengthEnum,
+  })).min(0),
+  alternativeExplanations: z.array(z.object({
+    explanation: z.string().min(1),
+    whyPlausible: z.string().min(1),
+  })).min(0),
+  overreachWarnings: z.array(z.object({
+    riskyClaim:  z.string().min(1),
+    saferWording: z.string().min(1),
+    reason:       z.string().min(1),
+  })).min(0),
+  wordingGuidance: z.object({
+    allowedStrength:    z.enum(['assertive', 'balanced', 'cautious', 'speculative']),
+    requiredQualifiers: z.array(z.string()).min(0),
+    forbiddenPhrases:   z.array(z.string()).min(0),
+  }),
+});
+export type ThesisDiscipline = z.infer<typeof ThesisDisciplineSchema>;
+
 // Primary Angle (Phase 10B): the single narrative spine the generators build
 // around. Authored once at research-finalize time, persisted in the synthesis
 // layer, projected into every platform's GeneratorInput. grounding sets the
@@ -148,6 +186,7 @@ export const PrimaryAngleSchema = z.object({
     hedgedClaims: z.array(z.string()).min(0),
   }),
   confidence: z.number().int().min(0).max(100),
+  thesisDiscipline: ThesisDisciplineSchema.optional(),   // Phase 10C
 });
 export type PrimaryAngle = z.infer<typeof PrimaryAngleSchema>;
 
