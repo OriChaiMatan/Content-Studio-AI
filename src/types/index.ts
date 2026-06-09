@@ -129,6 +129,17 @@ export interface SourceInput {
 
 // ── PipelineRunSummary ─────────────────────────────────────
 // Lightweight run info embedded in ContentCase responses.
+// ── Research integrity (Phase 10D.0) ───────────────────────
+// success = real synthesis ran; degraded = research fell back to mock (FAILURE);
+// mock = deterministic mock because synthesis is disabled (expected, not failure).
+export interface ResearchIntegrity {
+  status: 'success' | 'degraded' | 'mock';
+  degraded: boolean;
+  generatorVersion: string;   // "research-1" | "mock-research" | "mock-fallback"
+  competitionRan: boolean;
+  candidateCount: number;
+}
+
 export interface PipelineRunSummary {
   id: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
@@ -137,6 +148,7 @@ export interface PipelineRunSummary {
   sourceCount: number;          // primarySourceIds.length + contextSourceIds.length
   startedAt: string;            // ISO 8601
   completedAt: string | null;
+  research?: ResearchIntegrity | null;   // Phase 10D.0 — pipeline-level integrity
 }
 
 // ── PipelineStep ───────────────────────────────────────────
@@ -149,6 +161,7 @@ export interface PipelineStep {
   completedAt: string | null;
   summary: string | null;   // mock result text
   confidence: number | null; // 0–100
+  research?: ResearchIntegrity | null;   // Phase 10D.0 — present on the research step
 }
 
 // ── Content Output v2 metadata (Phase 9) ───────────────────
@@ -156,6 +169,8 @@ export interface OutputMetadata {
   generatorVersion?: string;        // "mock-2" | "gen-1" | "mock-fallback"
   model?: string;
   degraded?: boolean;
+  researchDegraded?: boolean;         // Phase 10D.0 — built on degraded research
+  researchGeneratorVersion?: string;  // Phase 10D.0
   contentScore?: number | null;
   researchConfidence?: number | null;
   factCheckAccuracy?: number | null;

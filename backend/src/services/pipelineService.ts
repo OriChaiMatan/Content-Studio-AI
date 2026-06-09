@@ -227,6 +227,17 @@ export const pipelineService = {
         const ctx = await researchSynthesisService.synthesize({
           run: activeRun, caseItem: existing, primarySources, contextSources,
         });
+        // Phase 10D.0 — QA strict mode: a degraded research stage (mock-fallback)
+        // must NOT silently continue to content generation. Fail the run hard so
+        // validation never mistakes a mock thesis for a real one. Production
+        // (flag unset) continues safely and surfaces the degradation instead.
+        const ctxMeta = (ctx as { meta?: { degraded?: boolean; generatorVersion?: string } }).meta;
+        if (process.env.PIPELINE_FAIL_ON_DEGRADED === 'true' && ctxMeta?.degraded) {
+          throw new Error(
+            `Research degraded (${ctxMeta.generatorVersion}): synthesis fell back to mock and the thesis competition did not run. ` +
+            `Aborting under PIPELINE_FAIL_ON_DEGRADED=true (QA strict mode).`,
+          );
+        }
         contractResult = { ok: true, researchContext: ctx };
 
       } else if (stepName === 'fact_check') {
@@ -267,6 +278,9 @@ export const pipelineService = {
           confidence:  0,
         },
       });
+      // Phase 10D.0 — a contract failure means the RUN failed; don't leave it
+      // 'running' (so QA strict mode produces an unambiguous failed run).
+      await prisma.pipelineRun.update({ where: { id: activeRun.id }, data: { status: 'failed', completedAt: now, errorMessage } });
       return {
         type:    'error',
         code:    'contract_validation_failed',
@@ -285,11 +299,24 @@ export const pipelineService = {
 
       if ('researchContext' in contractResult && contractResult.researchContext) {
         const rc = contractResult.researchContext;
-        summary =
-          `Analyzed ${primarySources.length} primary source${primarySources.length !== 1 ? 's' : ''}` +
-          (contextSources.length > 0 ? ` + ${contextSources.length} context source${contextSources.length !== 1 ? 's' : ''}` : '') +
-          `. ${rc.mainTopics.length} main topics identified. ${rc.importantClaims.length} key claims extracted.`;
-        confidence = rc.confidenceScore;
+        // Phase 10D.0 — step-level visibility: a degraded research stage must read
+        // DEGRADED (not a normal "Analyzed N sources" success), with low confidence
+        // and an explicit note that the thesis competition did not run.
+        const rcMeta = (rc as unknown as { meta?: { degraded?: boolean; generatorVersion?: string }; synthesis?: { thesisCompetition?: { candidates?: unknown[] } } });
+        const candCount = Array.isArray(rcMeta.synthesis?.thesisCompetition?.candidates) ? rcMeta.synthesis!.thesisCompetition!.candidates!.length : 0;
+        const sourcesLine =
+          `${primarySources.length} primary source${primarySources.length !== 1 ? 's' : ''}` +
+          (contextSources.length > 0 ? ` + ${contextSources.length} context source${contextSources.length !== 1 ? 's' : ''}` : '');
+        if (rcMeta.meta?.degraded) {
+          summary = `⚠ DEGRADED — research synthesis fell back to mock (${rcMeta.meta.generatorVersion}). Thesis competition did NOT run; downstream content is built on a mock thesis, not real synthesis. (${sourcesLine})`;
+          confidence = Math.min(rc.confidenceScore, 25);
+        } else if (rcMeta.meta?.generatorVersion === 'mock-research') {
+          summary = `Research used the deterministic mock (real synthesis disabled). ${rc.mainTopics.length} topics, ${rc.importantClaims.length} claims. (${sourcesLine})`;
+          confidence = rc.confidenceScore;
+        } else {
+          summary = `Analyzed ${sourcesLine}. ${rc.mainTopics.length} main topics, ${rc.importantClaims.length} key claims. ✓ Thesis competition ran — ${candCount} candidate${candCount !== 1 ? 's' : ''} evaluated.`;
+          confidence = rc.confidenceScore;
+        }
         pRunUpdate.researchContext = rc as unknown as Record<string, unknown>;
 
       } else if ('factCheckReport' in contractResult && contractResult.factCheckReport) {

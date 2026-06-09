@@ -32,13 +32,15 @@ const stepMeta: Record<PipelineStep['name'], { icon: string; title: string; desc
 
 function StepCard({ step }: { step: PipelineStep }) {
   const meta = stepMeta[step.name];
-  const statusColor = {
+  // Phase 10D.0 — a "completed" research step that degraded must look DEGRADED, not green.
+  const degradedResearch = step.research?.status === 'degraded';
+  const statusColor = degradedResearch ? 'border-amber-300 bg-amber-50/60' : {
     idle:      'border-outline-variant/30 bg-surface-container-lowest',
     running:   'border-primary/30 bg-primary-fixed/20',
     completed: 'border-green-300 bg-green-50/50',
     error:     'border-error/30 bg-error-container/20',
   }[step.status];
-  const iconBg = {
+  const iconBg = degradedResearch ? 'bg-amber-500 text-white' : {
     idle:      'bg-surface-container text-outline',
     running:   'bg-primary text-on-primary',
     completed: 'bg-green-500 text-white',
@@ -50,6 +52,7 @@ function StepCard({ step }: { step: PipelineStep }) {
       <div className="flex items-start gap-4">
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
           {step.status === 'running'   ? <span className="material-symbols-outlined animate-spin">{meta.icon}</span> :
+           degradedResearch            ? <Icon name="warning" /> :
            step.status === 'completed' ? <Icon name="check" /> :
            step.status === 'error'     ? <Icon name="error_outline" /> :
            <Icon name={meta.icon} />}
@@ -57,7 +60,7 @@ function StepCard({ step }: { step: PipelineStep }) {
         <div className="flex-1">
           <div className="flex items-center justify-between mb-1">
             <h3 className="text-[18px] font-serif font-medium text-on-surface">{meta.title}</h3>
-            <StatusChip status={step.status} />
+            <StatusChip status={step.status} degraded={degradedResearch} />
           </div>
           <p className="text-[14px] text-on-surface-variant">{meta.description}</p>
           {step.status === 'running' && (
@@ -88,6 +91,27 @@ function StepCard({ step }: { step: PipelineStep }) {
               )}
             </div>
           )}
+          {/* Phase 10D.0 — research integrity: did the thesis competition actually run? */}
+          {step.research && step.status !== 'running' && step.status !== 'idle' && (
+            step.research.status === 'degraded' ? (
+              <div className="mt-3 bg-amber-100/70 border border-amber-300 rounded-lg p-3">
+                <p className="text-[12px] font-bold text-amber-800 flex items-center gap-1">
+                  <Icon name="warning" size="sm" /> Thesis competition unavailable — research fallback used
+                </p>
+                <p className="text-[12px] text-amber-900 mt-1">
+                  Synthesis fell back to mock ({step.research.generatorVersion}). The thesis was not competed; any content below is built on a mock thesis, not real cross-source synthesis.
+                </p>
+              </div>
+            ) : step.research.status === 'success' ? (
+              <p className="text-[12px] text-green-700 mt-2 flex items-center gap-1">
+                <Icon name="check" size="sm" /> Thesis competition executed — {step.research.candidateCount} candidate{step.research.candidateCount !== 1 ? 's' : ''} evaluated
+              </p>
+            ) : (
+              <p className="text-[12px] text-on-surface-variant mt-2">
+                Synthesis disabled — deterministic mock used (no thesis competition).
+              </p>
+            )
+          )}
           {step.completedAt && (
             <p className="text-[11px] text-on-surface-variant mt-2">
               Completed at {new Date(step.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
@@ -99,7 +123,10 @@ function StepCard({ step }: { step: PipelineStep }) {
   );
 }
 
-function StatusChip({ status }: { status: PipelineStep['status'] }) {
+function StatusChip({ status, degraded }: { status: PipelineStep['status']; degraded?: boolean }) {
+  if (degraded) {
+    return <span className="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800">Degraded</span>;
+  }
   const cfg = {
     idle:      { label: 'Waiting',   bg: 'bg-surface-container text-on-surface-variant' },
     running:   { label: 'Running',   bg: 'bg-primary-fixed/60 text-primary' },

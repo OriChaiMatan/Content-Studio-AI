@@ -96,6 +96,11 @@ export function buildGeneratorInput(
   const rcV2 = ResearchContextV2Schema.safeParse(run.researchContext);
   const primaryAngle = rcV2.success ? rcV2.data.synthesis.primaryAngle : undefined;
 
+  // Phase 10D.0 — propagate research degradation into the content contract so it
+  // lands on every output's metadata (claude-gen-1 on mock research must show it).
+  const researchGeneratorVersion = rcV2.success ? rcV2.data.meta.generatorVersion : undefined;
+  const researchDegraded = rcV2.success ? rcV2.data.meta.degraded === true : false;
+
   return {
     contract: {
       platform,
@@ -103,6 +108,8 @@ export function buildGeneratorInput(
       generatorVersion: GENERATOR_VERSION,
       runId:            run.id,
       caseId:           caseItem.id,
+      researchDegraded,
+      researchGeneratorVersion,
     },
     brief: {
       caseTitle:    caseItem.title,

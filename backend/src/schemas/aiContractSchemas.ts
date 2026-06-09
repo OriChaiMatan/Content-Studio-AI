@@ -164,6 +164,60 @@ export const ThesisDisciplineSchema = z.object({
 });
 export type ThesisDiscipline = z.infer<typeof ThesisDisciplineSchema>;
 
+// Thesis Competition (Phase 10D): generate multiple candidate theses, score them,
+// and select the winner — so the system behaves like a world-class editor (picks
+// the STRONGEST explanation) rather than a cautious analyst (picks the safest).
+export const ThesisScoresSchema = z.object({
+  novelty:             z.number().int().min(0).max(10),
+  explanatoryPower:    z.number().int().min(0).max(10),
+  crossSourceCoverage: z.number().int().min(0).max(10),
+  discussionPotential: z.number().int().min(0).max(10),
+  businessValue:       z.number().int().min(0).max(10),
+  strategicDepth:      z.number().int().min(0).max(10),
+});
+export type ThesisScores = z.infer<typeof ThesisScoresSchema>;
+
+// Editorial scores (Phase 10D.1): the STORY axis, orthogonal to the analytical
+// axis above. Editorial power = make a serious reader stop, care, grasp the
+// stakes, and remember the thesis — NOT clickbait / tabloid / rage-bait.
+export const EditorialScoresSchema = z.object({
+  readerCuriosity: z.number().int().min(0).max(10),   // want to keep reading?
+  reframeStrength: z.number().int().min(0).max(10),   // overturns the default assumption?
+  narrativeTension:z.number().int().min(0).max(10),   // conflict / paradox / irony / tradeoff / unresolved stakes?
+  headlinePower:   z.number().int().min(0).max(10),   // plausible top-tier headline (Economist/Bloomberg/Stratechery/HBR)?
+});
+export type EditorialScores = z.infer<typeof EditorialScoresSchema>;
+
+export const CandidateAngleSchema = z.object({
+  thesis:     z.string().min(1),
+  reframe:    z.string().min(1),
+  grounding:  z.enum(['factual', 'inferred', 'speculative']),
+  sourceRefs: z.array(z.string().min(1)).min(0),
+  rationale:  z.string().min(1),    // why it explains the evidence
+  // ≥1 required of a winner: explains-unrelated | hidden-driver | reframes-topic.
+  qualifyingProperties: z.array(z.enum(['explains-unrelated', 'hidden-driver', 'reframes-topic'])).min(0),
+  scores:       ThesisScoresSchema,
+  overallValue: z.number().min(0).max(10),   // computed analytical weighted total
+  // Phase 10D.1 — editorial axis (optional: absent on pre-10D.1 / degraded runs).
+  editorialScores: EditorialScoresSchema.optional(),
+  editorialValue:  z.number().min(0).max(10).optional(),   // computed mean of editorial dims
+});
+export type CandidateAngle = z.infer<typeof CandidateAngleSchema>;
+
+export const ThesisCompetitionSchema = z.object({
+  candidates:         z.array(CandidateAngleSchema).min(1),
+  winnerIndex:        z.number().int().min(0),                 // the FINAL (editorial) winner
+  runnerUpIndex:      z.number().int().min(0).optional(),
+  reasonForSelection: z.string().min(1),
+  reasonOthersLost:   z.string().min(0),
+  // Phase 10D.1 — two-stage funnel diagnostics (optional for back-compat).
+  finalists:             z.array(z.number().int().min(0)).optional(),
+  analyticalWinnerIndex: z.number().int().min(0).optional(),
+  editorialWinnerIndex:  z.number().int().min(0).optional(),
+  editorialReason:       z.string().optional(),
+});
+export type ThesisCompetition = z.infer<typeof ThesisCompetitionSchema>;
+
 // Primary Angle (Phase 10B): the single narrative spine the generators build
 // around. Authored once at research-finalize time, persisted in the synthesis
 // layer, projected into every platform's GeneratorInput. grounding sets the
@@ -199,7 +253,8 @@ export const ResearchSynthesisLayerSchema = z.object({
   secondOrderImplications:  z.array(ImplicationSchema).min(0),
   nonObviousInsights:       z.array(NonObviousInsightSchema).min(0),
   openQuestions:            z.array(z.string().min(1)).min(0),
-  primaryAngle:             PrimaryAngleSchema.optional(),   // Phase 10B
+  primaryAngle:             PrimaryAngleSchema.optional(),       // Phase 10B (the winning thesis)
+  thesisCompetition:        ThesisCompetitionSchema.optional(),  // Phase 10D (selection diagnostics)
 });
 
 export const ResearchKnowledgeLayerSchema = z.object({
@@ -463,6 +518,11 @@ export const ContentMetadataSchema = z.object({
   generatorVersion:         z.string().min(1),        // "mock-2" | "gen-1" | "mock-fallback"
   model:                    z.string().optional(),
   degraded:                 z.boolean().default(false),
+  // Phase 10D.0 — input-degradation propagation. True when the RESEARCH stage
+  // this content was built on fell back to mock (even if the generator itself
+  // succeeded as claude-gen-1). Surfaced as a distinct "degraded research" badge.
+  researchDegraded:         z.boolean().optional(),
+  researchGeneratorVersion: z.string().optional(),    // "research-1" | "mock-research" | "mock-fallback"
   contentScore:             z.number().int().min(0).max(100).nullable().optional(),
   researchConfidence:       z.number().int().min(0).max(100).nullable().optional(),
   factCheckAccuracy:        z.number().int().min(0).max(100).nullable().optional(),
@@ -497,6 +557,10 @@ export const GeneratorInputSchema = z.object({
     generatorVersion: z.string().min(1),
     runId:            z.string().min(1),
     caseId:           z.string().min(1),
+    // Phase 10D.0 — degradation of the upstream research, carried so the
+    // generator can stamp it onto every output's metadata.
+    researchDegraded:         z.boolean().default(false),
+    researchGeneratorVersion: z.string().optional(),
   }),
   brief: z.object({
     caseTitle:    z.string().min(1),

@@ -117,6 +117,9 @@ export function generateMockContent(input: GeneratorInput): GeneratedOutput {
   const meta = (extra: Record<string, unknown> = {}) => ({
     generatorVersion: 'mock-2',
     degraded: false,
+    // Phase 10D.0 — preserve upstream research degradation through the mock path too.
+    researchDegraded:         input.contract.researchDegraded === true,
+    researchGeneratorVersion: input.contract.researchGeneratorVersion,
     contentScore: 80,
     researchConfidence: input.research.confidenceScore,
     factCheckAccuracy: input.facts.overallConfidenceScore,

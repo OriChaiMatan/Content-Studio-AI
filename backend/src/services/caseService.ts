@@ -66,7 +66,32 @@ function serializeOutput(o: ContentOutput) {
   };
 }
 
-function serializePipelineStep(s: PipelineStep) {
+// Phase 10D.0 — research integrity, derived from the run's stored researchContext.
+// success = real synthesis (research-1); degraded = mock-fallback (FAILURE);
+// mock = deterministic mock because synthesis is disabled (expected, not a failure).
+export function researchIntegrity(researchContext: unknown) {
+  const rc = researchContext as {
+    meta?: { degraded?: boolean; generatorVersion?: string };
+    synthesis?: { thesisCompetition?: { candidates?: unknown[] } };
+  } | null;
+  if (!rc?.meta) return null;
+  const gv = rc.meta.generatorVersion ?? 'unknown';
+  const degraded = rc.meta.degraded === true;
+  const candidateCount = Array.isArray(rc.synthesis?.thesisCompetition?.candidates)
+    ? rc.synthesis!.thesisCompetition!.candidates!.length : 0;
+  const status: 'success' | 'degraded' | 'mock' =
+    degraded ? 'degraded' : gv === 'research-1' ? 'success' : 'mock';
+  return {
+    status,
+    degraded,
+    generatorVersion: gv,
+    // The thesis competition only truly ran on real synthesis with >1 competed candidate.
+    competitionRan: status === 'success' && candidateCount > 1,
+    candidateCount,
+  };
+}
+
+function serializePipelineStep(s: PipelineStep, research: ReturnType<typeof researchIntegrity> = null) {
   return {
     id:          s.id,
     name:        s.name,
@@ -75,6 +100,7 @@ function serializePipelineStep(s: PipelineStep) {
     completedAt: s.completedAt ? s.completedAt.toISOString() : null,
     summary:     s.summary,
     confidence:  s.confidence,
+    research,   // Phase 10D.0 — present on the research step only
   };
 }
 
@@ -87,6 +113,7 @@ function serializeRun(r: PipelineRun) {
     sourceCount:      r.sourceCount,
     startedAt:        r.startedAt.toISOString(),
     completedAt:      r.completedAt ? r.completedAt.toISOString() : null,
+    research:         researchIntegrity(r.researchContext),   // Phase 10D.0 — pipeline-level
   };
 }
 
@@ -125,7 +152,9 @@ export function serializeCase(c: FullCase) {
     contentTargets: c.contentTargets,
     sources:    c.sources.map(serializeSource),
     outputs:    c.outputs.map(serializeOutput),
-    pipeline:   sortedSteps.map(serializePipelineStep),
+    // Phase 10D.0 — attach research integrity to the research step so the UI can
+    // render SUCCESS / DEGRADED and the competition-ran status at step level.
+    pipeline:   sortedSteps.map(s => serializePipelineStep(s, s.name === 'research' && latestRun ? researchIntegrity(latestRun.researchContext) : null)),
     currentRun: latestRun ? serializeRun(latestRun) : null,
     createdAt:  c.createdAt.toISOString(),
     updatedAt:  c.updatedAt.toISOString(),

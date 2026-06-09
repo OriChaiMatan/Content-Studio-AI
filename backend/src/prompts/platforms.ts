@@ -66,6 +66,9 @@ function baseMeta(input: GeneratorInput, extra: Record<string, unknown> = {}) {
     generatorVersion: 'claude-gen-1',
     model:            contentGenerationConfig.model,
     degraded:         false,
+    // Phase 10D.0 — carry upstream research degradation onto the output.
+    researchDegraded:         input.contract.researchDegraded === true,
+    researchGeneratorVersion: input.contract.researchGeneratorVersion,
     contentScore:     Math.max(70, Math.round((input.research.confidenceScore + input.facts.overallConfidenceScore) / 2)),
     researchConfidence: input.research.confidenceScore,
     factCheckAccuracy:  input.facts.overallConfidenceScore,

@@ -40,6 +40,12 @@ function isDegraded(output: ContentOutput): boolean {
     (typeof m.generatorVersion === 'string' && m.generatorVersion.startsWith('mock-fallback')));
 }
 
+// Phase 10D.0 — the generator may have succeeded (claude-gen-1) while the RESEARCH
+// it was built on degraded to mock. That must be visible too, distinctly.
+function isResearchDegraded(output: ContentOutput): boolean {
+  return output.metadata?.researchDegraded === true;
+}
+
 function DegradedBadge() {
   return (
     <span
@@ -47,6 +53,17 @@ function DegradedBadge() {
       title="This output was produced by the fallback generator, not the live generator."
     >
       <Icon name="warning" size="sm" /> Generated with fallback
+    </span>
+  );
+}
+
+function ResearchDegradedBadge() {
+  return (
+    <span
+      className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-800 flex items-center gap-1"
+      title="The research stage fell back to a mock thesis. This content was written from degraded research — the thesis competition did not run."
+    >
+      <Icon name="warning" size="sm" /> Built on degraded research
     </span>
   );
 }
@@ -201,6 +218,7 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
           <PlatformBadge platform={output.platform} />
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
+          {isResearchDegraded(output) && <ResearchDegradedBadge />}
           {isDegraded(output) && <DegradedBadge />}
           <OutputStatusBadge status={output.status} />
         </div>
