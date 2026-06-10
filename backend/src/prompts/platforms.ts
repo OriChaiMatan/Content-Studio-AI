@@ -87,6 +87,30 @@ const strArr = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
 const splitSentences = (t: string): string[] => t.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
 const normSentence  = (s: string): string => s.trim().replace(/\s+/g, ' ').replace(/[.!?]+$/u, '').toLowerCase();
 
+// Phase 11D.5 — rendering normalizers.
+// (a) Strip a leading list enumerator the model sometimes bakes into a takeaway
+//     ("1. ", "1) ", "1- ", "- ", "• ") so the assembler's own numbering does not
+//     produce "1. 1. …". Never returns empty (keeps the original if a strip would).
+const stripLeadingEnumerator = (s: string): string => {
+  const out = s.replace(/^\s*(?:\d+\s*[.)\-]\s*|[-–—•*]\s*)+/, '').trim();
+  return out || s.trim();
+};
+// (b) Render topics as real hashtags: ensure exactly one leading '#', no internal
+//     whitespace, and drop case-insensitive duplicates. The model emits bare topics
+//     ("IdentitySecurity"); assembly is responsible for the '#'. Handles already-'#'ed
+//     and spaced inputs idempotently.
+const normalizeHashtags = (arr: string[]): string[] => {
+  const seen = new Set<string>(); const out: string[] = [];
+  for (const raw of arr) {
+    const bare = String(raw).replace(/^#+/, '').replace(/\s+/g, '');
+    if (!bare) continue;
+    const key = bare.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key); out.push('#' + bare);
+  }
+  return out;
+};
+
 export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
   // ── LinkedIn ────────────────────────────────────────────────────────────────
   linkedin: {
@@ -117,8 +141,12 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
     finalize: (raw, input) => {
       let breakdown = LinkedInBreakdownSchema.parse({
         hook: str(raw.hook), context: str(raw.context), insight: str(raw.insight),
-        takeaways: strArr(raw.takeaways), cta: str(raw.cta),
-        hashtags: strArr(raw.hashtags), imagePrompt: img(raw.imagePrompt, 'primary'),
+        // Phase 11D.5 — strip any leading enumerator (fixes "1. 1. …" double numbering).
+        takeaways: strArr(raw.takeaways).map(stripLeadingEnumerator),
+        cta: str(raw.cta),
+        // Phase 11D.5 — render bare topics as '#'-prefixed, de-duplicated hashtags.
+        hashtags: normalizeHashtags(strArr(raw.hashtags)),
+        imagePrompt: img(raw.imagePrompt, 'primary'),
       });
       const assemble = (bd: typeof breakdown) => [
         bd.hook, '', bd.context, '', bd.insight, '',
@@ -227,7 +255,8 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
     finalize: (raw, input) => {
       const breakdown = FacebookBreakdownSchema.parse({
         hook: str(raw.hook), story: str(raw.story), personalInterpretation: str(raw.personalInterpretation),
-        communityQuestion: str(raw.communityQuestion), hashtags: strArr(raw.hashtags),
+        // Phase 11D.5 — same '#'-rendering fix as LinkedIn.
+        communityQuestion: str(raw.communityQuestion), hashtags: normalizeHashtags(strArr(raw.hashtags)),
         imagePrompt: img(raw.imagePrompt, 'primary'),
       });
       const readyToPublish = [
@@ -267,7 +296,8 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
     },
     finalize: (raw, input) => {
       const breakdown = InstagramBreakdownSchema.parse({
-        hook: str(raw.hook), body: str(raw.body), cta: str(raw.cta), hashtags: strArr(raw.hashtags),
+        // Phase 11D.5 — same '#'-rendering fix as LinkedIn.
+        hook: str(raw.hook), body: str(raw.body), cta: str(raw.cta), hashtags: normalizeHashtags(strArr(raw.hashtags)),
         primaryImagePrompt: img(raw.primaryImagePrompt, 'primary'),
         alternativeImagePrompt: img(raw.alternativeImagePrompt, 'alternative'),
       });
