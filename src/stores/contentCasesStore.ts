@@ -25,6 +25,9 @@ interface ContentCasesState {
 
   // ── Source management — API-first, network-error fallback ───────────────────
   addSource: (caseId: string, source: NewSourceInput) => Promise<ContentSource>;
+  // Phase 11B — add several sources in ONE request; analysis runs concurrently
+  // server-side. Returns added sources + per-source failures (HTTP 207 partial).
+  addSources: (caseId: string, sources: NewSourceInput[]) => Promise<{ added: ContentSource[]; failed: { index: number; error: string }[] }>;
   updateSource: (caseId: string, sourceId: string, updates: { label?: string; content?: string; manualText?: string }) => Promise<void>;
   deleteSource: (caseId: string, sourceId: string) => Promise<void>;
 
@@ -219,6 +222,29 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
       }));
       return local;
     }
+  },
+
+  addSources: async (caseId, inputs) => {
+    // Phase 11B — single round-trip to the concurrent batch endpoint. 207 = partial
+    // success; successful sources are merged into the store, failures are returned
+    // so the UI can show them without blocking the ones that succeeded.
+    type BatchResult =
+      | { index: number; ok: true; source: ContentSource }
+      | { index: number; ok: false; error: string };
+    const { results } = await api.post<{ results: BatchResult[] }>(
+      `/cases/${caseId}/sources/batch`,
+      { sources: inputs.map(s => ({ type: s.type, label: s.label, content: s.content, ...(s.fileData ? { fileData: s.fileData } : {}) })) },
+    );
+    const added = results.filter((r): r is Extract<BatchResult, { ok: true }> => r.ok).map(r => r.source);
+    const failed = results.filter((r): r is Extract<BatchResult, { ok: false }> => !r.ok).map(r => ({ index: r.index, error: r.error }));
+    if (added.length) {
+      set(state => ({
+        cases: state.cases.map(c =>
+          c.id !== caseId ? c : { ...c, sources: [...c.sources, ...added], updatedAt: new Date().toISOString() },
+        ),
+      }));
+    }
+    return { added, failed };
   },
 
   updateSource: async (caseId, sourceId, updates) => {

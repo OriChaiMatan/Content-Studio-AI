@@ -25,5 +25,12 @@ export const updateSourceSchema = z.object({
   { message: 'At least one of label, content, or manualText must be provided' },
 );
 
+// Phase 11B — batch ingestion: add several sources in one request so their
+// analysis runs CONCURRENTLY (each source still validated by addSourceSchema).
+export const addSourcesBatchSchema = z.object({
+  sources: z.array(addSourceSchema).min(1, 'At least one source is required').max(25, 'At most 25 sources per batch'),
+});
+
 export type AddSourceInput    = z.infer<typeof addSourceSchema>;
 export type UpdateSourceInput = z.infer<typeof updateSourceSchema>;
+export type AddSourcesBatchInput = z.infer<typeof addSourcesBatchSchema>;

@@ -2,9 +2,34 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { sourceService } from '../../services/sourceService';
-import { addSourceSchema, updateSourceSchema } from '../../schemas/sourceSchemas';
+import { addSourceSchema, addSourcesBatchSchema, updateSourceSchema } from '../../schemas/sourceSchemas';
 
 const router = Router();
+
+// ── POST /api/cases/:id/sources/batch (Phase 11B) ─────────────────────────────
+// Add several sources in ONE request; their analysis runs concurrently (bounded
+// by SOURCE_ANALYSIS_BATCH_CONCURRENCY). Per-source behaviour is identical to the
+// single POST. Returns 201 if all succeeded, 207 (multi-status) if any failed.
+router.post('/:id/sources/batch', async (req: Request, res: Response) => {
+  try {
+    const { sources } = addSourcesBatchSchema.parse(req.body);
+    const results = await sourceService.addSourcesBatch(req.params.id, sources);
+
+    if (results === null) {
+      res.status(404).json({ error: 'Case not found' });
+      return;
+    }
+    const anyFailed = results.some(r => !r.ok);
+    res.status(anyFailed ? 207 : 201).json({ results });
+  } catch (err) {
+    if (err instanceof ZodError) {
+      res.status(400).json({ error: 'Validation failed', details: err.errors });
+      return;
+    }
+    console.error('[POST /api/cases/:id/sources/batch]', err);
+    res.status(500).json({ error: 'Failed to add sources' });
+  }
+});
 
 // ── POST /api/cases/:id/sources ───────────────────────────────────────────────
 // Add a new source to an existing Content Case.

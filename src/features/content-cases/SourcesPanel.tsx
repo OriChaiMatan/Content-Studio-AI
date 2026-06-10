@@ -169,6 +169,9 @@ function formatDate(iso: string) {
 
 interface AddFormProps {
   onAdd: (type: SourceType, label: string, content: string, fileData?: string) => Promise<void>;
+  // Phase 11B — add several URL sources at once (concurrent batch). Returns the
+  // count added and any per-source failures so the form can show partial results.
+  onAddMany: (inputs: { type: SourceType; label: string; content: string }[]) => Promise<{ added: number; failed: { index: number; error: string }[] }>;
   onCancel: () => void;
 }
 
@@ -176,7 +179,7 @@ interface AddFormProps {
 // we never ship an oversized base64 body the server would only reject anyway.
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
-function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
+function AddSourceForm({ onAdd, onAddMany, onCancel }: AddFormProps) {
   const [type, setType]       = useState<SourceType>('text');
   const [label, setLabel]     = useState('');
   const [content, setContent] = useState('');
@@ -218,11 +221,28 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
     setSaving(true);
     setError(null);
     try {
+      // Phase 11B — URL type accepts several URLs (one per line). 2+ → concurrent
+      // batch; 0–1 → the existing single POST (behaviour unchanged). text/pdf are
+      // always a single source.
+      if (type === 'url') {
+        const urls = content.split('\n').map(u => u.trim()).filter(Boolean);
+        if (urls.length > 1) {
+          const { added, failed } = await onAddMany(urls.map(u => ({ type: 'url', label, content: u })));
+          if (failed.length === 0) return; // all added → parent closes the form
+          // Partial success: keep the failed URLs in the box, report them, stay open.
+          const failedUrls = failed.map(f => urls[f.index]).filter(Boolean);
+          setContent(failedUrls.join('\n'));
+          setError(`Added ${added} of ${urls.length}. Failed:\n` + failed.map(f => `• ${urls[f.index] ?? `#${f.index}`} — ${f.error}`).join('\n'));
+          setSaving(false);
+          return;
+        }
+        await onAdd('url', label, urls[0] ?? content, undefined);
+        return; // parent closes on success
+      }
       await onAdd(type, label, content, type === 'pdf' ? fileData ?? undefined : undefined);
       // Form is closed by the parent on success
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add source. Please try again.');
-    } finally {
       setSaving(false);
     }
   }
@@ -271,12 +291,12 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
         />
       )}
       {type === 'url' && (
-        <Input
-          label="URL *"
-          type="url"
+        <Textarea
+          label="URL(s) *"
           value={content}
           onChange={e => setContent(e.target.value)}
-          placeholder="https://…"
+          placeholder="https://… — paste one URL per line to add several at once"
+          rows={3}
         />
       )}
       {type === 'pdf' && (
@@ -301,9 +321,9 @@ function AddSourceForm({ onAdd, onCancel }: AddFormProps) {
 
       {/* Error message */}
       {error && (
-        <div className="flex items-center gap-2 text-[12px] text-error bg-error-container/50 rounded-lg px-3 py-2">
+        <div className="flex items-start gap-2 text-[12px] text-error bg-error-container/50 rounded-lg px-3 py-2">
           <Icon name="error" size="sm" />
-          <span>{error}</span>
+          <span className="whitespace-pre-line">{error}</span>
         </div>
       )}
 
@@ -588,6 +608,7 @@ interface SourcesPanelProps {
 export function SourcesPanel({ caseId }: SourcesPanelProps) {
   const caseItem     = useContentCasesStore(s => s.getCaseById(caseId));
   const addSource    = useContentCasesStore(s => s.addSource);
+  const addSources   = useContentCasesStore(s => s.addSources);
   const updateSource = useContentCasesStore(s => s.updateSource);
   const deleteSource = useContentCasesStore(s => s.deleteSource);
   const [showForm, setShowForm] = useState(false);
@@ -602,6 +623,15 @@ export function SourcesPanel({ caseId }: SourcesPanelProps) {
   async function handleAdd(type: SourceType, label: string, content: string, fileData?: string) {
     await addSource(caseId, { type, label, content, fileData });
     setShowForm(false);
+  }
+
+  // Phase 11B — multiple sources in one action → concurrent batch endpoint.
+  // Close the form only on full success; on partial failure the form stays open
+  // and shows which sources failed (the successful ones are already in the list).
+  async function handleAddMany(inputs: { type: SourceType; label: string; content: string }[]) {
+    const { added, failed } = await addSources(caseId, inputs);
+    if (failed.length === 0) setShowForm(false);
+    return { added: added.length, failed };
   }
 
   async function handleSaveEdit(sourceId: string, label: string, content: string) {
@@ -649,6 +679,7 @@ export function SourcesPanel({ caseId }: SourcesPanelProps) {
           <div className="mb-4">
             <AddSourceForm
               onAdd={handleAdd}
+              onAddMany={handleAddMany}
               onCancel={() => setShowForm(false)}
             />
           </div>

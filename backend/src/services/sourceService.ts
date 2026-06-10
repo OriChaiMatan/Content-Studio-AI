@@ -150,6 +150,33 @@ async function extractAndAnalyze(
   };
 }
 
+// ── Phase 11B — bounded-concurrency pool ──────────────────────────────────────
+// Runs `fn` over `items` with at most `limit` in flight at once, preserving input
+// order and ISOLATING failures (one rejected item never aborts the others).
+// Used to analyze a batch of sources concurrently while respecting the Anthropic
+// rate limit via the concurrency cap.
+const SOURCE_BATCH_CONCURRENCY = Math.max(1, parseInt(process.env.SOURCE_ANALYSIS_BATCH_CONCURRENCY ?? '5', 10));
+
+async function runPool<T, R>(
+  items: T[], limit: number, fn: (item: T, index: number) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      try { results[i] = { status: 'fulfilled', value: await fn(items[i], i) }; }
+      catch (reason) { results[i] = { status: 'rejected', reason }; }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+}
+
+export type BatchSourceResult =
+  | { index: number; ok: true; source: NonNullable<Awaited<ReturnType<typeof sourceService.addSource>>> }
+  | { index: number; ok: false; error: string };
+
 // ── Service methods ───────────────────────────────────────────────────────────
 
 export const sourceService = {
@@ -204,6 +231,31 @@ export const sourceService = {
 
       return serializeSource(source);
     });
+  },
+
+  // Phase 11B — POST /api/cases/:id/sources/batch
+  // Add multiple sources whose analysis runs CONCURRENTLY (bounded by
+  // SOURCE_BATCH_CONCURRENCY to respect the Anthropic rate limit). Each source is
+  // processed by the EXACT same addSource() path — identical extraction, analysis,
+  // Claude retries, transaction, and serialization — so per-source output and
+  // behaviour are unchanged. Failures are isolated per source (one bad source does
+  // not abort the rest). Returns null only when the case itself does not exist.
+  async addSourcesBatch(caseId: string, inputs: AddSourceInput[]): Promise<BatchSourceResult[] | null> {
+    const caseExists = await prisma.contentCase.findUnique({ where: { id: caseId }, select: { id: true } });
+    if (!caseExists) return null;
+
+    const startedAt = Date.now();
+    const settled = await runPool(inputs, SOURCE_BATCH_CONCURRENCY, inp => sourceService.addSource(caseId, inp));
+    const results: BatchSourceResult[] = settled.map((r, index) =>
+      r.status === 'fulfilled' && r.value
+        ? { index, ok: true, source: r.value }
+        : { index, ok: false, error: r.status === 'rejected'
+            ? (r.reason instanceof Error ? r.reason.message : String(r.reason))
+            : 'Case not found during analysis' });
+
+    const ok = results.filter(r => r.ok).length;
+    console.log(`[sources:batch] case=${caseId} n=${inputs.length} concurrency=${SOURCE_BATCH_CONCURRENCY} ok=${ok} failed=${inputs.length - ok} elapsedMs=${Date.now() - startedAt}`);
+    return results;
   },
 
   // PATCH /api/cases/:id/sources/:sourceId
