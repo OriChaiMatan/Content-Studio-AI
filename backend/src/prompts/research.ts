@@ -77,7 +77,7 @@ export function researchSystem(lang: 'en' | 'he'): string {
     '- Label grounding honestly: "supported" (stated by sources), "inferred" (reasoned), "speculative" (a leap). Speculative leaps are valuable but MUST be labeled.',
     '- Optionally add expertPOV to a non-obvious insight: the conclusion a domain expert would draw (strategic/operational/prediction/practitioner). expertPOV is NEVER a fact — its grounding must be "inferred" or "speculative".',
     '- For contradictions, present BOTH sides and do not pick a winner; the disagreement itself is the story.',
-    '- thesisCompetition: generate 5–6 genuinely DIFFERENT candidate theses (concise — thesis ≤320 chars, reframe ≤220, rationale ≤180) and score each on TWO axes. ANALYTICAL (scores): novelty, explanatoryPower, crossSourceCoverage, discussionPotential, businessValue, strategicDepth. Rules: (a) a candidate must be a THESIS that explains a SYSTEM or structural shift — "sales fell 18%" / "renovations rose" / "demand may be delayed" are observations and must score low; (b) the strongest candidates explain seemingly-unrelated sources, reveal a hidden driver, or reframe the whole topic (mark these in qualifyingProperties); (c) if a thesis can be written from a single source, its crossSourceCoverage MUST be low.',
+    '- thesisCompetition: generate exactly 5 genuinely DIFFERENT candidate theses (concise — thesis ≤320 chars, reframe ≤220, rationale ≤120) and score each on TWO axes. ANALYTICAL (scores): novelty, explanatoryPower, crossSourceCoverage, discussionPotential, businessValue, strategicDepth. Rules: (a) a candidate must be a THESIS that explains a SYSTEM or structural shift — "sales fell 18%" / "renovations rose" / "demand may be delayed" are observations and must score low; (b) the strongest candidates explain seemingly-unrelated sources, reveal a hidden driver, or reframe the whole topic (mark these in qualifyingProperties); (c) if a thesis can be written from a single source, its crossSourceCoverage MUST be low.',
     '- editorialScores (the STORY axis, scored independently of the analytical axis): score each candidate as a world-class EDITOR would — readerCuriosity (would a serious reader keep reading), reframeStrength (overturns the default assumption), narrativeTension (conflict / paradox / irony / tradeoff / unresolved stakes), headlinePower (could be a headline in The Economist / Bloomberg / Stratechery / HBR). Editorial power means making a SERIOUS reader stop, care, understand the stakes, and remember the thesis — it is NEVER clickbait, tabloid, or rage-bait. A thesis can be analytically deep yet editorially flat (abstract, jargon-y); say so honestly with a low editorial score. Then set recommendedWinnerIndex to the candidate you would actually put on the cover.',
     '- winnerDiscipline (inside thesisCompetition): for your recommended winner ONLY, stress-test it like a senior analyst (NOT a fact-checker), CONCISELY: supportLevel; supportingEvidence (≤3, with refs); assumptions (≤2, + risk if wrong); counterArguments (≤2; at least one strong one for any inferred/speculative thesis); alternativeExplanations (≤2, ordinary/competing reasons); overreachWarnings (≤2, claims the thesis tempts but sources do NOT support, with safer wording); wordingGuidance. One short sentence per item.',
     `- Write all natural-language text in ${language}. Proper nouns / product / company names may stay in their original language.`,
@@ -173,16 +173,15 @@ export const RESEARCH_TOOL: Anthropic.Tool = {
     properties: {
       singleSource:        { type: 'boolean' },
       synthesisConfidence: { type: 'integer', minimum: 0, maximum: 100 },
-      coreSubjects: { type: 'array', maxItems: 8, items: { type: 'object', properties: {
+      coreSubjects: { type: 'array', maxItems: 4, items: { type: 'object', properties: {
         name: { type: 'string' }, type: { type: 'string', enum: ['company','person','product','technology','concept','trend','organization','location'] },
         role: { type: 'string', maxLength: 120 }, sourceRefs: { type: 'array', items: { type: 'string' } } }, required: ['name','type','role','sourceRefs'] } },
-      keyFacts: { type: 'array', maxItems: 12, items: { type: 'object', properties: {
+      keyFacts: { type: 'array', maxItems: 7, items: { type: 'object', properties: {
         statement: { type: 'string', maxLength: 200 }, type: { type: 'string', enum: ['announcement','statistic','claim','definition','event','opinion','prediction'] },
         sourceRefs: { type: 'array', items: { type: 'string' } }, grounding: { type: 'string', enum: ['stated','implied'] },
         status: { type: 'string', enum: ['claimed','corroborated','disputed','unverified'] }, confidence: { type: 'integer', minimum: 0, maximum: 100 } },
         required: ['statement','type','sourceRefs','grounding','status','confidence'] } },
       mainStory: { type: 'object', properties: { headline: { type: 'string', maxLength: 140 }, summary: { type: 'string', maxLength: 400 }, sourceRefs: { type: 'array', items: { type: 'string' } } }, required: ['headline','summary','sourceRefs'] },
-      supportingStories: { type: 'array', maxItems: 3, items: { type: 'object', properties: { headline: { type: 'string', maxLength: 140 }, summary: { type: 'string', maxLength: 300 }, sourceRefs: { type: 'array', items: { type: 'string' } } }, required: ['headline','summary','sourceRefs'] } },
       sourceConnections: { type: 'array', maxItems: 5, items: { type: 'object', properties: {
         description: { type: 'string', maxLength: 240 }, sourceRefs: { type: 'array', items: { type: 'string' } },
         type: { type: 'string', enum: ['causal','analogical','sequential','tension','convergent','enabling'] },
@@ -193,26 +192,26 @@ export const RESEARCH_TOOL: Anthropic.Tool = {
         subject: { type: 'string', maxLength: 120 }, claimA: { type: 'string', maxLength: 200 }, claimB: { type: 'string', maxLength: 200 }, sourceRefs: { type: 'array', items: { type: 'string' } },
         nature: { type: 'string', enum: ['factual','evidentiary','scope'] }, severity: { type: 'integer', minimum: 0, maximum: 100 }, resolution: { type: 'string', maxLength: 200 } },
         required: ['subject','claimA','claimB','sourceRefs','nature','severity','resolution'] } },
-      secondOrderImplications: { type: 'array', maxItems: 4, items: { type: 'object', properties: {
+      secondOrderImplications: { type: 'array', maxItems: 2, items: { type: 'object', properties: {
         implication: { type: 'string', maxLength: 220 }, basis: { type: 'array', items: { type: 'string' } }, horizon: { type: 'string', enum: ['now','near','long'] },
         confidence: { type: 'integer', minimum: 0, maximum: 100 }, speculative: { type: 'boolean' } }, required: ['implication','basis','horizon','confidence','speculative'] } },
       nonObviousInsights: { type: 'array', maxItems: 5, items: { type: 'object', properties: {
         insight: { type: 'string', maxLength: 240 }, reasoning: { type: 'string', maxLength: 200 }, sourceRefs: { type: 'array', items: { type: 'string' } },
-        novelty: { type: 'integer', minimum: 0, maximum: 100 }, lens: { type: 'string', enum: ['analogical','second-order','contrarian','absence','stakeholder'] },
+        novelty: { type: 'integer', minimum: 0, maximum: 100 }, lens: { type: 'string', enum: ['analogical','second-order','contrarian','absence','stakeholder'], description: 'The REASONING lens that produced this insight (how you saw it) — NOT a relationship/connection type. Pick exactly one: "analogical" (a parallel to another domain), "second-order" (a downstream/ripple consequence), "contrarian" (cuts against the conventional read), "absence" (notable for what is missing or unsaid), "stakeholder" (seen through one actor\'s incentives). Do NOT use connection types here (e.g. "causal", "tension", "sequential", "convergent", "enabling" are INVALID for lens).' },
         speculative: { type: 'boolean' }, expertPOV: { type: 'object', properties: expertPOVProps, required: ['type','statement','grounding'] } },
         required: ['insight','reasoning','sourceRefs','novelty','lens','speculative'] } },
-      openQuestions: { type: 'array', maxItems: 5, items: { type: 'string', maxLength: 200 } },
+      openQuestions: { type: 'array', maxItems: 3, items: { type: 'string', maxLength: 200 } },
       // Phase 10D — THESIS COMPETITION: generate multiple competing theses, score
       // each, and recommend a winner. Phase 10B/10C: the winner becomes the
       // narrative spine (primaryAngle) and carries winnerDiscipline.
-      thesisCompetition: { type: 'object', description: 'Behave like a world-class editor, not a cautious analyst. Generate 5–7 genuinely DIFFERENT candidate theses for this material, score each, and recommend the STRONGEST (not the safest). A real thesis explains a SYSTEM, not an event. "Sales fell 18%" / "renovations rose" are observations, NOT theses. A winning thesis must explain seemingly-unrelated sources, reveal a hidden driver, or reframe the whole topic.', properties: {
-        candidateAngles: { type: 'array', minItems: 5, maxItems: 7, items: { type: 'object', properties: {
+      thesisCompetition: { type: 'object', description: 'Behave like a world-class editor, not a cautious analyst. Generate exactly 5 genuinely DIFFERENT candidate theses for this material, score each, and recommend the STRONGEST (not the safest). A real thesis explains a SYSTEM, not an event. "Sales fell 18%" / "renovations rose" are observations, NOT theses. A winning thesis must explain seemingly-unrelated sources, reveal a hidden driver, or reframe the whole topic.', properties: {
+        candidateAngles: { type: 'array', minItems: 5, maxItems: 5, items: { type: 'object', properties: {
           thesis:    { type: 'string', maxLength: 320, description: 'A thesis that explains a system/structural shift — not a restatement of one source. Concise (≤320 chars).' },
           reframe:   { type: 'string', maxLength: 220, description: 'A "the real story is X, not the obvious Y" hook seed (≤220 chars).' },
           basisKind: { type: 'string', enum: ['connection','tension','contradiction','insight','implication'] },
           grounding: { type: 'string', enum: ['factual','inferred','speculative'] },
           sourceRefs:{ type: 'array', items: { type: 'string' }, description: 'The [S#] this thesis genuinely requires.' },
-          rationale: { type: 'string', maxLength: 180, description: 'Why this explains the evidence — ONE concise sentence, max 180 chars.' },
+          rationale: { type: 'string', maxLength: 120, description: 'Why this explains the evidence — ONE concise sentence, max 120 chars.' },
           qualifyingProperties: { type: 'array', items: { type: 'string', enum: ['explains-unrelated','hidden-driver','reframes-topic'] }, description: 'Strong-thesis properties this satisfies (a winner needs ≥1).' },
           scores: { type: 'object', description: 'ANALYTICAL axis — score each dimension 1–10, honestly.', properties: {
             novelty:             { type: 'integer', minimum: 1, maximum: 10, description: 'Would an intelligent reader learn something unexpected?' },
@@ -568,13 +567,13 @@ function buildCompetition(
         readerCuriosity: clampScore(ec.readerCuriosity), reframeStrength: clampScore(ec.reframeStrength),
         narrativeTension: clampScore(ec.narrativeTension), headlinePower: clampScore(ec.headlinePower),
       } : editorialFallback(scores, props, basisKind);
-      // Phase 10D.2 — hard-cap the internal rationale (never user-facing) at 180 chars.
-      return { thesis: String(c.thesis), reframe: String(c.reframe), basisKind, grounding, sourceRefs: refs, rationale: truncate(String(c.rationale ?? c.thesis), 180), qualifyingProperties: props, scores, editorialScores };
+      // Phase 10D.2 — hard-cap the internal rationale (never user-facing). Phase 11C: 180→120.
+      return { thesis: String(c.thesis), reframe: String(c.reframe), basisKind, grounding, sourceRefs: refs, rationale: truncate(String(c.rationale ?? c.thesis), 120), qualifyingProperties: props, scores, editorialScores };
     });
 
   if (cands.length === 0) cands = deterministicCandidates(synthesis, meta, keep);
 
-  const candidates: CandidateAngle[] = cands.map(c => ({
+  let candidates: CandidateAngle[] = cands.map(c => ({
     thesis: c.thesis, reframe: c.reframe, grounding: c.grounding, sourceRefs: c.sourceRefs,
     rationale: c.rationale, qualifyingProperties: c.qualifyingProperties, scores: c.scores,
     overallValue: computeOverall(c.scores),
@@ -590,14 +589,35 @@ function buildCompetition(
   // must genuinely require ≥2 sources. Single-source theses can never be finalists here.
   const crossSourceOK = (c: CandidateAngle) => meta.singleSource || c.sourceRefs.length >= 2;
 
-  // ── Stage 1 — analytical ranking (UNCHANGED from 10D) ──
-  const analyticalOrder = candidates.map((_, i) => i).sort((a, b) => {
+  // ── Analytical comparator (the 10D ordering) — extracted so the Phase 11C cap and
+  //    the Stage-1 ranking below use IDENTICAL scoring logic. ──
+  const byAnalytical = (a: number, b: number): number => {
     const qa = qualifies(candidates[a]) ? 1 : 0, qb = qualifies(candidates[b]) ? 1 : 0;
     if (qa !== qb) return qb - qa;
     if (candidates[b].overallValue !== candidates[a].overallValue) return candidates[b].overallValue - candidates[a].overallValue;
     if (candidates[b].scores.crossSourceCoverage !== candidates[a].scores.crossSourceCoverage) return candidates[b].scores.crossSourceCoverage - candidates[a].scores.crossSourceCoverage;
     return candidates[b].scores.novelty - candidates[a].scores.novelty;
-  });
+  };
+
+  // ── Phase 11C — DETERMINISTIC HARD CAP at 5 candidates ──
+  // The tool's maxItems:5 is advisory; Claude (or the deterministic fallback) can
+  // emit more, inflating output tokens/runtime and undermining the compaction goal.
+  // ALL emitted candidates are scored first (overallValue/editorialValue above), then
+  // we keep the strongest 5 by the SAME analytical comparator used for finalist
+  // selection — never by raw emission order. cands and candidates stay PARALLEL so
+  // winnerRaw / discipline mapping stay correct, and every downstream index
+  // (analytical/editorial winners, finalists, runner-up) refers to this capped array.
+  const emittedCount = candidates.length;
+  let recommended = Number(tc?.recommendedWinnerIndex ?? -1);
+  if (candidates.length > 5) {
+    const keptIdx = candidates.map((_, i) => i).sort(byAnalytical).slice(0, 5).sort((a, b) => a - b);
+    candidates  = keptIdx.map(i => candidates[i]);
+    cands       = keptIdx.map(i => cands[i]);
+    recommended = keptIdx.indexOf(recommended);   // remap to capped indices (-1 if the model's pick was cut)
+  }
+
+  // ── Stage 1 — analytical ranking (UNCHANGED from 10D) ──
+  const analyticalOrder = candidates.map((_, i) => i).sort(byAnalytical);
   const analyticalWinnerIndex = analyticalOrder[0];
 
   // ── Stage 2 — editorial funnel (Phase 10D.1) ──
@@ -655,9 +675,13 @@ function buildCompetition(
       : `Chosen over analytical #1 "${truncate(aWin.thesis)}" (analytical ${aWin.overallValue} vs ${win.overallValue}; editorial ${win.editorialValue} vs ${aWin.editorialValue}/10) — a stronger STORY (higher ${topEdDims.join(', ')}) among analytically-qualified finalists.`
   ) + weakNote;
   const runnerCand = runnerUpIndex != null ? candidates[runnerUpIndex] : undefined;
-  const reasonOthersLost = runnerCand
+  // Phase 11C — surface the hard cap in the existing diagnostic field (no new schema).
+  const capNote = emittedCount > candidates.length
+    ? ` Capped from ${emittedCount} emitted candidates to the top 5 by analytical value (Phase 11C).`
+    : '';
+  const reasonOthersLost = (runnerCand
     ? `Runner-up "${truncate(runnerCand.thesis)}" — analytical ${runnerCand.overallValue}/10, editorial ${runnerCand.editorialValue}/10. Non-finalists were observations, single-source, or explained fewer sources.`
-    : 'Only one viable finalist.';
+    : 'Only one viable finalist.') + capNote;
 
   const competition = ThesisCompetitionSchema.parse({
     candidates, winnerIndex, runnerUpIndex, reasonForSelection, reasonOthersLost,
@@ -665,7 +689,7 @@ function buildCompetition(
   });
   // Use Claude's winnerDiscipline only if it nominated the SAME thesis that won;
   // otherwise 10C discipline is built deterministically for the editorial winner.
-  const recommended = Number(tc?.recommendedWinnerIndex ?? -1);
+  // (`recommended` was captured + remapped to capped indices above.)
   const winnerDiscipline = recommended === winnerIndex ? tc?.winnerDiscipline : undefined;
   return { competition, winnerRaw: cands[winnerIndex], winnerDiscipline };
 }
