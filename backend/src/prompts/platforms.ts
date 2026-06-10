@@ -83,6 +83,10 @@ function baseMeta(input: GeneratorInput, extra: Record<string, unknown> = {}) {
 const str = (v: unknown) => String(v ?? '');
 const strArr = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
 
+// Phase 11D.4 — LinkedIn deterministic length-repair helpers (sentence-aware, EN+He).
+const splitSentences = (t: string): string[] => t.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+const normSentence  = (s: string): string => s.trim().replace(/\s+/g, ' ').replace(/[.!?]+$/u, '').toLowerCase();
+
 export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
   // ── LinkedIn ────────────────────────────────────────────────────────────────
   linkedin: {
@@ -111,20 +115,72 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
       },
     },
     finalize: (raw, input) => {
-      const breakdown = LinkedInBreakdownSchema.parse({
+      let breakdown = LinkedInBreakdownSchema.parse({
         hook: str(raw.hook), context: str(raw.context), insight: str(raw.insight),
         takeaways: strArr(raw.takeaways), cta: str(raw.cta),
         hashtags: strArr(raw.hashtags), imagePrompt: img(raw.imagePrompt, 'primary'),
       });
-      const readyToPublish = [
-        breakdown.hook, '', breakdown.context, '', breakdown.insight, '',
-        breakdown.takeaways.map((x, i) => `${i + 1}. ${x}`).join('\n'), '', breakdown.cta,
-        ...(breakdown.hashtags.length ? ['', breakdown.hashtags.join(' ')] : []),
+      const assemble = (bd: typeof breakdown) => [
+        bd.hook, '', bd.context, '', bd.insight, '',
+        bd.takeaways.map((x, i) => `${i + 1}. ${x}`).join('\n'), '', bd.cta,
+        ...(bd.hashtags.length ? ['', bd.hashtags.join(' ')] : []),
       ].join('\n').trim();
-      // HARD length rule (LinkedIn only): 650–1400 chars. Out-of-range fails
-      // validation → corrective retry asks Claude to rewrite within range →
-      // if still out-of-range, the service returns a v2 mock fallback. No
-      // mechanical truncation, no silent over-length acceptance.
+
+      let readyToPublish = assemble(breakdown);
+      const originalLen = readyToPublish.length;
+      let linkedinLengthRepaired = false;
+      let duplicateSentencesRemoved = 0;
+
+      // Phase 11D.4 — DETERMINISTIC small/medium overage repair (1401–1900 chars), NO
+      // Claude call. Preserves the hook + core insight (thesis & synthesis narrative);
+      // removes duplicate sentences, then trims the lowest-value elements in order
+      // (hashtags → extra takeaways down to 3 → cta tail → context tail → insight tail)
+      // until ≤1400, keeping ≥3 takeaways when possible (≥1 always) and ≥650 chars.
+      // Over 1900 (or under 650) → fall through to the existing corrective retry.
+      if (readyToPublish.length > 1400 && readyToPublish.length <= 1900) {
+        const rep = { ...breakdown, takeaways: [...breakdown.takeaways], hashtags: [...breakdown.hashtags] };
+
+        // (1) Duplicate-sentence cleanup — the live fallback repeated an insight sentence.
+        const seen = new Set<string>();
+        [...splitSentences(rep.hook), ...splitSentences(rep.context)].forEach(s => seen.add(normSentence(s)));
+        const keptIns: string[] = [];
+        for (const s of splitSentences(rep.insight)) {
+          const n = normSentence(s);
+          if (n && !seen.has(n)) { seen.add(n); keptIns.push(s); } else if (n) duplicateSentencesRemoved++;
+        }
+        if (keptIns.length) rep.insight = keptIns.join(' ');
+        const keptTk: string[] = []; const tkSeen = new Set<string>();
+        for (const tk of rep.takeaways) {
+          const n = normSentence(tk);
+          if (n && !seen.has(n) && !tkSeen.has(n)) { tkSeen.add(n); keptTk.push(tk); } else if (n) duplicateSentencesRemoved++;
+        }
+        if (keptTk.length) rep.takeaways = keptTk;
+
+        // (2) Progressive trimming of the lowest-value elements, re-checking each time.
+        let cur = assemble(rep).length;
+        if (cur > 1400 && rep.hashtags.length) { rep.hashtags = []; cur = assemble(rep).length; }
+        while (cur > 1400 && rep.takeaways.length > 3) { rep.takeaways = rep.takeaways.slice(0, -1); cur = assemble(rep).length; }
+        if (cur > 1400) { const first = splitSentences(rep.cta)[0]; if (first && first.length < rep.cta.length) { rep.cta = first; cur = assemble(rep).length; } }
+        while (cur > 1400) { const cs = splitSentences(rep.context); if (cs.length <= 1) break; rep.context = cs.slice(0, -1).join(' '); cur = assemble(rep).length; }
+        while (cur > 1400) { const is = splitSentences(rep.insight); if (is.length <= 1) break; rep.insight = is.slice(0, -1).join(' '); cur = assemble(rep).length; }
+        while (cur > 1400 && rep.takeaways.length > 1) { rep.takeaways = rep.takeaways.slice(0, -1); cur = assemble(rep).length; }
+
+        // Accept the repair only if it landed in range; otherwise keep the original and
+        // let the existing gate fire (retry). Re-validate the breakdown shape too.
+        if (cur >= 650 && cur <= 1400) {
+          const parsed = LinkedInBreakdownSchema.safeParse(rep);
+          if (parsed.success) {
+            breakdown = parsed.data;
+            readyToPublish = assemble(breakdown);
+            linkedinLengthRepaired = true;
+            console.warn(`[contentGen:linkedin] length ${originalLen}→${readyToPublish.length} chars — deterministically repaired (${duplicateSentencesRemoved} duplicate sentence(s) removed, no Claude retry).`);
+          }
+        }
+      }
+
+      // HARD length rule (LinkedIn only): 650–1400 chars. Out-of-range (after any
+      // deterministic repair) fails validation → corrective retry → if still out-of-range,
+      // the service returns a v2 mock fallback. No silent over-length acceptance.
       const len = readyToPublish.length;
       if (len < 650 || len > 1400) {
         throw new Error(
@@ -139,7 +195,7 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
       }
       return GeneratedOutputSchema.parse({
         platform: 'linkedin', title: input.brief.caseTitle, readyToPublish, breakdown,
-        metadata: baseMeta(input, { hashtags: breakdown.hashtags, imagePrompts: [breakdown.imagePrompt] }),
+        metadata: baseMeta(input, { hashtags: breakdown.hashtags, imagePrompts: [breakdown.imagePrompt], ...(linkedinLengthRepaired ? { linkedinLengthRepaired: true } : {}) }),
       });
     },
   },
