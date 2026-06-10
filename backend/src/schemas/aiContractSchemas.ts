@@ -543,6 +543,7 @@ export const ContentMetadataSchema = z.object({
   hashtags:                 z.array(z.string()).optional(),
   imagePrompts:             z.array(ImagePromptV2Schema).optional(),
   readingTimeMinutes:       z.number().nullable().optional(),       // newsletter
+  practicalTakeawaysRepaired: z.boolean().optional(),               // Phase 11D.3 — empty required array backfilled deterministically (no Claude retry)
   estimatedDurationMinutes: z.number().nullable().optional(),       // podcast
   estimatedWordCount:       z.number().int().nullable().optional(), // podcast
 });

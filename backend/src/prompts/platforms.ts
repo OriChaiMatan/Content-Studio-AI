@@ -225,13 +225,17 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
 
   // ── Newsletter ────────────────────────────────────────────────────────────
   newsletter: {
-    maxTokens: 4000,
+    // Phase 11D.2 — was a hardcoded 4000 (truncated complete Hebrew newsletters →
+    // retry → mock fallback). Now env-configurable; default 8000. See contentGenerationConfig.
+    maxTokens: contentGenerationConfig.newsletterMaxTokens,
     longform: true,
     instruction: [
       'PLATFORM: Newsletter. Purpose: education and analysis. Analytical, not salesy.',
       'mainAnalysis must ARGUE the thesis (claim → reasoning → implication) and engage the tension/counter-argument head-on — it is NOT a survey of the topic or a summary of the sources. Open on the thesis; let interpretation drive; cite facts only to earn each claim.',
       'Length: around 600–1200 words (mainAnalysis is the substantial body).',
-      'Return the breakdown: subject, previewText, opening, mainAnalysis, practicalTakeaways (1–8), closingInsight, cta. No image prompt.',
+      'Return the breakdown: subject, previewText, opening, mainAnalysis, practicalTakeaways, closingInsight, cta. No image prompt.',
+      // Phase 11D.3 — make the required array explicit so it is never returned empty.
+      'practicalTakeaways is REQUIRED and must NEVER be empty: always provide 3–6 concrete, actionable takeaways, each a complete non-blank phrase. Do not omit this array, do not return [], and do not include empty strings.',
     ].join('\n'),
     tool: {
       name: 'record_newsletter_content',
@@ -248,9 +252,31 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
       },
     },
     finalize: (raw, input) => {
+      // Phase 11D.3 — deterministic repair for an empty/blank practicalTakeaways. The
+      // model (esp. Hebrew) occasionally completes (stop_reason=tool_use, NOT truncated)
+      // yet returns an empty required array → Zod fail → corrective retry → mock-fallback
+      // (degraded, ~90s wasted). Instead, backfill from the already-generated, language-
+      // matched research material (keyInsights/importantClaims — NO extra Claude call);
+      // last resort the model's own closingInsight. Recorded in metadata + a warn, never
+      // silent. Genuine failures (everything blank) still fall through to the normal retry.
+      let practicalTakeaways = strArr(raw.practicalTakeaways).map(s => s.trim()).filter(Boolean);
+      let practicalTakeawaysRepaired = false;
+      if (practicalTakeaways.length === 0) {
+        const fromResearch = [...(input.research.keyInsights ?? []), ...(input.research.importantClaims ?? [])]
+          .map(s => String(s).trim()).filter(Boolean);
+        practicalTakeaways = fromResearch.slice(0, 3);
+        if (practicalTakeaways.length === 0) {
+          const ci = str(raw.closingInsight).trim();
+          if (ci) practicalTakeaways = [ci];
+        }
+        practicalTakeawaysRepaired = practicalTakeaways.length > 0;
+        if (practicalTakeawaysRepaired) {
+          console.warn(`[contentGen:newsletter] empty practicalTakeaways (stop=tool_use) — deterministically repaired from research material (${practicalTakeaways.length} item(s)); no Claude retry.`);
+        }
+      }
       const breakdown = NewsletterBreakdownSchema.parse({
         subject: str(raw.subject), previewText: str(raw.previewText), opening: str(raw.opening),
-        mainAnalysis: str(raw.mainAnalysis), practicalTakeaways: strArr(raw.practicalTakeaways),
+        mainAnalysis: str(raw.mainAnalysis), practicalTakeaways,
         closingInsight: str(raw.closingInsight), cta: str(raw.cta),
       });
       const readyToPublish = [
@@ -262,7 +288,7 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
       const readingTimeMinutes = Math.max(1, Math.round(words(readyToPublish) / 200));
       return GeneratedOutputSchema.parse({
         platform: 'newsletter', title: breakdown.subject, readyToPublish, breakdown,
-        metadata: baseMeta(input, { readingTimeMinutes }),
+        metadata: baseMeta(input, { readingTimeMinutes, ...(practicalTakeawaysRepaired ? { practicalTakeawaysRepaired: true } : {}) }),
       });
     },
   },

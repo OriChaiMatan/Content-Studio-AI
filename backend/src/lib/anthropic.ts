@@ -41,6 +41,14 @@ export const contentGenerationConfig = {
   timeoutMs:        parseInt(process.env.CONTENT_GENERATION_TIMEOUT_MS ?? '60000', 10),
   podcastTimeoutMs: parseInt(process.env.CONTENT_GENERATION_PODCAST_TIMEOUT_MS ?? '180000', 10),
   concurrency:      parseInt(process.env.CONTENT_GENERATION_CONCURRENCY ?? '3', 10),
+  // Phase 11D.2 — newsletter output ceiling. Was a hardcoded 4000, which a complete
+  // Hebrew newsletter (~4.5–5.5k tokens; English ~1.9k) routinely exceeded, causing
+  // truncation → corrective retry → second truncation → mock fallback (~75–90s wasted
+  // + degraded output). 8000 gives ~1.5–2× headroom over the worst realistic Hebrew
+  // newsletter while staying well under the podcast longform cap (16000). max_tokens is
+  // a CEILING, not a target — English still finishes at its natural ~1.9k, so this adds
+  // no latency to runs that already fit; it only lets the long Hebrew case complete.
+  newsletterMaxTokens: parseInt(process.env.CONTENT_NEWSLETTER_MAX_TOKENS ?? '8000', 10),
 } as const;
 
 // Returns the shared Anthropic client, or null when analysis is disabled or no

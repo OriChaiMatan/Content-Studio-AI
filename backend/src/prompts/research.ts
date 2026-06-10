@@ -732,6 +732,34 @@ export function selectThesis(
 }
 
 /** Validate Claude's synthesis output and assemble the v1-valid v2 superset. */
+// Phase 11D.1 — RESEARCH RETRY RESILIENCE. Claude occasionally mis-emits a recoverable
+// DIAGNOSTIC-ONLY enum — most often nonObviousInsights[].lens receiving a sourceConnection
+// type ("causal"/"tension"/…). Strict Zod then rejected the WHOLE synthesis and forced a
+// second full synthesis call (~90–195s, the dominant stage). We coerce ONLY these
+// non-load-bearing labels to a safe in-enum value before validation, so they can no longer
+// trigger a retry. This is behavior-preserving: the insight text, sourceRefs, novelty,
+// speculative flag and expertPOV.statement are untouched; the only downstream use of `lens`
+// branches on `=== 'contrarian'`, and an invalid value was already not 'contrarian', so
+// mapping it to 'second-order' takes the identical branch. expertPOV.type/grounding are
+// display-only metadata (the consumed field is expertPOV.statement). NOTHING that feeds the
+// thesis competition, editorial selection, thesisDiscipline, primaryAngle, or content is
+// coerced here — genuinely structural errors still take the existing corrective-retry path.
+const VALID_LENS = new Set(['analogical', 'second-order', 'contrarian', 'absence', 'stakeholder']);
+const VALID_POV_TYPE = new Set(['strategic', 'operational', 'prediction', 'practitioner']);
+const VALID_POV_GROUNDING = new Set(['inferred', 'speculative']);
+function coerceInsightDiagnostics(n: any): any {
+  if (!n || typeof n !== 'object') return n;
+  const out = { ...n };
+  if (!VALID_LENS.has(out.lens)) out.lens = 'second-order';   // non-contrarian default → identical downstream branch
+  if (out.expertPOV && typeof out.expertPOV === 'object') {
+    const pov = { ...out.expertPOV };
+    if (!VALID_POV_TYPE.has(pov.type)) pov.type = 'strategic';
+    if (!VALID_POV_GROUNDING.has(pov.grounding)) pov.grounding = 'inferred';   // expertPOV is never a fact
+    out.expertPOV = pov;
+  }
+  return out;
+}
+
 export function finalizeSynthesis(raw: Record<string, unknown>, input: SynthesisInput): ResearchContextV2 {
   const validRefs = new Set(input.sourceRefs.map(r => r.ref));
   const keepRefs = (refs: unknown): string[] => (Array.isArray(refs) ? refs.map(String).filter(r => validRefs.has(r)) : []);
@@ -748,7 +776,7 @@ export function finalizeSynthesis(raw: Record<string, unknown>, input: Synthesis
     tensions:                (Array.isArray(raw.tensions) ? raw.tensions : []).map((t: any) => ({ ...t, sourceRefs: keepRefs(t.sourceRefs) })),
     contradictions:          (Array.isArray(raw.contradictions) ? raw.contradictions : []).map((c: any) => ({ ...c, sourceRefs: keepRefs(c.sourceRefs) })),
     secondOrderImplications: Array.isArray(raw.secondOrderImplications) ? raw.secondOrderImplications : [],
-    nonObviousInsights:      (Array.isArray(raw.nonObviousInsights) ? raw.nonObviousInsights : []).map((n: any) => ({ ...n, sourceRefs: keepRefs(n.sourceRefs) })),
+    nonObviousInsights:      (Array.isArray(raw.nonObviousInsights) ? raw.nonObviousInsights : []).map((n: any) => coerceInsightDiagnostics({ ...n, sourceRefs: keepRefs(n.sourceRefs) })),
     openQuestions:           (Array.isArray(raw.openQuestions) ? raw.openQuestions.map(String) : []).filter(Boolean),
   });
 
