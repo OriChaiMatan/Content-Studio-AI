@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useAuthStore } from '../../stores/authStore';
 import { Icon } from '../ui/Icon';
 
 const navItems = [
@@ -11,6 +12,7 @@ const navItems = [
 
 export function Sidebar() {
   const user = useSettingsStore(s => s.user);
+  const logout = useAuthStore(s => s.logout);
   const navigate = useNavigate();
 
   return (
@@ -70,6 +72,13 @@ export function Sidebar() {
           title="Settings"
         >
           <Icon name="settings" size="sm" />
+        </button>
+        <button
+          onClick={() => { void logout(); }}
+          className="text-on-surface-variant hover:text-error transition-colors"
+          title="Sign out"
+        >
+          <Icon name="logout" size="sm" />
         </button>
       </div>
     </aside>

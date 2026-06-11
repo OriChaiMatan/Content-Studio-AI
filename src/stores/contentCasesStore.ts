@@ -432,8 +432,7 @@ function _offlineAdvance(
   }
 }
 
-// Trigger initial data load as soon as the store module is imported.
-// Uses a microtask so the store is fully initialized before the fetch starts.
-queueMicrotask(() => {
-  useContentCasesStore.getState().fetchCases();
-});
+// Phase 12 fix — NO auto-fetch on module import. /api/cases is a PROTECTED endpoint and
+// must not be called before authentication is resolved (it would 401 on boot for a
+// logged-out user). The fetch is now triggered from AuthedApp, which only mounts when
+// authStore.status === 'authenticated'.

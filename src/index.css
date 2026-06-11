@@ -73,6 +73,24 @@
   --spacing-lg: 24px;
   --spacing-xl: 32px;
 
+  /* Max-width scale (Phase 12 fix). The named spacing keys above (xs/sm/md/lg/xl)
+     collide with Tailwind v4's container size names: `max-w-*` resolves
+     [--max-width → --spacing → --container], so `max-w-md` was matching --spacing-md
+     (16px) before --container-md. Defining --max-width-* (the FIRST namespace, with
+     Tailwind's standard container values) restores correct max-w-* sizing globally
+     WITHOUT touching the spacing tokens. */
+  --max-width-xs: 20rem;
+  --max-width-sm: 24rem;
+  --max-width-md: 28rem;
+  --max-width-lg: 32rem;
+  --max-width-xl: 36rem;
+  --max-width-2xl: 42rem;
+  --max-width-3xl: 48rem;
+  --max-width-4xl: 56rem;
+  --max-width-5xl: 64rem;
+  --max-width-6xl: 72rem;
+  --max-width-7xl: 80rem;
+
   /* Font Families */
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-serif: 'Noto Serif', ui-serif, Georgia, serif;

@@ -40,10 +40,11 @@ export const libraryService = {
   //
   // Groups are sorted newest-run-first.
   // Items without a pipelineRunId are each their own singleton group (legacy data).
-  async getGrouped() {
-    // 1. Fetch all approved items with case info
+  async getGrouped(userId: string) {
+    // 1. Fetch approved items — Phase 12: STRICT ownership, only items whose owning
+    //    case belongs to the authenticated user.
     const items = await prisma.libraryItem.findMany({
-      where:   { status: 'approved' },
+      where:   { status: 'approved', contentCase: { userId } },
       include: { contentCase: { select: { title: true } } },
       orderBy: { date: 'desc' },
     });

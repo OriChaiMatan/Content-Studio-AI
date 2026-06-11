@@ -3,8 +3,13 @@ import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { caseService } from '../../services/caseService';
 import { createCaseSchema, updateCaseSchema } from '../../schemas/caseSchemas';
+import { requireCaseOwnership } from '../middleware/auth';
 
 const router = Router();
+
+// Phase 12 — STRICT ownership: any route with :id is gated. A case that does not
+// exist OR belongs to another user returns 404 (never 403, no existence leak).
+router.param('id', requireCaseOwnership);
 
 // ── GET /api/cases ────────────────────────────────────────────────────────────
 // Returns all cases sorted by updatedAt DESC.
@@ -12,7 +17,7 @@ const router = Router();
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    let cases = await caseService.listCases();
+    let cases = await caseService.listCases(req.userId!);
 
     // Optional server-side filter by status
     const { status, q } = req.query as Record<string, string | undefined>;
@@ -40,7 +45,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const c = await caseService.getCaseById(req.params.id);
+    const c = await caseService.getCaseById(req.params.id, req.userId!);
     if (!c) {
       res.status(404).json({ error: 'Case not found' });
       return;
@@ -59,7 +64,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const input = createCaseSchema.parse(req.body);
-    const c = await caseService.createCase(input);
+    const c = await caseService.createCase(input, req.userId!);
     res.status(201).json(c);
   } catch (err) {
     if (err instanceof ZodError) {

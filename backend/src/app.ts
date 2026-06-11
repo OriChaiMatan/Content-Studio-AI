@@ -2,7 +2,10 @@ import 'dotenv/config';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { prisma } from './lib/prisma';
+import { requireAuth } from './api/middleware/auth';
+import authRouter     from './api/routes/auth';
 import casesRouter    from './api/routes/cases';
 import sourcesRouter  from './api/routes/sources';
 import pipelineRouter from './api/routes/pipeline';
@@ -39,20 +42,27 @@ app.use(
 // is still hard-capped server-side in pdfExtractionService.
 app.use(express.json({ limit: '16mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-// ── API routes ────────────────────────────────────────────────────────────────
+// ── Auth routes (PUBLIC) — Phase 12 ───────────────────────────────────────────
+// register/login/logout/me. /me self-guards with requireAuth.
+app.use('/api/auth', authRouter);
+
+// ── API routes (PROTECTED) ────────────────────────────────────────────────────
+// requireAuth sets req.userId; every case/library route is per-user scoped, and
+// each :id|:caseId route additionally enforces strict ownership (404 on mismatch).
 // Both routers mount at /api/cases. Express routes by segment depth:
 //   casesRouter   → /api/cases, /api/cases/:id           (1 segment)
 //   sourcesRouter → /api/cases/:id/sources, .../sources/:sourceId  (3 segments)
 // No conflicts — /:id only matches a single path segment.
-app.use('/api/cases', casesRouter);
-app.use('/api/cases', sourcesRouter);
+app.use('/api/cases', requireAuth, casesRouter);
+app.use('/api/cases', requireAuth, sourcesRouter);
 // pipeline routes: /:id/pipeline, /:id/pipeline/start, /:id/pipeline/advance
-app.use('/api/cases', pipelineRouter);
+app.use('/api/cases', requireAuth, pipelineRouter);
 // output routes: /:caseId/outputs/:outputId, .../status, .../regenerate
-app.use('/api/cases', outputsRouter);
-// library: grouped-by-run view of approved outputs
-app.use('/api/library', libraryRouter);
+app.use('/api/cases', requireAuth, outputsRouter);
+// library: grouped-by-run view of approved outputs (per-user)
+app.use('/api/library', requireAuth, libraryRouter);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 // Returns 200 when the server is up.

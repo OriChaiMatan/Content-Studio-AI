@@ -2,9 +2,6 @@ import type { Prisma, ContentSource, ContentOutput, PipelineStep, PipelineRun } 
 import { prisma } from '../lib/prisma';
 import type { CreateCaseInput, UpdateCaseInput } from '../schemas/caseSchemas';
 
-// Hard-coded until authentication is added in a future phase.
-const DEV_USER_ID = 'user-seed-1';
-
 // Canonical pipeline step order — matches the frontend's PipelineStep[] expectation.
 const PIPELINE_STEP_ORDER = ['research', 'fact_check', 'content_creation'] as const;
 type StepName = typeof PIPELINE_STEP_ORDER[number];
@@ -165,27 +162,31 @@ export function serializeCase(c: FullCase) {
 
 export const caseService = {
 
-  async listCases() {
+  // Phase 12 — STRICT ownership: only the authenticated user's cases are returned.
+  async listCases(userId: string) {
     const cases = await prisma.contentCase.findMany({
+      where: { userId },
       include: caseInclude,
       orderBy: { updatedAt: 'desc' },
     });
     return cases.map(serializeCase);
   },
 
-  async getCaseById(id: string) {
-    const c = await prisma.contentCase.findUnique({
-      where: { id },
+  // Ownership of :id routes is enforced upstream by requireCaseOwnership; we also
+  // pass userId so the query itself is scoped (defense in depth).
+  async getCaseById(id: string, userId: string) {
+    const c = await prisma.contentCase.findFirst({
+      where: { id, userId },
       include: caseInclude,
     });
     return c ? serializeCase(c) : null;
   },
 
-  async createCase(data: CreateCaseInput) {
+  async createCase(data: CreateCaseInput, userId: string) {
     const c = await prisma.$transaction(async tx => {
       return tx.contentCase.create({
         data: {
-          userId:          DEV_USER_ID,
+          userId,
           title:           data.title,
           language:        data.language,
           // Simplified wizard fields

@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { pipelineService } from '../../services/pipelineService';
+import { requireCaseOwnership } from '../middleware/auth';
 
 const router = Router();
+
+// Phase 12 — STRICT ownership: pipeline runs only on the owner's case; else 404.
+router.param('id', requireCaseOwnership);
 
 // ── GET /api/cases/:id/pipeline ───────────────────────────────────────────────
 // Lightweight pipeline status — steps + current run summary + source counts.

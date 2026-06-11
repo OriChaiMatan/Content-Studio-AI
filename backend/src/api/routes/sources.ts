@@ -3,8 +3,12 @@ import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { sourceService } from '../../services/sourceService';
 import { addSourceSchema, addSourcesBatchSchema, updateSourceSchema } from '../../schemas/sourceSchemas';
+import { requireCaseOwnership } from '../middleware/auth';
 
 const router = Router();
+
+// Phase 12 — STRICT ownership: every source route hangs off :id; non-owners get 404.
+router.param('id', requireCaseOwnership);
 
 // ── POST /api/cases/:id/sources/batch (Phase 11B) ─────────────────────────────
 // Add several sources in ONE request; their analysis runs concurrently (bounded

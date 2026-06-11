@@ -3,8 +3,12 @@ import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { outputService } from '../../services/outputService';
 import { updateOutputBodySchema, updateOutputStatusSchema } from '../../schemas/outputSchemas';
+import { requireCaseOwnership } from '../middleware/auth';
 
 const router = Router();
+
+// Phase 12 — STRICT ownership: outputs are scoped to the owning case (:caseId); else 404.
+router.param('caseId', requireCaseOwnership);
 
 // ── PATCH /api/cases/:caseId/outputs/:outputId ───────────────────────────────
 // Edit the body (and optionally title) of a draft output.

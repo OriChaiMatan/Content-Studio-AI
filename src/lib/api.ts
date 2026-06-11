@@ -20,6 +20,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // TypeError is thrown here if the backend is unreachable (ECONNREFUSED, etc.)
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...init?.headers },
+    // Phase 12 — send the httpOnly auth cookie with every request.
+    credentials: 'include',
     ...init,
   });
 
@@ -28,6 +30,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const json = await res.json().catch(() => ({ error: res.statusText }));
 
   if (!res.ok) {
+    // Phase 12 — a 401 on a protected call means the session is gone/expired.
+    // Notify the app (authStore listens) so it can route back to /login. We skip
+    // /auth/* endpoints, where a 401 is an expected, locally-handled outcome.
+    if (res.status === 401 && !path.startsWith('/auth/')) {
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+    }
     const message = typeof json?.error === 'string'
       ? json.error
       : `Request failed: ${res.status}`;

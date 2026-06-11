@@ -9,9 +9,9 @@ const router = Router();
 // Each group includes run metadata and the individual items.
 // Sorted newest run first.
 
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
-    const data = await libraryService.getGrouped();
+    const data = await libraryService.getGrouped(req.userId!);
     res.json(data);
   } catch (err) {
     console.error('[GET /api/library]', err);
