@@ -142,6 +142,9 @@ model User {
   updatedAt               DateTime      @updatedAt
 
   cases                   ContentCase[]
+  // Phase 13B — optional 1:1 WhatsApp channel identity. Nullable so legacy/seed
+  // users (and any future passwordless flows) remain valid without a number.
+  whatsappIdentity        WhatsAppIdentity?
 
   @@map("users")
 }
@@ -383,4 +386,30 @@ model WhatsAppMessage {
 
   @@index([phoneE164, createdAt])
   @@map("whatsapp_messages")
+}
+
+// WhatsAppIdentity — Phase 13B. One verified WhatsApp number per user (MVP).
+// Created at registration with verified=false; flipped to true by user-initiated
+// verification (the user sends verifyCode from their WhatsApp to the business
+// number; the inbound webhook matches sender + code). verifyCode/verifyExpires are
+// transient secrets and are NEVER serialized to the client. phoneE164 is stored in
+// canonical E.164 ("+972501234567"); inbound matching reconciles against Meta's
+// digit-only `from` via a shared normalizer.
+model WhatsAppIdentity {
+  id            String    @id @default(cuid())
+  userId        String    @unique           // one number per user (MVP)
+  phoneE164     String    @unique           // canonical E.164, e.g. "+972501234567"
+  verified      Boolean   @default(false)
+  verifiedAt    DateTime?
+  verifyCode    String?                     // single-use; cleared on success
+  verifyExpires DateTime?                   // now + 60 min on (re)generation
+  attemptCount  Int       @default(0)       // wrong-code guard
+  optOut        Boolean   @default(false)   // declared now; used by a later notification phase
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([phoneE164])
+  @@map("whatsapp_identities")
 }

@@ -1,17 +1,22 @@
 import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { useAuthStore } from '../../stores/authStore';
 import { AuthLayout, AuthField } from './AuthLayout';
 
-// Phase 12 · Part 2 — editorial registration. Wired to authStore.register; route
-// guard redirects to "/" once status flips to authenticated.
+// Strict E.164 mirror of the server validator (backend authSchemas) for instant feedback.
+const E164_RE = /^\+[1-9]\d{7,14}$/;
+
+// Phase 12 · Part 2 — editorial registration. Phase 13B adds the WhatsApp number and
+// redirects to /verify-whatsapp on success so verification is the next step.
 export function RegisterPage() {
   const register = useAuthStore(s => s.register);
+  const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [whatsappPhone, setWhatsappPhone] = useState('');
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -20,9 +25,15 @@ export function RegisterPage() {
     e.preventDefault();
     setError(null);
     if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    if (!E164_RE.test(whatsappPhone.trim())) {
+      setError('Enter a valid WhatsApp number in international format, e.g. +972501234567');
+      return;
+    }
     setBusy(true);
     try {
-      await register(name.trim(), email.trim(), password);
+      await register(name.trim(), email.trim(), password, whatsappPhone.trim());
+      // Authenticated now; verification is the next step (not a hard gate).
+      navigate('/verify-whatsapp', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
       setBusy(false);
@@ -44,6 +55,10 @@ export function RegisterPage() {
         <AuthField
           id="email" label="Email address" type="email" autoComplete="email" required
           value={email} onChange={e => setEmail(e.target.value)} placeholder="name@organization.com"
+        />
+        <AuthField
+          id="whatsappPhone" label="WhatsApp number" type="tel" autoComplete="tel" inputMode="tel" required
+          value={whatsappPhone} onChange={e => setWhatsappPhone(e.target.value)} placeholder="+972501234567"
         />
         <AuthField
           id="password" label="Password" type={show ? 'text' : 'password'} autoComplete="new-password" required

@@ -33,6 +33,10 @@ export const whatsappConfig = {
   // Base URL for building deep links into the app. Declared now (used by later
   // phases for case/review links); unused in 13A.
   appBaseUrl: process.env.APP_BASE_URL ?? 'http://localhost:5173',
+
+  // Phase 13B — human-dialable business WhatsApp number shown on /verify-whatsapp.
+  // Distinct from phoneNumberId (an API id, not dialable). Display/placeholder only.
+  displayNumber: process.env.WHATSAPP_DISPLAY_NUMBER ?? '',
 } as const;
 
 // True only when every credential needed to SEND an outbound message is present.

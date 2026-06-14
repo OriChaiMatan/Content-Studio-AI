@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { whatsappConfig, canEcho } from '../lib/whatsapp';
+import { phoneDigits, normalizeCodeInput, MAX_VERIFY_ATTEMPTS } from '../lib/whatsappVerification';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WhatsApp service (Phase 13A — plumbing only)
@@ -139,24 +140,86 @@ async function logOutbound(to: string, body: string, kind: 'echo' | 'error'): Pr
   });
 }
 
+// ── 13B inbound verification ──────────────────────────────────────────────────
+// User-initiated verification: match the sender phone + message body against an
+// unverified WhatsAppIdentity. Registration stores '+E.164'; Meta's `from` is
+// digit-only, so we reconstruct the canonical '+<digits>' for the unique lookup.
+//
+// Structural safety: matching binds to phoneE164 == sender, so a number can only
+// ever verify ITSELF — cross-account verification is impossible by construction.
+type VerifyStatus = 'verified' | 'wrong' | 'expired' | 'locked' | 'already' | 'none';
+
+async function tryVerifyInbound(from: string, body: string): Promise<VerifyStatus> {
+  const candidate = `+${phoneDigits(from)}`;
+  const identity = await prisma.whatsAppIdentity.findUnique({ where: { phoneE164: candidate } });
+  if (!identity) return 'none';          // no pending identity for this number
+  if (identity.verified) return 'already';
+
+  // Expired or no active code → needs a resend.
+  if (!identity.verifyCode || !identity.verifyExpires || identity.verifyExpires.getTime() < Date.now()) {
+    return 'expired';
+  }
+  // Too many wrong attempts → locked until a resend regenerates the code.
+  if (identity.attemptCount >= MAX_VERIFY_ATTEMPTS) return 'locked';
+
+  if (normalizeCodeInput(body) !== identity.verifyCode) {
+    await prisma.whatsAppIdentity.update({
+      where: { id: identity.id },
+      data:  { attemptCount: { increment: 1 } },
+    });
+    return 'wrong';
+  }
+
+  // Match — flip to verified and clear the transient secret.
+  await prisma.whatsAppIdentity.update({
+    where: { id: identity.id },
+    data:  { verified: true, verifiedAt: new Date(), verifyCode: null, verifyExpires: null, attemptCount: 0 },
+  });
+  return 'verified';
+}
+
 // ── 13A entrypoint ────────────────────────────────────────────────────────────
 // Process a verified webhook payload: log each inbound message idempotently and,
 // when fully gated-on, echo text messages back. Returns a small summary for the
 // route's debug log. Never throws (errors are logged and swallowed) so the webhook
 // can always return 200 to Meta.
-export async function processInbound(payload: MetaWebhookPayload): Promise<{ received: number; logged: number; echoed: number }> {
+export async function processInbound(payload: MetaWebhookPayload): Promise<{ received: number; logged: number; verified: number; echoed: number }> {
   const messages = extractInboundMessages(payload);
   let logged = 0;
+  let verified = 0;
   let echoed = 0;
 
   for (const msg of messages) {
     try {
+      // Dedupe FIRST so Meta retries are full no-ops (no double verify / double echo).
       const isNew = await logInbound(msg, msg);
       if (isNew) logged++;
+      if (!isNew) continue;
 
-      // Echo only NEW text messages, and only when fully gated-on. Never echo a
-      // duplicate (Meta retry) — that would double-send.
-      if (isNew && msg.type === 'text' && msg.body && canEcho()) {
+      // ── Phase 13B — verification takes precedence over the generic echo ───────
+      // Only text messages can carry a code. 'none' means no pending identity for
+      // this sender → fall through to the 13A echo behavior.
+      let vstatus: VerifyStatus = 'none';
+      if (msg.type === 'text') {
+        vstatus = await tryVerifyInbound(msg.from, msg.body);
+      }
+
+      if (vstatus === 'verified') {
+        verified++;
+        if (canEcho()) await sendText(msg.from, '✓ Your WhatsApp number is now verified.');
+        continue;
+      }
+      if (vstatus === 'expired' || vstatus === 'locked') {
+        if (canEcho()) await sendText(msg.from, 'That code is no longer valid. Request a new code in the app and try again.');
+        continue;
+      }
+      if (vstatus === 'wrong' || vstatus === 'already') {
+        // Wrong code (attempt counted) or already verified — no reply, no echo.
+        continue;
+      }
+
+      // vstatus === 'none' → 13A generic echo, only when fully gated-on.
+      if (msg.type === 'text' && msg.body && canEcho()) {
         const ok = await sendText(msg.from, `Received: ${msg.body}`);
         if (ok) echoed++;
       }
@@ -165,5 +228,5 @@ export async function processInbound(payload: MetaWebhookPayload): Promise<{ rec
     }
   }
 
-  return { received: messages.length, logged, echoed };
+  return { received: messages.length, logged, verified, echoed };
 }

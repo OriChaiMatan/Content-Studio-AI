@@ -11,6 +11,8 @@ import { LibraryPage } from './features/library/LibraryPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { RegisterPage } from './features/auth/RegisterPage';
+import { VerifyWhatsAppPage } from './features/auth/VerifyWhatsAppPage';
+import { WhatsAppVerifyBanner } from './features/auth/WhatsAppVerifyBanner';
 import { useAuthStore } from './stores/authStore';
 import { useContentCasesStore } from './stores/contentCasesStore';
 import { useLibraryStore } from './stores/libraryStore';
@@ -28,6 +30,7 @@ function AuthedApp() {
 
   return (
     <AppLayout>
+      <WhatsAppVerifyBanner />
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/cases" element={<ContentCasesPage />} />
@@ -37,6 +40,7 @@ function AuthedApp() {
         <Route path="/cases/:id/review" element={<ContentCaseReview />} />
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/verify-whatsapp" element={<VerifyWhatsAppPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppLayout>

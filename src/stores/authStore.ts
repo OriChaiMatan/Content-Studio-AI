@@ -16,7 +16,24 @@ export interface AuthUser {
     factCheckConflict: boolean;
     draftReady: boolean;
   };
+  // Phase 13B — WhatsApp channel status. phoneE164 here is MASKED.
+  whatsapp: {
+    linked: boolean;
+    verified: boolean;
+    phoneE164: string | null;
+    verifiedAt: string | null;
+  };
   createdAt: string;
+}
+
+// Phase 13B — owner-only verification payload from register/resend/change. Holds the
+// PLAINTEXT code + FULL number for the /verify-whatsapp screen. Lost on reload (not
+// persisted): the page offers "resend" to mint a fresh one.
+export interface WhatsappVerification {
+  phoneE164: string;
+  code: string;
+  expiresAt: string | null;
+  businessNumber: string | null;
 }
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
@@ -33,10 +50,16 @@ function syncSettingsUser(user: AuthUser) {
 interface AuthState {
   user: AuthUser | null;
   status: AuthStatus;
+  // Phase 13B — last verification payload (code + full number) from register/resend/
+  // change. Null until issued; null after a reload. Drives the /verify-whatsapp page.
+  whatsappVerification: WhatsappVerification | null;
   loadMe: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string, whatsappPhone: string) => Promise<void>;
   logout: () => Promise<void>;
+  // Phase 13B — re-issue the code / change the number; both refresh whatsappVerification.
+  resendWhatsappCode: () => Promise<void>;
+  changeWhatsappNumber: (whatsappPhone: string) => Promise<void>;
   // Called when a protected request returns 401 (cookie expired/invalid).
   handleUnauthorized: () => void;
 }
@@ -44,6 +67,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   status: 'loading',
+  whatsappVerification: null,
 
   // Boot hydration from the httpOnly cookie. /auth/me ALWAYS returns 200 with
   // { authenticated, user } — no 401 on a logged-out boot.
@@ -68,15 +92,31 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user, status: 'authenticated' });
   },
 
-  register: async (name, email, password) => {
-    const { user } = await api.post<{ user: AuthUser }>('/auth/register', { name, email, password });
+  register: async (name, email, password, whatsappPhone) => {
+    const { user, whatsappVerification } = await api.post<{ user: AuthUser; whatsappVerification: WhatsappVerification | null }>(
+      '/auth/register', { name, email, password, whatsappPhone },
+    );
     syncSettingsUser(user);
-    set({ user, status: 'authenticated' });
+    set({ user, status: 'authenticated', whatsappVerification });
   },
 
   logout: async () => {
     try { await api.post('/auth/logout', {}); } catch { /* idempotent */ }
-    set({ user: null, status: 'unauthenticated' });
+    set({ user: null, status: 'unauthenticated', whatsappVerification: null });
+  },
+
+  resendWhatsappCode: async () => {
+    const { whatsappVerification } = await api.post<{ whatsappVerification: WhatsappVerification }>(
+      '/auth/whatsapp/resend', {},
+    );
+    set({ whatsappVerification });
+  },
+
+  changeWhatsappNumber: async (whatsappPhone) => {
+    const { whatsappVerification } = await api.patch<{ whatsappVerification: WhatsappVerification }>(
+      '/auth/whatsapp/number', { whatsappPhone },
+    );
+    set({ whatsappVerification });
   },
 
   handleUnauthorized: () => set({ user: null, status: 'unauthenticated' }),
