@@ -5,9 +5,24 @@ import { Input } from '../../components/ui/Input';
 import { Toggle } from '../../components/ui/Toggle';
 import { Button } from '../../components/ui/Button';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useAuthStore } from '../../stores/authStore';
+
+// Read-only status row for the WhatsApp section (Phase 13G).
+function StatusRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-on-surface-variant">{label}</span>
+      <span className="font-medium text-on-surface">{value}</span>
+    </div>
+  );
+}
 
 export function SettingsPage() {
   const { user, updateUser, updateNotification } = useSettingsStore();
+  // Phase 13G — real authenticated user (carries WhatsApp status); read-only here.
+  const authUser = useAuthStore(s => s.user);
+  const wa = authUser?.whatsapp;
+  const waNotificationsOn = !!wa && !wa.optOut && !!authUser?.notifications.generationComplete;
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -80,6 +95,20 @@ export function SettingsPage() {
                   onChange={v => updateNotification('draftReady', v)}
                 />
               </div>
+            </SectionCard>
+
+            {/* WhatsApp (read-only status — Phase 13G) */}
+            <SectionCard title="WhatsApp" icon="chat">
+              {wa?.linked ? (
+                <div className="space-y-3 text-[14px]">
+                  <StatusRow label="Connected" value="Yes" />
+                  <StatusRow label="Phone" value={wa.phoneE164 ?? '—'} />
+                  <StatusRow label="Verified" value={wa.verified ? 'Yes' : 'No'} />
+                  <StatusRow label="Notifications" value={waNotificationsOn ? 'On' : 'Off'} />
+                </div>
+              ) : (
+                <p className="text-[14px] text-on-surface-variant">Not connected</p>
+              )}
             </SectionCard>
           </div>
 

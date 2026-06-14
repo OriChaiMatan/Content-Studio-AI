@@ -22,6 +22,8 @@ export interface AuthUser {
     verified: boolean;
     phoneE164: string | null;
     verifiedAt: string | null;
+    // Phase 13G — WhatsApp-specific notification opt-out (read-only display).
+    optOut: boolean;
   };
   createdAt: string;
 }

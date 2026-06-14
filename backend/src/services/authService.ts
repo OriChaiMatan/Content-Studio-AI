@@ -32,6 +32,8 @@ export function serializeUser(u: User, identity?: WhatsAppIdentity | null) {
       verified:   identity?.verified ?? false,
       phoneE164:  identity ? maskPhone(identity.phoneE164) : null,
       verifiedAt: identity?.verifiedAt ? identity.verifiedAt.toISOString() : null,
+      // Phase 13G — WhatsApp-specific notification opt-out (read-only in Settings).
+      optOut:     identity?.optOut ?? false,
     },
     createdAt: u.createdAt.toISOString(),
   };
