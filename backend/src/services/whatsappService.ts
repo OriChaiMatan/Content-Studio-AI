@@ -1,7 +1,9 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type WhatsAppIdentity } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { whatsappConfig, canEcho } from '../lib/whatsapp';
+import { canEcho } from '../lib/whatsapp';
+import { sendText } from '../lib/whatsappSend';
 import { phoneDigits, normalizeCodeInput, MAX_VERIFY_ATTEMPTS } from '../lib/whatsappVerification';
+import { ingestFromWhatsapp } from './whatsappIngestionService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WhatsApp service (Phase 13A — plumbing only)
@@ -97,64 +99,22 @@ async function logInbound(msg: InboundMessage, rawMessage: unknown): Promise<boo
   }
 }
 
-// ── Outbound send (gated) ─────────────────────────────────────────────────────
-// Sends a plain-text WhatsApp message via the Graph API. Caller MUST gate on
-// canEcho()/enabled — this function does not re-check the feature flag, only that
-// it has somewhere to send. Never throws: logs and returns false on failure so a
-// send error can never turn the webhook ack into a non-200.
-export async function sendText(to: string, body: string): Promise<boolean> {
-  const url = `https://graph.facebook.com/${whatsappConfig.apiVersion}/${whatsappConfig.phoneNumberId}/messages`;
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${whatsappConfig.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to,
-        type: 'text',
-        text: { body },
-      }),
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      console.error(`[whatsapp] send failed: ${res.status} ${detail.slice(0, 300)}`);
-      await logOutbound(to, body, 'error').catch(() => {});
-      return false;
-    }
-    await logOutbound(to, body, 'echo').catch(() => {});
-    return true;
-  } catch (err) {
-    console.error('[whatsapp] send error:', err instanceof Error ? err.message : err);
-    await logOutbound(to, body, 'error').catch(() => {});
-    return false;
-  }
-}
-
-// Outbound rows carry no waMessageId (we don't track Meta's returned id in 13A).
-async function logOutbound(to: string, body: string, kind: 'echo' | 'error'): Promise<void> {
-  await prisma.whatsAppMessage.create({
-    data: { phoneE164: to, direction: 'outbound', kind, body },
-  });
+// ── Identity resolution ───────────────────────────────────────────────────────
+// Registration stores '+E.164'; Meta's `from` is digit-only, so we reconstruct the
+// canonical '+<digits>' for the unique lookup.
+async function resolveIdentity(from: string): Promise<WhatsAppIdentity | null> {
+  return prisma.whatsAppIdentity.findUnique({ where: { phoneE164: `+${phoneDigits(from)}` } });
 }
 
 // ── 13B inbound verification ──────────────────────────────────────────────────
-// User-initiated verification: match the sender phone + message body against an
-// unverified WhatsAppIdentity. Registration stores '+E.164'; Meta's `from` is
-// digit-only, so we reconstruct the canonical '+<digits>' for the unique lookup.
+// Match the message body against an UNVERIFIED identity's code. Caller resolves the
+// identity and only calls this when it exists and is not yet verified.
 //
 // Structural safety: matching binds to phoneE164 == sender, so a number can only
 // ever verify ITSELF — cross-account verification is impossible by construction.
-type VerifyStatus = 'verified' | 'wrong' | 'expired' | 'locked' | 'already' | 'none';
+type VerifyStatus = 'verified' | 'wrong' | 'expired' | 'locked';
 
-async function tryVerifyInbound(from: string, body: string): Promise<VerifyStatus> {
-  const candidate = `+${phoneDigits(from)}`;
-  const identity = await prisma.whatsAppIdentity.findUnique({ where: { phoneE164: candidate } });
-  if (!identity) return 'none';          // no pending identity for this number
-  if (identity.verified) return 'already';
-
+async function runVerification(identity: WhatsAppIdentity, body: string): Promise<VerifyStatus> {
   // Expired or no active code → needs a resend.
   if (!identity.verifyCode || !identity.verifyExpires || identity.verifyExpires.getTime() < Date.now()) {
     return 'expired';
@@ -178,55 +138,60 @@ async function tryVerifyInbound(from: string, body: string): Promise<VerifyStatu
   return 'verified';
 }
 
-// ── 13A entrypoint ────────────────────────────────────────────────────────────
-// Process a verified webhook payload: log each inbound message idempotently and,
-// when fully gated-on, echo text messages back. Returns a small summary for the
-// route's debug log. Never throws (errors are logged and swallowed) so the webhook
-// can always return 200 to Meta.
-export async function processInbound(payload: MetaWebhookPayload): Promise<{ received: number; logged: number; verified: number; echoed: number }> {
+// ── Entrypoint ────────────────────────────────────────────────────────────────
+// Process a signature-verified webhook payload: log each inbound message
+// idempotently, then branch by sender identity state:
+//   no identity   → 13A generic echo (debug only)
+//   unverified    → 13B verification
+//   verified      → 13C source ingestion
+// Returns a small summary for the route's debug log. Never throws (errors are
+// logged and swallowed) so the webhook can always return 200 to Meta.
+export async function processInbound(payload: MetaWebhookPayload): Promise<{ received: number; logged: number; verified: number; ingested: number; echoed: number }> {
   const messages = extractInboundMessages(payload);
   let logged = 0;
   let verified = 0;
+  let ingested = 0;
   let echoed = 0;
 
   for (const msg of messages) {
     try {
-      // Dedupe FIRST so Meta retries are full no-ops (no double verify / double echo).
+      // Dedupe FIRST so Meta retries are full no-ops (no double verify / ingest / echo).
       const isNew = await logInbound(msg, msg);
       if (isNew) logged++;
       if (!isNew) continue;
 
-      // ── Phase 13B — verification takes precedence over the generic echo ───────
-      // Only text messages can carry a code. 'none' means no pending identity for
-      // this sender → fall through to the 13A echo behavior.
-      let vstatus: VerifyStatus = 'none';
-      if (msg.type === 'text') {
-        vstatus = await tryVerifyInbound(msg.from, msg.body);
-      }
+      const identity = await resolveIdentity(msg.from);
 
-      if (vstatus === 'verified') {
-        verified++;
-        if (canEcho()) await sendText(msg.from, '✓ Your WhatsApp number is now verified.');
-        continue;
-      }
-      if (vstatus === 'expired' || vstatus === 'locked') {
-        if (canEcho()) await sendText(msg.from, 'That code is no longer valid. Request a new code in the app and try again.');
-        continue;
-      }
-      if (vstatus === 'wrong' || vstatus === 'already') {
-        // Wrong code (attempt counted) or already verified — no reply, no echo.
+      // ── No identity for this number → 13A generic echo (debug only) ───────────
+      if (!identity) {
+        if (msg.type === 'text' && msg.body && canEcho()) {
+          const ok = await sendText(msg.from, `Received: ${msg.body}`);
+          if (ok) echoed++;
+        }
         continue;
       }
 
-      // vstatus === 'none' → 13A generic echo, only when fully gated-on.
-      if (msg.type === 'text' && msg.body && canEcho()) {
-        const ok = await sendText(msg.from, `Received: ${msg.body}`);
-        if (ok) echoed++;
+      // ── Unverified identity → 13B verification ────────────────────────────────
+      if (!identity.verified) {
+        if (msg.type !== 'text') continue;   // only text can carry a code
+        const vstatus = await runVerification(identity, msg.body);
+        if (vstatus === 'verified') {
+          verified++;
+          if (canEcho()) await sendText(msg.from, '✓ Your WhatsApp number is now verified.');
+        } else if (vstatus === 'expired' || vstatus === 'locked') {
+          if (canEcho()) await sendText(msg.from, 'That code is no longer valid. Request a new code in the app and try again.');
+        }
+        // 'wrong' → silent (attempt already counted).
+        continue;
       }
+
+      // ── Verified identity → 13C source ingestion ──────────────────────────────
+      const result = await ingestFromWhatsapp(identity, msg);
+      if (result.ingested) ingested++;
     } catch (err) {
       console.error('[whatsapp] processInbound error for', msg.waMessageId, err instanceof Error ? err.message : err);
     }
   }
 
-  return { received: messages.length, logged, verified, echoed };
+  return { received: messages.length, logged, verified, ingested, echoed };
 }

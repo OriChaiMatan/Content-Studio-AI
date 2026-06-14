@@ -56,6 +56,15 @@ export function canEcho(): boolean {
   return whatsappConfig.enabled && whatsappConfig.echoEnabled && isWhatsappConfigured();
 }
 
+// Phase 13C — product replies (confirmations, guidance notices) may send whenever
+// WhatsApp is enabled and credentials are present. Unlike echo, this does NOT
+// require WHATSAPP_ECHO_ENABLED: a confirmation is a real product message, not the
+// 13A debug echo. In dev (no token) this is false → replies are skipped (intent is
+// still logged), and ingestion still happens.
+export function canSend(): boolean {
+  return whatsappConfig.enabled && isWhatsappConfigured();
+}
+
 // ── Startup diagnostic (Phase 13A) ───────────────────────────────────────────
 // Reports resolved config so we can confirm what the running process loaded.
 // NEVER prints secrets — only presence/length.
