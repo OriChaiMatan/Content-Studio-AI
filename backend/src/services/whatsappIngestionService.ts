@@ -115,7 +115,7 @@ function buildCaseListMessage(options: CaseOption[], totalActive: number): strin
 }
 
 function confirmation(title: string, caseId: string): string {
-  return `✓ Added to "${title}". Review it here: ${caseLink(caseId)}`;
+  return `Added to "${title}".\n\nView the case:\n${caseLink(caseId)}`;
 }
 
 export interface IngestResult {
