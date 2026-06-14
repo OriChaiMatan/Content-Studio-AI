@@ -11,6 +11,7 @@ import sourcesRouter  from './api/routes/sources';
 import pipelineRouter from './api/routes/pipeline';
 import outputsRouter  from './api/routes/outputs';
 import libraryRouter  from './api/routes/library';
+import whatsappRouter from './api/routes/whatsapp';
 
 const app = express();
 
@@ -35,6 +36,14 @@ app.use(
     credentials: true,
   }),
 );
+
+// ── WhatsApp webhook (PUBLIC) — Phase 13A ─────────────────────────────────────
+// Mounted BEFORE the global JSON parser with a path-scoped raw parser so the
+// webhook handler sees the unparsed Buffer needed for HMAC signature verification.
+// express.raw sets req._body, so the global express.json() below skips this path —
+// global parsing for every other route is unchanged. PUBLIC (no requireAuth):
+// trust comes from the verify token (GET) and the HMAC signature (POST).
+app.use('/api/integrations/whatsapp', express.raw({ type: '*/*', limit: '1mb' }), whatsappRouter);
 
 // ── Body parsing ──────────────────────────────────────────────────────────────
 // Limit accommodates base64-encoded PDF uploads (Phase 8.5): a 10 MB PDF is

@@ -365,3 +365,22 @@ model LibraryItem {
   @@index([platform, status])
   @@map("library_items")
 }
+
+// WhatsAppMessage — Phase 13A inbound/outbound log + idempotency.
+// waMessageId is Meta's globally-unique message id; the @unique constraint is the
+// dedupe key so retried inbound webhooks never create duplicate rows. Outbound rows
+// carry no waMessageId (null). This table is logging/plumbing only — it has no FK to
+// User or ContentCase yet (phone→user mapping arrives in a later phase).
+model WhatsAppMessage {
+  id          String   @id @default(cuid())
+  waMessageId String?  @unique           // Meta message id — idempotency key (inbound only)
+  phoneE164   String                     // sender (inbound) / recipient (outbound)
+  direction   String                     // "inbound" | "outbound"
+  kind        String                     // "inbound" | "echo" | "error"
+  body        String   @db.Text
+  raw         Json?                       // parsed Meta message object (inbound), for debugging
+  createdAt   DateTime @default(now())
+
+  @@index([phoneE164, createdAt])
+  @@map("whatsapp_messages")
+}
