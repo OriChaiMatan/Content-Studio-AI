@@ -27,6 +27,7 @@ import {
 } from './mockAiService';
 import { contentGeneratorService } from './contentGeneratorService';
 import { researchSynthesisService } from './researchSynthesisService';
+import { notificationService } from './notificationService';
 
 // ── Source selection ───────────────────────────────────────────────────────────
 
@@ -415,6 +416,17 @@ export const pipelineService = {
 
       return tx.contentCase.findUniqueOrThrow({ where: { id: caseId }, include: caseInclude });
     });
+
+    // Phase 13E — "Review Ready" notification. After the content_creation step
+    // commits (run completed, case in_review), fire a detached, best-effort
+    // WhatsApp notification. The service self-validates all conditions (incl.
+    // "current run produced >= 1 output") and eligibility, and never throws.
+    // Fire-and-forget so it adds no latency to /advance and can't fail the run.
+    if (stepName === 'content_creation') {
+      void notificationService
+        .onReviewReady(caseId, activeRun.id)
+        .catch(err => console.error('[notify] onReviewReady failed', err instanceof Error ? err.message : err));
+    }
 
     return { type: 'ok', case: serializeCase(updatedCase) } as const;
   },

@@ -13,8 +13,9 @@ import { whatsappConfig, canSend } from './whatsapp';
 // Behavior is unchanged from the previous in-service implementation.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Outbound row classification. 13A echo, errors, and 13C product messages.
-export type OutboundKind = 'echo' | 'error' | 'confirmation' | 'notice';
+// Outbound row classification. 13A echo, errors, 13C product messages, and the
+// 13E review-ready notification (logged distinctly).
+export type OutboundKind = 'echo' | 'error' | 'confirmation' | 'notice' | 'notification';
 
 // Outbound rows carry no waMessageId (we don't track Meta's returned id in 13A).
 async function logOutbound(to: string, body: string, kind: OutboundKind): Promise<void> {
@@ -62,7 +63,7 @@ export async function sendText(to: string, body: string, kind: OutboundKind = 'e
 // Phase 13C — product reply: send when canSend(), otherwise just log the intended
 // message (so dev without credentials still records the decision). Returns whether
 // it was actually delivered.
-export async function reply(to: string, body: string, kind: 'confirmation' | 'notice'): Promise<boolean> {
+export async function reply(to: string, body: string, kind: 'confirmation' | 'notice' | 'notification'): Promise<boolean> {
   if (canSend()) return sendText(to, body, kind);
   await logOutbound(to, body, kind).catch(() => {});
   return false;
