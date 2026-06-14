@@ -145,6 +145,8 @@ model User {
   // Phase 13B — optional 1:1 WhatsApp channel identity. Nullable so legacy/seed
   // users (and any future passwordless flows) remain valid without a number.
   whatsappIdentity        WhatsAppIdentity?
+  // Phase 13D — optional short-lived pending source awaiting a case selection.
+  whatsappPendingSource   WhatsAppPendingSource?
 
   @@map("users")
 }
@@ -412,4 +414,28 @@ model WhatsAppIdentity {
 
   @@index([phoneE164])
   @@map("whatsapp_identities")
+}
+
+// WhatsAppPendingSource — Phase 13D. A classified inbound message held while a
+// verified sender chooses which of their multiple active cases to file it in.
+// One pending per phone/user (unique phoneE164) → "new pending replaces previous"
+// is a single upsert. caseOptions is a STORED SNAPSHOT of the numbered list shown
+// (ordered [{ index, caseId, title }]); selection resolves against it, then the
+// chosen case is re-checked live (owned + exists + not completed) before ingest.
+// Lazy expiry only (no sweeper): expiresAt is checked on read.
+model WhatsAppPendingSource {
+  id          String   @id @default(cuid())
+  userId      String   @unique           // one pending per user (1 number per user)
+  phoneE164   String   @unique           // upsert key; matches the verified identity
+  sourceType  String                     // 'text' | 'url' (String — not SourceType; no pdf)
+  label       String
+  content     String   @db.Text
+  caseOptions Json                        // ordered [{ index, caseId, title }]
+  expiresAt   DateTime                    // now + 30 min
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_pending_sources")
 }
