@@ -156,6 +156,12 @@ export function ContentCasePipeline() {
   const refreshCase         = useContentCasesStore(s => s.refreshCase);
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting]     = useState(false);
+  // Phase 14B fix — bootstrap-polling flag. /pipeline/run returns 202 before the
+  // detached startRun has committed, so the first refresh can see old state and
+  // inProgress would never flip → polling never starts. We set this on a successful
+  // launch and poll regardless of inProgress until the run becomes visible (handoff)
+  // or a safety timeout fires.
+  const [runnerActive, setRunnerActive] = useState(false);
   // Output language chosen per run (Phase 8.6). null = use the case default.
   const [outputLanguage, setOutputLanguage] = useState<'en' | 'he' | null>(null);
 
@@ -166,22 +172,49 @@ export function ContentCasePipeline() {
   const usedSources   = caseItem?.sources.filter(s => s.status === 'used') ?? [];
   const hasNewSources = newSources.length > 0;
 
-  // Fetch the case if not in store (e.g. direct URL navigation or page refresh)
+  // On mount (per case id): load if missing, and force a fresh fetch if already in the
+  // store. The force-refresh ensures server-side source changes (e.g. WhatsApp ingestion)
+  // are reflected when entering the pipeline page, since fetchCaseById no-ops when loaded.
   useEffect(() => {
-    if (!caseItem && id) fetchCaseById(id);
-  }, [id, caseItem, fetchCaseById]);
+    if (!id) return;
+    void fetchCaseById(id);   // loads if missing (no-op if already present)
+    void refreshCase(id);     // force-refreshes if present (no-op if missing)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   // Phase 14B — the SERVER-SIDE runner advances the pipeline; the browser only polls.
-  // While a run is in progress (a step is running, or the case is in an in-progress
-  // status), refresh the case every 3s so progress reflects server state. Stops once
-  // terminal (in_review / all complete / error step) and on unmount. The UI no longer
-  // calls advancePipelineStep.
+  // The UI no longer calls advancePipelineStep.
   const inProgress = !!runningStep || ['research', 'fact_check', 'generating'].includes(caseItem?.status ?? '');
+
+  // Poll while a run is in progress OR while bootstrapping a freshly-launched run.
+  // Refresh immediately when polling starts, then every 3s. Stops on unmount and when
+  // the run is neither in progress nor bootstrapping (terminal / never started).
+  const polling = runnerActive || inProgress;
   useEffect(() => {
-    if (!id || !inProgress) return;
+    if (!id || !polling) return;
+    void refreshCase(id);                                   // immediate
     const t = setInterval(() => { void refreshCase(id); }, 3000);
     return () => clearInterval(t);
-  }, [id, inProgress, refreshCase]);
+  }, [id, polling, refreshCase]);
+
+  // Handoff: once the launched run is visibly in progress, inProgress drives polling,
+  // so clear the bootstrap flag.
+  useEffect(() => {
+    if (runnerActive && inProgress) setRunnerActive(false);
+  }, [runnerActive, inProgress]);
+
+  // Safety: if a launched run never becomes visible (e.g. startRun raced/failed),
+  // stop bootstrap polling after 20s so we don't poll forever.
+  useEffect(() => {
+    if (!runnerActive) return;
+    const t = setTimeout(() => setRunnerActive(false), 20000);
+    return () => clearTimeout(t);
+  }, [runnerActive]);
+
+  // True while a launch is in flight or bootstrapping (before the run is visibly
+  // running). Keeps the Generate buttons in a loading/disabled state so the UI never
+  // looks static between the click and the first 'research running' refresh.
+  const isLaunching = starting || (runnerActive && !inProgress);
 
   if (!caseItem) {
     return (
@@ -199,11 +232,14 @@ export function ContentCasePipeline() {
   const effectiveLang: 'en' | 'he' = outputLanguage ?? (c.language === 'he' ? 'he' : 'en');
 
   async function handleStart() {
-    if (!id || starting) return;
+    if (!id || starting || runnerActive) return;
     setStartError(null);
     setStarting(true);
     try {
       await runPipeline(id, effectiveLang);
+      // 202 accepted — begin bootstrap polling immediately, even though the detached
+      // runner may not have flipped the case to 'research' in the DB yet.
+      setRunnerActive(true);
     } catch (err) {
       if (err instanceof ApiError) {
         setStartError(err.message);
@@ -243,8 +279,11 @@ export function ContentCasePipeline() {
           </div>
 
           {/* Source selection info */}
-          {run ? (
-            // Active or completed run: show which sources were selected
+          {run && inProgress ? (
+            // ACTIVE run only: show the run's frozen snapshot (what this run is
+            // processing). When no run is active (idle/completed), fall through to the
+            // live source-status counts below so the banner reflects what the NEXT run
+            // will select (sources added since the last run are included).
             <div className="flex items-start gap-3 rounded-xl p-4 mb-6 border bg-primary-fixed/20 border-primary/20">
               <Icon name="article" className="text-primary shrink-0 mt-0.5" />
               <div className="flex-1">
@@ -359,11 +398,11 @@ export function ContentCasePipeline() {
               <Button
                 fullWidth
                 onClick={handleStart}
-                disabled={!hasNewSources || starting}
-                loading={starting}
+                disabled={!hasNewSources || isLaunching}
+                loading={isLaunching}
               >
                 <Icon name="play_arrow" size="sm" />
-                {starting ? 'Starting…' : 'Start Pipeline'}
+                {isLaunching ? 'Starting…' : 'Start Pipeline'}
               </Button>
             )}
 
@@ -414,9 +453,9 @@ export function ContentCasePipeline() {
                   </div>
                 </div>
                 {hasNewSources && (
-                  <Button variant="secondary" onClick={handleStart} disabled={starting} loading={starting}>
+                  <Button variant="secondary" onClick={handleStart} disabled={isLaunching} loading={isLaunching}>
                     <Icon name="refresh" size="sm" />
-                    {starting ? 'Starting…' : 'Retry'}
+                    {isLaunching ? 'Starting…' : 'Retry'}
                   </Button>
                 )}
               </div>
@@ -428,11 +467,11 @@ export function ContentCasePipeline() {
                 variant="secondary"
                 fullWidth
                 onClick={handleStart}
-                disabled={starting}
-                loading={starting}
+                disabled={isLaunching}
+                loading={isLaunching}
               >
                 <Icon name="autorenew" size="sm" />
-                {starting ? 'Starting new run…' : 'Generate New Content'}
+                {isLaunching ? 'Starting new run…' : 'Generate New Content'}
               </Button>
             )}
 
