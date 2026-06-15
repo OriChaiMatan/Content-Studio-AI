@@ -46,6 +46,10 @@ interface ContentCasesState {
   startPipeline: (caseId: string, outputLanguage?: 'en' | 'he') => Promise<void>;
   // advancePipelineStep: advances the active run one step (called by the 3s timer).
   advancePipelineStep: (caseId: string) => Promise<void>;
+  // runPipeline (Phase 14B): start the SERVER-SIDE runner — POST /pipeline/run returns
+  // 202 and the backend drives the run to completion. The UI then polls via refreshCase;
+  // it never calls advancePipelineStep for this path. Re-throws ApiError (409/400/404).
+  runPipeline: (caseId: string, outputLanguage?: 'en' | 'he') => Promise<void>;
 
   // ── Wizard ─────────────────────────────────────────────────────────────────
   openWizard: () => void;
@@ -398,6 +402,17 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
       // Network error during advance — the timer will retry naturally on next fire.
       // ApiError is unlikely here (no user input involved), so no need to re-throw.
     }
+  },
+
+  runPipeline: async (caseId, outputLanguage) => {
+    // 202 Accepted — the server-side runner is now driving the run. Re-throw ApiError
+    // (already_running 409 / no_new_sources 400 / 404) so the page can surface it.
+    await api.post<{ accepted: boolean; caseId: string }>(
+      `/cases/${caseId}/pipeline/run`,
+      outputLanguage ? { outputLanguage } : {},
+    );
+    // Reflect "research running" immediately; polling (refreshCase) takes over from here.
+    await get().refreshCase(caseId);
   },
 
   openWizard:  () => set({ wizardOpen: true }),

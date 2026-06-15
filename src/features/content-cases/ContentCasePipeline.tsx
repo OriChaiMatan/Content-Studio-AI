@@ -152,8 +152,8 @@ export function ContentCasePipeline() {
   const caseItem            = useContentCasesStore(s => s.getCaseById(id ?? ''));
   const loading             = useContentCasesStore(s => s.loading);
   const fetchCaseById       = useContentCasesStore(s => s.fetchCaseById);
-  const startPipeline       = useContentCasesStore(s => s.startPipeline);
-  const advancePipelineStep = useContentCasesStore(s => s.advancePipelineStep);
+  const runPipeline         = useContentCasesStore(s => s.runPipeline);
+  const refreshCase         = useContentCasesStore(s => s.refreshCase);
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting]     = useState(false);
   // Output language chosen per run (Phase 8.6). null = use the case default.
@@ -171,14 +171,17 @@ export function ContentCasePipeline() {
     if (!caseItem && id) fetchCaseById(id);
   }, [id, caseItem, fetchCaseById]);
 
-  // Auto-advance: when a step is running, call advancePipelineStep after 3s.
-  // Depends on runningStep?.id so it re-fires each time a NEW step becomes active.
+  // Phase 14B — the SERVER-SIDE runner advances the pipeline; the browser only polls.
+  // While a run is in progress (a step is running, or the case is in an in-progress
+  // status), refresh the case every 3s so progress reflects server state. Stops once
+  // terminal (in_review / all complete / error step) and on unmount. The UI no longer
+  // calls advancePipelineStep.
+  const inProgress = !!runningStep || ['research', 'fact_check', 'generating'].includes(caseItem?.status ?? '');
   useEffect(() => {
-    if (!runningStep || !id) return;
-    const t = setTimeout(() => advancePipelineStep(id), 3000);
-    return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runningStep?.id, id]);
+    if (!id || !inProgress) return;
+    const t = setInterval(() => { void refreshCase(id); }, 3000);
+    return () => clearInterval(t);
+  }, [id, inProgress, refreshCase]);
 
   if (!caseItem) {
     return (
@@ -200,7 +203,7 @@ export function ContentCasePipeline() {
     setStartError(null);
     setStarting(true);
     try {
-      await startPipeline(id, effectiveLang);
+      await runPipeline(id, effectiveLang);
     } catch (err) {
       if (err instanceof ApiError) {
         setStartError(err.message);

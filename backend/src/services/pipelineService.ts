@@ -90,6 +90,23 @@ export const pipelineService = {
     };
   },
 
+  // ── Pre-flight (Phase 14B) ───────────────────────────────────────────────────
+  // Read-only guard mirroring startRun's checks, so POST /pipeline/run can return a
+  // synchronous 404/409/400 before detaching the server-side runner. The runner's
+  // own startRun remains the authoritative guard (this is best-effort UX; a race is
+  // harmless — startRun no-ops on already_running / no_new_sources).
+  async preflight(caseId: string): Promise<{ ok: true } | { ok: false; code: 'case_not_found' | 'already_running' | 'no_new_sources' }> {
+    const c = await prisma.contentCase.findUnique({
+      where: { id: caseId },
+      include: { sources: true, pipelineRuns: { where: { status: 'running' }, take: 1 } },
+    });
+    if (!c) return { ok: false, code: 'case_not_found' };
+    if (c.pipelineRuns.length > 0) return { ok: false, code: 'already_running' };
+    const { primary } = partitionSources(c.sources);
+    if (primary.length === 0) return { ok: false, code: 'no_new_sources' };
+    return { ok: true };
+  },
+
   // ── Start a new pipeline run ─────────────────────────────────────────────────
 
   async startRun(caseId: string, outputLanguage?: string) {

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { pipelineService } from '../../services/pipelineService';
+import { pipelineRunnerService } from '../../services/pipelineRunnerService';
 import { requireCaseOwnership } from '../middleware/auth';
 
 const router = Router();
@@ -23,6 +24,51 @@ router.get('/:id/pipeline', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /api/cases/:id/pipeline]', err);
     res.status(500).json({ error: 'Failed to get pipeline status' });
+  }
+});
+
+// ── POST /api/cases/:id/pipeline/run (Phase 14B) ─────────────────────────────
+// Start the SERVER-SIDE runner for this case, detached, and return 202 immediately.
+// The pipeline then runs start→advance×3 to completion in-process with no dependency
+// on the browser (the client polls GET /cases/:id for progress). A synchronous
+// pre-flight gives an immediate 404/409/400; the detached runner is best-effort and
+// never crashes the server. Ownership is enforced by router.param above.
+//
+// The authoritative "already running" guard is the DB: preflight (and startRun
+// inside the runner) reject a new run while one is 'running'. We deliberately do NOT
+// keep an in-process lock — it produced spurious 409s when its lifetime drifted from
+// the DB state (a quick second click, or a stale entry after an aborted run), while
+// adding nothing over the DB guard: a redundant second runner simply no-ops via
+// startRun's already_running. Removing it makes second+ generations reliable.
+router.post('/:id/pipeline/run', async (req: Request, res: Response) => {
+  const caseId = req.params.id;
+  const outputLanguage = typeof req.body?.outputLanguage === 'string' ? req.body.outputLanguage : undefined;
+  try {
+    const pre = await pipelineService.preflight(caseId);
+    if (!pre.ok) {
+      const statusCode =
+        pre.code === 'case_not_found'  ? 404 :
+        pre.code === 'already_running' ? 409 :
+        pre.code === 'no_new_sources'  ? 400 : 500;
+      res.status(statusCode).json({ error: pre.code });
+      return;
+    }
+
+    // Detach the runner — do NOT await. runToCompletion never throws; .catch is a
+    // backstop so an unexpected rejection can never crash the server.
+    void pipelineRunnerService
+      .runToCompletion(caseId, { outputLanguage })
+      .then(result => {
+        if (result.status !== 'completed') {
+          console.log('[POST /pipeline/run] detached runner finished', JSON.stringify({ caseId, status: result.status, code: result.code }));
+        }
+      })
+      .catch(err => console.error('[POST /pipeline/run] detached runner error', caseId, err instanceof Error ? err.message : err));
+
+    res.status(202).json({ accepted: true, caseId });
+  } catch (err) {
+    console.error('[POST /api/cases/:id/pipeline/run]', err);
+    res.status(500).json({ error: 'Failed to start pipeline run' });
   }
 });
 
