@@ -5,6 +5,7 @@ import { CaseStatusBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
+import { useLiveCase } from './useLiveCase';
 import { ApiError } from '../../lib/api';
 import type { PipelineStep } from '../../types';
 
@@ -149,11 +150,10 @@ function ConnectorLine({ done }: { done: boolean }) {
 export function ContentCasePipeline() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const caseItem            = useContentCasesStore(s => s.getCaseById(id ?? ''));
   const loading             = useContentCasesStore(s => s.loading);
-  const fetchCaseById       = useContentCasesStore(s => s.fetchCaseById);
   const runPipeline         = useContentCasesStore(s => s.runPipeline);
-  const refreshCase         = useContentCasesStore(s => s.refreshCase);
+  // Live, auto-refreshing case (shared with the case detail page).
+  const view                = useLiveCase(id);
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting]     = useState(false);
   // Phase 14B fix — bootstrap-polling flag. /pipeline/run returns 202 before the
@@ -165,40 +165,19 @@ export function ContentCasePipeline() {
   // Output language chosen per run (Phase 8.6). null = use the case default.
   const [outputLanguage, setOutputLanguage] = useState<'en' | 'he' | null>(null);
 
-  const runningStep   = caseItem?.pipeline.find(s => s.status === 'running');
-  const allDone       = caseItem?.pipeline.every(s => s.status === 'completed');
-  const hasErrorStep  = caseItem?.pipeline.some(s => s.status === 'error') ?? false;
-  const newSources    = caseItem?.sources.filter(s => s.status === 'new') ?? [];
-  const usedSources   = caseItem?.sources.filter(s => s.status === 'used') ?? [];
+  const runningStep   = view?.pipeline.find(s => s.status === 'running');
+  const allDone       = view?.pipeline.every(s => s.status === 'completed');
+  const hasErrorStep  = view?.pipeline.some(s => s.status === 'error') ?? false;
+  const newSources    = view?.sources.filter(s => s.status === 'new') ?? [];
+  const usedSources   = view?.sources.filter(s => s.status === 'used') ?? [];
   const hasNewSources = newSources.length > 0;
 
-  // On mount (per case id): load if missing, and force a fresh fetch if already in the
-  // store. The force-refresh ensures server-side source changes (e.g. WhatsApp ingestion)
-  // are reflected when entering the pipeline page, since fetchCaseById no-ops when loaded.
-  useEffect(() => {
-    if (!id) return;
-    void fetchCaseById(id);   // loads if missing (no-op if already present)
-    void refreshCase(id);     // force-refreshes if present (no-op if missing)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  // Phase 14B — the SERVER-SIDE runner advances the pipeline; the browser only polls
+  // (via useLiveCase). The UI no longer calls advancePipelineStep.
+  const inProgress = !!runningStep || ['research', 'fact_check', 'generating'].includes(view?.status ?? '');
 
-  // Phase 14B — the SERVER-SIDE runner advances the pipeline; the browser only polls.
-  // The UI no longer calls advancePipelineStep.
-  const inProgress = !!runningStep || ['research', 'fact_check', 'generating'].includes(caseItem?.status ?? '');
-
-  // Poll while a run is in progress OR while bootstrapping a freshly-launched run.
-  // Refresh immediately when polling starts, then every 3s. Stops on unmount and when
-  // the run is neither in progress nor bootstrapping (terminal / never started).
-  const polling = runnerActive || inProgress;
-  useEffect(() => {
-    if (!id || !polling) return;
-    void refreshCase(id);                                   // immediate
-    const t = setInterval(() => { void refreshCase(id); }, 3000);
-    return () => clearInterval(t);
-  }, [id, polling, refreshCase]);
-
-  // Handoff: once the launched run is visibly in progress, inProgress drives polling,
-  // so clear the bootstrap flag.
+  // Handoff: once a locally-launched run is visibly in progress, clear the bootstrap
+  // flag (it only drives the "Starting…" button UX, not polling anymore).
   useEffect(() => {
     if (runnerActive && inProgress) setRunnerActive(false);
   }, [runnerActive, inProgress]);
@@ -216,7 +195,7 @@ export function ContentCasePipeline() {
   // looks static between the click and the first 'research running' refresh.
   const isLaunching = starting || (runnerActive && !inProgress);
 
-  if (!caseItem) {
+  if (!view) {
     return (
       <div className="flex-1 flex items-center justify-center gap-3 text-on-surface-variant">
         {loading
@@ -226,7 +205,7 @@ export function ContentCasePipeline() {
     );
   }
 
-  const c = caseItem;
+  const c = view;
 
   // Default to the case language for backward compatibility, else English.
   const effectiveLang: 'en' | 'he' = outputLanguage ?? (c.language === 'he' ? 'he' : 'en');

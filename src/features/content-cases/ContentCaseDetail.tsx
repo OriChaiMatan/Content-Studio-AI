@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
 import { CaseStatusBadge, PlatformBadge, OutputStatusBadge } from '../../components/ui/Badge';
@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { Card } from '../../components/ui/Card';
 import { SourcesPanel } from './SourcesPanel';
+import { useLiveCase } from './useLiveCase';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { api } from '../../lib/api';
 import type { ContentGoal, ContentStyle, ContentTarget, Language, ContentCase } from '../../types';
@@ -41,11 +42,13 @@ export function ContentCaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  // Store selectors
-  const caseItem      = useContentCasesStore(s => s.getCaseById(id ?? ''));
+  // Live, auto-refreshing case (same pattern as the pipeline page — polls GET
+  // /cases/:id every 5s so scheduled runs, step progress, completion, and new
+  // WhatsApp sources show without a manual refresh). The hook also seeds the store
+  // on mount, so the previous one-shot fetchCaseById effect is no longer needed.
+  const caseItem      = useLiveCase(id);
   const loading       = useContentCasesStore(s => s.loading);
   const refreshCase   = useContentCasesStore(s => s.refreshCase);
-  const fetchCaseById = useContentCasesStore(s => s.fetchCaseById);
   const deleteCase    = useContentCasesStore(s => s.deleteCase);
 
   // Local state
@@ -54,11 +57,6 @@ export function ContentCaseDetail() {
   const [confirmDelete,   setConfirmDelete]   = useState(false);
   const [deleting,        setDeleting]        = useState(false);
   const [deleteError,     setDeleteError]     = useState<string | null>(null);
-
-  // Effects
-  useEffect(() => {
-    if (!caseItem && id) fetchCaseById(id);
-  }, [id, caseItem, fetchCaseById]);
 
   // ── Early return — safe now that all hooks are above ─────────────────────────
   if (!caseItem) {
