@@ -3,6 +3,7 @@ import app from './app';
 import { prisma } from './lib/prisma';
 import { contentGenerationConfig } from './lib/anthropic';
 import { schedulerService } from './services/schedulerService';
+import { pipelineRunReaperService } from './services/pipelineRunReaperService';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
@@ -27,12 +28,21 @@ const server = app.listen(PORT, () => {
   } catch (err) {
     console.error('[scheduler] failed to start', err instanceof Error ? err.message : err);
   }
+
+  // Phase 14D — start the always-on stuck-run reaper (independent of the scheduler;
+  // no-op unless REAPER_ENABLED!=false). Guarded so it can never crash startup.
+  try {
+    pipelineRunReaperService.start();
+  } catch (err) {
+    console.error('[reaper] failed to start', err instanceof Error ? err.message : err);
+  }
 });
 
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
 async function shutdown(signal: string) {
   console.log(`\nReceived ${signal}. Shutting down gracefully...`);
   schedulerService.stop();
+  pipelineRunReaperService.stop();
   server.close(async () => {
     await prisma.$disconnect();
     console.log('Prisma disconnected. Bye.');

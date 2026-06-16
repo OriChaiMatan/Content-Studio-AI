@@ -5,12 +5,14 @@ import { pipelineRunnerService } from './pipelineRunnerService';
 // Lightweight in-process scheduler (Phase 14C)
 //
 // Default OFF (SCHEDULER_ENABLED). When on, ticks every SCHEDULER_INTERVAL_MINUTES:
-//   1. reap stuck runs (status='running' older than SCHEDULER_STUCK_RUN_MINUTES)
-//   2. find non-manual, active cases whose scheduled slot is due NOW (in
+//   1. find non-manual, active cases whose scheduled slot is due NOW (in
 //      SCHEDULER_TIMEZONE) and not already processed
-//   3. consume the slot (lastScheduledSlotKey) and, if eligible (>=1 new source,
+//   2. consume the slot (lastScheduledSlotKey) and, if eligible (>=1 new source,
 //      no running run), launch pipelineRunnerService.runToCompletion detached with
 //      triggeredBy='schedule'.
+//
+// Stuck-run reaping is NOT owned here (Phase 14D) — see pipelineRunReaperService,
+// which runs always-on, independent of SCHEDULER_ENABLED.
 //
 // No cron/BullMQ/Redis/workers. No pipeline logic duplicated. Never backfills missed
 // slots (the due window is exactly one tick interval). The 13E review-ready WhatsApp
@@ -21,7 +23,6 @@ export const schedulerConfig = {
   enabled:         process.env.SCHEDULER_ENABLED === 'true',
   intervalMinutes: Math.max(1, parseInt(process.env.SCHEDULER_INTERVAL_MINUTES ?? '15', 10)),
   timezone:        process.env.SCHEDULER_TIMEZONE ?? 'Asia/Jerusalem',
-  stuckRunMinutes: Math.max(1, parseInt(process.env.SCHEDULER_STUCK_RUN_MINUTES ?? '30', 10)),
 } as const;
 
 // ── Pure time helpers (exported for testing) ──────────────────────────────────
@@ -100,19 +101,8 @@ export function isDue(c: SchedulableCase, parts: LocalNowParts, intervalMinutes:
   return false;
 }
 
-// ── Stuck-run reaper (exported for testing) ───────────────────────────────────
-// Conservative: only flips status='running' runs older than the threshold to
-// 'failed'. Never touches completed/failed runs; leaves case status/steps as-is
-// (the next startRun resets them). Unblocks the case's already_running guard.
-export async function reapStuckRuns(thresholdMinutes: number): Promise<number> {
-  const cutoff = new Date(Date.now() - thresholdMinutes * 60_000);
-  const res = await prisma.pipelineRun.updateMany({
-    where: { status: 'running', startedAt: { lt: cutoff } },
-    data:  { status: 'failed', completedAt: new Date(), errorMessage: 'Run exceeded max duration; marked failed by scheduler reaper.' },
-  });
-  if (res.count > 0) console.log(`[scheduler] reaper marked ${res.count} stuck run(s) failed (>${thresholdMinutes}m)`);
-  return res.count;
-}
+// Stuck-run reaping is no longer owned by the scheduler (Phase 14D) — it lives in
+// pipelineRunReaperService and runs always-on, independent of SCHEDULER_ENABLED.
 
 // ── Candidate query ───────────────────────────────────────────────────────────
 async function findCandidates() {
@@ -134,15 +124,14 @@ async function findCandidates() {
 // ── Tick (exported for testing) ───────────────────────────────────────────────
 let ticking = false;
 
-export async function tick(): Promise<{ due: number; launched: number; reaped: number }> {
+export async function tick(): Promise<{ due: number; launched: number }> {
   if (ticking) {
     console.log('[scheduler] tick skipped — previous tick still running');
-    return { due: 0, launched: 0, reaped: 0 };
+    return { due: 0, launched: 0 };
   }
   ticking = true;
-  let due = 0, launched = 0, reaped = 0;
+  let due = 0, launched = 0;
   try {
-    reaped = await reapStuckRuns(schedulerConfig.stuckRunMinutes);
     const parts = localNowParts(schedulerConfig.timezone);
     const candidates = await findCandidates();
 
@@ -179,7 +168,7 @@ export async function tick(): Promise<{ due: number; launched: number; reaped: n
   } finally {
     ticking = false;
   }
-  return { due, launched, reaped };
+  return { due, launched };
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -192,7 +181,7 @@ export const schedulerService = {
       return;
     }
     if (timer) return;   // already started
-    console.log(`[scheduler] started — every ${schedulerConfig.intervalMinutes}m, tz=${schedulerConfig.timezone}, stuckRun=${schedulerConfig.stuckRunMinutes}m`);
+    console.log(`[scheduler] started — every ${schedulerConfig.intervalMinutes}m, tz=${schedulerConfig.timezone}`);
     // Immediate tick (catches a slot near boot; idempotent, never backfills past slots).
     void tick();
     timer = setInterval(() => { void tick(); }, schedulerConfig.intervalMinutes * 60_000);
