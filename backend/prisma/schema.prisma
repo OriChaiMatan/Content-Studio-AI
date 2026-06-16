@@ -173,6 +173,12 @@ model ContentCase {
   scheduleDayOfWeek  Int?              // 0–6 for weekly; null otherwise
   scheduleDayOfMonth Int?              // 1–31 for monthly; null otherwise
 
+  // Phase 14C — scheduler idempotency. The unique key of the scheduled slot the
+  // scheduler last processed for this case, e.g. "2026-06-16|daily|14:30". Set once
+  // per due slot (consume-on-due) so a slot fires at most once even across overlapping
+  // ticks. Null until the scheduler first processes a slot for this case.
+  lastScheduledSlotKey String?
+
   // ── Simplified wizard fields ────────────────────────────────────────────────
   // Collected in the 3-step wizard. Old cases default to first option / empty.
   contentGoal    ContentGoal  @default(build_authority)

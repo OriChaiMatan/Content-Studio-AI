@@ -109,7 +109,7 @@ export const pipelineService = {
 
   // ── Start a new pipeline run ─────────────────────────────────────────────────
 
-  async startRun(caseId: string, outputLanguage?: string) {
+  async startRun(caseId: string, outputLanguage?: string, triggeredBy: string = 'manual') {
     const existing = await prisma.contentCase.findUnique({
       where: { id: caseId },
       include: {
@@ -145,7 +145,7 @@ export const pipelineService = {
       await tx.pipelineRun.create({
         data: {
           contentCaseId:   caseId,
-          triggeredBy:     'manual',
+          triggeredBy,
           status:          'running',
           outputLanguage:  resolvedLanguage,
           primarySourceIds,

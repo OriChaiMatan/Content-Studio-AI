@@ -2,6 +2,7 @@ import 'dotenv/config';
 import app from './app';
 import { prisma } from './lib/prisma';
 import { contentGenerationConfig } from './lib/anthropic';
+import { schedulerService } from './services/schedulerService';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
@@ -18,11 +19,20 @@ const server = app.listen(PORT, () => {
     apiKeyPresent: (process.env.ANTHROPIC_API_KEY ?? '').length > 0,
     model: contentGenerationConfig.model,
   }));
+
+  // Phase 14C — start the in-process scheduler (no-op unless SCHEDULER_ENABLED=true).
+  // Guarded so a scheduler error can never crash server startup.
+  try {
+    schedulerService.start();
+  } catch (err) {
+    console.error('[scheduler] failed to start', err instanceof Error ? err.message : err);
+  }
 });
 
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
 async function shutdown(signal: string) {
   console.log(`\nReceived ${signal}. Shutting down gracefully...`);
+  schedulerService.stop();
   server.close(async () => {
     await prisma.$disconnect();
     console.log('Prisma disconnected. Bye.');

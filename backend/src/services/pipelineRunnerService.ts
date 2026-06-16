@@ -19,6 +19,7 @@ import { PIPELINE_STEP_ORDER } from '../schemas/pipelineSchemas';
 export interface RunToCompletionOptions {
   outputLanguage?: string;   // 'en' | 'he' — forwarded to startRun (validated there)
   maxAdvances?: number;      // loop guard; defaults to PIPELINE_STEP_ORDER.length + 1
+  triggeredBy?: string;      // 'manual' (default in startRun) | 'schedule' (Phase 14C)
 }
 
 export interface RunResult {
@@ -70,7 +71,7 @@ export const pipelineRunnerService = {
 
     try {
       // ── Start the run (snapshots sources; sets research → running) ────────────
-      const start = await pipelineService.startRun(caseId, options.outputLanguage);
+      const start = await pipelineService.startRun(caseId, options.outputLanguage, options.triggeredBy);
       if (start.type === 'error') {
         // case_not_found | already_running | no_new_sources — no run created.
         return finish({ status: 'not_started', runId: null, stepsAdvanced: 0, code: start.code, message: start.message });
