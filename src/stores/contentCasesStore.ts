@@ -22,6 +22,9 @@ interface ContentCasesState {
   updateCase: (id: string, partial: Partial<ContentCase>) => void;
   deleteCase: (id: string) => Promise<void>;  // calls DELETE /api/cases/:id
   getCaseById: (id: string) => ContentCase | undefined;
+  // Replace (or add) a case in the store from an already-fetched object — used by
+  // useLiveCase to keep the global store fresh alongside its local copy.
+  upsertCase: (updatedCase: ContentCase) => void;
 
   // ── Source management — API-first, network-error fallback ───────────────────
   addSource: (caseId: string, source: NewSourceInput) => Promise<ContentSource>;
@@ -102,6 +105,13 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
   // ── Case CRUD ────────────────────────────────────────────────────────────────
 
   getCaseById: (id) => get().cases.find(c => c.id === id),
+
+  upsertCase: (updatedCase) =>
+    set(state => ({
+      cases: state.cases.some(c => c.id === updatedCase.id)
+        ? state.cases.map(c => c.id === updatedCase.id ? updatedCase : c)
+        : [...state.cases, updatedCase],
+    })),
 
   createCase: async (data: WizardFormData) => {
     try {

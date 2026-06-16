@@ -17,6 +17,7 @@ import type { ContentCase } from '../../types';
 export function useLiveCase(id: string | undefined): ContentCase | undefined {
   const caseItem      = useContentCasesStore(s => s.getCaseById(id ?? ''));
   const fetchCaseById = useContentCasesStore(s => s.fetchCaseById);
+  const upsertCase    = useContentCasesStore(s => s.upsertCase);
   const [liveCase, setLiveCase] = useState<ContentCase | null>(null);
 
   // Seed the store if this case isn't loaded yet (direct URL / refresh / navigation).
@@ -25,15 +26,19 @@ export function useLiveCase(id: string | undefined): ContentCase | undefined {
     void fetchCaseById(id);
   }, [id, fetchCaseById]);
 
-  // Always-on direct poll into local state: immediate, then every 5s. Cleared on
-  // unmount / id change.
+  // Always-on direct poll: immediate, then every 5s. Each successful fetch updates BOTH
+  // local state (guaranteed re-render of this page) AND the global store (so other case
+  // pages — detail / pipeline / review / lists — render fresh on their first paint,
+  // avoiding stale snapshots when navigating between them). Cleared on unmount / id change.
   useEffect(() => {
     if (!id) return;
     let active = true;
     const fetchLive = async () => {
       try {
         const c = await api.get<ContentCase>(`/cases/${id}`);
-        if (active) setLiveCase(c);
+        if (!active) return;
+        setLiveCase(c);
+        upsertCase(c);
       } catch {
         // Keep the last good copy; the next tick retries.
       }
@@ -41,7 +46,7 @@ export function useLiveCase(id: string | undefined): ContentCase | undefined {
     void fetchLive();
     const t = setInterval(fetchLive, 5000);
     return () => { active = false; clearInterval(t); };
-  }, [id]);
+  }, [id, upsertCase]);
 
   return liveCase ?? caseItem;
 }

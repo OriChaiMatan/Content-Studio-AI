@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { useLibraryStore } from '../../stores/libraryStore';
+import { useLiveCase } from '../content-cases/useLiveCase';
 import type { Platform, ContentOutput } from '../../types';
 
 const PLATFORM_ORDER: Platform[] = ['linkedin', 'facebook', 'instagram', 'newsletter', 'podcast', 'image_prompt'];
@@ -382,22 +383,15 @@ export function ContentCaseReview() {
   // Used when navigating from the Library to view a specific historical run.
   const runIdParam = searchParams.get('runId');
 
-  const caseItem      = useContentCasesStore(s => s.getCaseById(id ?? ''));
-  const loading       = useContentCasesStore(s => s.loading);
-  const fetchCaseById = useContentCasesStore(s => s.fetchCaseById);
-  const refreshCase   = useContentCasesStore(s => s.refreshCase);
+  // Live, auto-refreshing case (same pattern as the detail/pipeline pages): polls
+  // GET /cases/:id immediately on mount and every 5s into local state. This fixes the
+  // regression where the review page read a stale store snapshot (no outputs) when the
+  // case was already loaded, so a just-completed run showed "No outputs generated yet"
+  // until a manual refresh. The unconditional mount fetch also covers the historical
+  // ?runId= case (previously a conditional refresh).
+  const caseItem = useLiveCase(id);
+  const loading  = useContentCasesStore(s => s.loading);
   const [activePlatform, setActivePlatform] = useState<Platform>('linkedin');
-
-  // When arriving from Library with a specific runId, ensure the full case is loaded.
-  useEffect(() => {
-    if (!caseItem && id) {
-      fetchCaseById(id);
-    } else if (caseItem && id && runIdParam) {
-      // Force refresh so approved outputs from older runs are present in the store
-      refreshCase(id);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, runIdParam]);
 
   if (!caseItem) {
     return (
