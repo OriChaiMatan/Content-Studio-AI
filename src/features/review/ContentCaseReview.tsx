@@ -146,11 +146,12 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
   const [regenerating, setRegenerating] = useState(false);
   const [actionError, setActionError]   = useState<string | null>(null);
 
-  const updateOutputStatus = useContentCasesStore(s => s.updateOutputStatus);
-  const updateOutputBody   = useContentCasesStore(s => s.updateOutputBody);
-  const regenerateOutput   = useContentCasesStore(s => s.regenerateOutput);
-  const refreshCase        = useContentCasesStore(s => s.refreshCase);
-  const fetchLibrary       = useLibraryStore(s => s.fetchLibrary);
+  const updateOutputStatus   = useContentCasesStore(s => s.updateOutputStatus);
+  const setOutputStatusLocal = useContentCasesStore(s => s.setOutputStatusLocal);
+  const updateOutputBody     = useContentCasesStore(s => s.updateOutputBody);
+  const regenerateOutput     = useContentCasesStore(s => s.regenerateOutput);
+  const refreshCase          = useContentCasesStore(s => s.refreshCase);
+  const fetchLibrary         = useLibraryStore(s => s.fetchLibrary);
 
   // Keep local edit state in sync when the store updates (e.g. after Regenerate)
   useEffect(() => {
@@ -159,14 +160,18 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
   }, [output.body]);
 
   async function handleApprove() {
-    if (approving) return;
+    if (approving || output.status === 'approved') return;
+    const prev = output.status;
     setApproving(true);
     setActionError(null);
+    setOutputStatusLocal(caseId, output.id, 'approved');   // optimistic — instant
     try {
       await updateOutputStatus(caseId, output.id, 'approved');
-      await refreshCase(caseId);
-      await fetchLibrary();
+      // Background — do NOT block the button on these (approval updates sources + library).
+      void refreshCase(caseId);
+      void fetchLibrary();
     } catch (err) {
+      setOutputStatusLocal(caseId, output.id, prev);        // rollback
       setActionError(err instanceof Error ? err.message : 'Unable to approve. Please try again.');
     } finally {
       setApproving(false);
@@ -174,12 +179,15 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
   }
 
   async function handleReject() {
-    if (rejecting) return;
+    if (rejecting || output.status === 'rejected') return;
+    const prev = output.status;
     setRejecting(true);
     setActionError(null);
+    setOutputStatusLocal(caseId, output.id, 'rejected');   // optimistic — instant
     try {
       await updateOutputStatus(caseId, output.id, 'rejected');
     } catch (err) {
+      setOutputStatusLocal(caseId, output.id, prev);        // rollback
       setActionError(err instanceof Error ? err.message : 'Unable to reject. Please try again.');
     } finally {
       setRejecting(false);

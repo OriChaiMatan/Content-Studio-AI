@@ -35,6 +35,9 @@ interface ContentCasesState {
   deleteSource: (caseId: string, sourceId: string) => Promise<void>;
 
   // ── Output actions — API-backed ────────────────────────────────────────────
+  // Local-only optimistic status set (no API) — used by the review page so Approve/
+  // Reject feel instant; the API call + rollback-on-failure are driven by the caller.
+  setOutputStatusLocal: (caseId: string, outputId: string, status: OutputStatus) => void;
   updateOutputStatus: (caseId: string, outputId: string, status: OutputStatus) => Promise<ContentOutput>;
   updateOutputBody: (caseId: string, outputId: string, body: string) => Promise<ContentOutput>;
   regenerateOutput: (caseId: string, outputId: string) => Promise<ContentOutput>;
@@ -324,6 +327,16 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
   },
 
   // ── Output actions — API-backed ──────────────────────────────────────────────
+
+  setOutputStatusLocal: (caseId, outputId, status) =>
+    set(state => ({
+      cases: state.cases.map(c =>
+        c.id !== caseId ? c : {
+          ...c,
+          outputs: c.outputs.map(o => o.id !== outputId ? o : { ...o, status }),
+        },
+      ),
+    })),
 
   updateOutputStatus: async (caseId, outputId, status) => {
     const updated = await api.patch<ContentOutput>(
