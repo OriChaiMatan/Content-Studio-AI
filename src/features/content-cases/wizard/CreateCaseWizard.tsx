@@ -5,9 +5,16 @@ import { Button } from '../../../components/ui/Button';
 import { Icon } from '../../../components/ui/Icon';
 import { Input } from '../../../components/ui/Input';
 import { useContentCasesStore } from '../../../stores/contentCasesStore';
-import type { WizardFormData, ContentGoal, ContentStyle, ContentTarget, ScheduleFrequency } from '../../../types';
+import type { WizardFormData, Language, ContentGoal, ContentStyle, ContentTarget, ScheduleFrequency } from '../../../types';
 
 // ── Option definitions ────────────────────────────────────
+
+// Output language for the case (Hebrew-first MVP — defaults to 'he').
+const LANGUAGE_OPTIONS: { value: Language; label: string }[] = [
+  { value: 'he', label: 'Hebrew (עברית)' },
+  { value: 'en', label: 'English' },
+];
+const languageLabel = (l: Language) => LANGUAGE_OPTIONS.find(o => o.value === l)?.label ?? l;
 
 const GOAL_OPTIONS: { value: ContentGoal; label: string; icon: string }[] = [
   { value: 'build_authority',   label: 'Build Authority',    icon: 'star' },
@@ -54,6 +61,7 @@ const STEPS = ['Goal', 'Style & Targets', 'Schedule'];
 
 const emptyForm: WizardFormData = {
   title:          '',
+  language:       'he',
   contentGoal:    'build_authority',
   goalCustom:     '',
   contentStyle:   'professional',
@@ -80,6 +88,32 @@ function Step1Goal({ form, update }: { form: WizardFormData; update: UpdateFn })
         placeholder="e.g. Quantum Computing 2024"
         autoFocus
       />
+
+      <div className="flex flex-col gap-2">
+        <label className="text-[14px] font-medium text-on-surface-variant">Output Language *</label>
+        <p className="text-[12px] text-on-surface-variant -mt-1">
+          The language all generated content for this case will be written in.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {LANGUAGE_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => update('language', opt.value)}
+              className={[
+                'flex items-center gap-2 px-4 py-3 rounded-xl border-2 text-[13px] font-medium text-left transition-all',
+                form.language === opt.value
+                  ? 'border-primary bg-secondary-container/40 text-primary'
+                  : 'border-outline-variant text-on-surface-variant hover:border-primary/30 hover:bg-surface-container',
+              ].join(' ')}
+            >
+              <Icon name="translate" size="sm" className={form.language === opt.value ? 'text-primary' : 'text-outline'} />
+              {opt.label}
+              {form.language === opt.value && <Icon name="check_circle" size="sm" className="text-primary ml-auto" filled />}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="flex flex-col gap-2">
         <label className="text-[14px] font-medium text-on-surface-variant">Goal *</label>
@@ -198,6 +232,13 @@ function Step3Schedule({ form, update }: { form: WizardFormData; update: UpdateF
   const freq = form.scheduleFrequency;
   return (
     <div className="space-y-6">
+      {/* Compact pre-creation summary of the chosen output language (no dedicated Review step). */}
+      <div className="flex items-center gap-2 text-[13px] bg-surface-container rounded-lg px-3 py-2.5">
+        <Icon name="translate" size="sm" className="text-primary" />
+        <span className="text-on-surface-variant">Output language:</span>
+        <span className="font-bold text-on-surface">{languageLabel(form.language)}</span>
+      </div>
+
       <div className="flex flex-col gap-2">
         <label className="text-[14px] font-medium text-on-surface-variant">Generate Schedule</label>
         <p className="text-[12px] text-on-surface-variant -mt-1">

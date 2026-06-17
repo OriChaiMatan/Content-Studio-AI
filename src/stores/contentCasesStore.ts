@@ -117,6 +117,7 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
     try {
       const newCase = await api.post<ContentCase>('/cases', {
         title:          data.title,
+        language:       data.language,
         contentGoal:    data.contentGoal,
         goalCustom:     data.goalCustom,
         contentStyle:   data.contentStyle,
@@ -144,7 +145,7 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
         id: caseId,
         title:          data.title,
         status:         'draft',
-        language:       'en',
+        language:       data.language,
         contentGoal:    data.contentGoal,
         goalCustom:     data.goalCustom || null,
         contentStyle:   data.contentStyle,

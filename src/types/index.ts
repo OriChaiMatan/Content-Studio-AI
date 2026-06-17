@@ -308,8 +308,9 @@ export interface User {
 
 // ── Wizard form state — 3-step wizard (Phase 8.6) ─────────
 export interface WizardFormData {
-  // Step 1: Case Name + Goal
+  // Step 1: Case Name + Language + Goal
   title:        string;
+  language:     Language;
   contentGoal:  ContentGoal;
   goalCustom:   string;
   // Step 2: Content Style + Content Targets
