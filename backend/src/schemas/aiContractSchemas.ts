@@ -449,9 +449,15 @@ export const LinkedInBreakdownSchema = z.object({
   hook:        z.string().min(1),
   context:     z.string().min(1),
   insight:     z.string().min(1),
-  takeaways:   z.array(z.string().min(1)).min(1).max(6),
+  // Phase L2 — takeaways are now OPTIONAL (0–3): sharp implications/consequences of
+  // the thesis, NOT a required "lessons" list. max kept permissive; the LinkedIn
+  // finalizer caps to 3. (LinkedIn only — Facebook/Newsletter/Podcast unchanged.)
+  takeaways:   z.array(z.string().min(1)).min(0).max(6),
   cta:         z.string().min(1),
-  hashtags:    z.array(z.string().min(1)).min(0).max(3),   // 0–3
+  // Phase L3 — LinkedIn hashtags are mandatory 3–6 (delivered by the finalizer's
+  // deterministic backfill). Schema keeps min permissive so a rare backfill shortage
+  // never rejects the whole post; max raised 3 → 6.
+  hashtags:    z.array(z.string().min(1)).min(0).max(6),
 });
 
 export const FacebookBreakdownSchema = z.object({
