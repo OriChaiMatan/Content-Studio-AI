@@ -9,7 +9,7 @@ import { SourcesPanel } from './SourcesPanel';
 import { useLiveCase } from './useLiveCase';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { api } from '../../lib/api';
-import type { ContentGoal, ContentStyle, ContentTarget, Language, ContentCase } from '../../types';
+import type { ContentGoal, ContentStyle, ContentTarget, Language, ContentCase, ScheduleFrequency } from '../../types';
 
 // ── Human-readable labels for new enum fields ─────────────
 
@@ -35,6 +35,29 @@ const TARGET_ICONS: Record<ContentTarget, string> = {
   linkedin: 'work', facebook: 'groups',
   newsletter: 'email', podcast: 'mic', images: 'image',
 };
+
+// Schedule editing (inline; mirrors the create wizard's Step 3 — not extracted yet).
+const FREQ_OPTIONS: { value: ScheduleFrequency; label: string; icon: string }[] = [
+  { value: 'manual',  label: 'Manual',  icon: 'touch_app' },
+  { value: 'daily',   label: 'Daily',   icon: 'today' },
+  { value: 'weekly',  label: 'Weekly',  icon: 'date_range' },
+  { value: 'monthly', label: 'Monthly', icon: 'calendar_month' },
+];
+const DOW_OPTIONS = [
+  { value: 0, label: 'Sunday' }, { value: 1, label: 'Monday' }, { value: 2, label: 'Tuesday' },
+  { value: 3, label: 'Wednesday' }, { value: 4, label: 'Thursday' }, { value: 5, label: 'Friday' },
+  { value: 6, label: 'Saturday' },
+];
+
+// Flat settings-update payload sent to PATCH /cases/:id. ContentCase exposes a NESTED
+// `schedule` object for reading, but the backend update API takes FLAT schedule fields.
+type CaseSettingsUpdate =
+  Partial<Pick<ContentCase, 'contentGoal' | 'contentStyle' | 'language' | 'contentTargets'>> & {
+    scheduleFrequency?:  ScheduleFrequency;
+    scheduleTime?:       string | null;
+    scheduleDayOfWeek?:  number | null;
+    scheduleDayOfMonth?: number | null;
+  };
 
 export function ContentCaseDetail() {
   // ── ALL hooks must be called unconditionally before any early return ──────────
@@ -333,7 +356,7 @@ interface CaseSettingsCardProps {
   saving: boolean;
   onEdit: () => void;
   onCancel: () => void;
-  onSave: (updates: Partial<ContentCase>) => Promise<void>;
+  onSave: (updates: CaseSettingsUpdate) => Promise<void>;
 }
 
 function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: CaseSettingsCardProps) {
@@ -341,6 +364,11 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
   const [style,   setStyle]   = useState<ContentStyle>(c.contentStyle);
   const [lang,    setLang]    = useState<Language>(c.language);
   const [targets, setTargets] = useState<ContentTarget[]>(c.contentTargets);
+  // Schedule editing state (seeded from the case's nested schedule).
+  const [freq, setFreq] = useState<ScheduleFrequency>(c.schedule.frequency);
+  const [time, setTime] = useState<string>(c.schedule.time ?? '09:00');
+  const [dow,  setDow]  = useState<number>(c.schedule.dayOfWeek ?? 1);
+  const [dom,  setDom]  = useState<number>(c.schedule.dayOfMonth ?? 1);
 
   function toggleTarget(t: ContentTarget) {
     setTargets(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
@@ -355,6 +383,10 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
   function handleEdit() {
     setGoal(c.contentGoal); setStyle(c.contentStyle);
     setLang(c.language);    setTargets(c.contentTargets);
+    setFreq(c.schedule.frequency);
+    setTime(c.schedule.time ?? '09:00');
+    setDow(c.schedule.dayOfWeek ?? 1);
+    setDom(c.schedule.dayOfMonth ?? 1);
     onEdit();
   }
 
@@ -465,9 +497,61 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
             {targets.length === 0 && <p className="text-[11px] text-error mt-1">Select at least one target</p>}
           </div>
 
+          {/* Generate Schedule */}
+          <div>
+            <p className="text-[12px] font-medium text-on-surface-variant mb-1.5">Generate Schedule</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {FREQ_OPTIONS.map(opt => (
+                <button key={opt.value} type="button" onClick={() => setFreq(opt.value)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[12px] font-medium transition-all ${freq === opt.value ? 'border-primary bg-secondary-container/40 text-primary' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'}`}>
+                  <Icon name={opt.icon} size="sm" />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {freq !== 'manual' && (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {freq === 'weekly' && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-medium text-on-surface-variant">Day of week</label>
+                    <select value={dow} onChange={e => setDow(Number(e.target.value))}
+                      className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-[12px] text-on-surface">
+                      {DOW_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                    </select>
+                  </div>
+                )}
+                {freq === 'monthly' && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-medium text-on-surface-variant">Day of month</label>
+                    <select value={dom} onChange={e => setDom(Number(e.target.value))}
+                      className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-[12px] text-on-surface">
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-medium text-on-surface-variant">Time</label>
+                  <input type="time" value={time} onChange={e => setTime(e.target.value)}
+                    className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-[12px] text-on-surface" />
+                </div>
+              </div>
+            )}
+            {freq === 'manual' && (
+              <p className="text-[11px] text-on-surface-variant mt-1.5">Generates only when you click Generate Now.</p>
+            )}
+          </div>
+
           <div className="flex gap-2 pt-2">
             <Button size="sm" variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Button>
-            <Button size="sm" onClick={() => onSave({ contentGoal: goal, contentStyle: style, language: lang, contentTargets: targets })}
+            <Button size="sm" onClick={() => onSave({
+                contentGoal: goal, contentStyle: style, language: lang, contentTargets: targets,
+                // Null irrelevant schedule fields by frequency (mirrors the create wizard).
+                scheduleFrequency:  freq,
+                scheduleTime:       freq === 'manual' ? null : time,
+                scheduleDayOfWeek:  freq === 'weekly'  ? dow : null,
+                scheduleDayOfMonth: freq === 'monthly' ? dom : null,
+              })}
               loading={saving} disabled={saving || targets.length === 0}>
               <Icon name="save" size="sm" />
               {saving ? 'Saving…' : 'Save Settings'}

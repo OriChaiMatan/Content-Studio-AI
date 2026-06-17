@@ -231,6 +231,23 @@ export const caseService = {
     if (data.scheduleTime       !== undefined) patch.scheduleTime       = data.scheduleTime;
     if (data.scheduleDayOfWeek  !== undefined) patch.scheduleDayOfWeek  = data.scheduleDayOfWeek;
     if (data.scheduleDayOfMonth !== undefined) patch.scheduleDayOfMonth = data.scheduleDayOfMonth;
+
+    // Schedule re-edit (Task 3.4): when the schedule ACTUALLY changes, clear the
+    // scheduler's "already processed this slot" key so the new schedule isn't blocked
+    // by a stale slot key. Compare provided fields against the stored values so an
+    // unrelated settings edit (goal/style/language/targets) never resets the key — and
+    // a no-op save of the same schedule doesn't clear it either. This does NOT trigger
+    // generation (updateCase never runs the pipeline); the scheduler acts on its own tick.
+    const scheduleKeys = ['scheduleFrequency', 'scheduleTime', 'scheduleDayOfWeek', 'scheduleDayOfMonth'] as const;
+    const scheduleProvided = scheduleKeys.some(k => data[k] !== undefined);
+    if (scheduleProvided) {
+      const current = await prisma.contentCase.findUnique({
+        where: { id },
+        select: { scheduleFrequency: true, scheduleTime: true, scheduleDayOfWeek: true, scheduleDayOfMonth: true },
+      });
+      const changed = current != null && scheduleKeys.some(k => data[k] !== undefined && data[k] !== current[k]);
+      if (changed) patch.lastScheduledSlotKey = null;
+    }
     // Legacy fields (old wizard — kept for backward compat)
     if (data.targetAudience  !== undefined) patch.targetAudience  = data.targetAudience;
     if (data.industry        !== undefined) patch.industry        = data.industry;
