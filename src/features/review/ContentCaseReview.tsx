@@ -9,15 +9,13 @@ import { useLibraryStore } from '../../stores/libraryStore';
 import { useLiveCase } from '../content-cases/useLiveCase';
 import type { Platform, ContentOutput } from '../../types';
 
-const PLATFORM_ORDER: Platform[] = ['linkedin', 'facebook', 'instagram', 'newsletter', 'podcast', 'image_prompt'];
+const PLATFORM_ORDER: Platform[] = ['linkedin', 'facebook', 'newsletter', 'podcast'];
 
 const platformIcon: Record<Platform, string> = {
   linkedin:     'work',
   facebook:     'groups',
-  instagram:    'photo_camera',
   newsletter:   'email',
   podcast:      'mic',
-  image_prompt: 'image',
 };
 
 // ── Score pill ────────────────────────────────────────────

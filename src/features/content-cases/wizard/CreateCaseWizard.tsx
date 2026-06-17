@@ -33,10 +33,8 @@ const STYLE_OPTIONS: { value: ContentStyle; label: string }[] = [
 const TARGET_OPTIONS: { value: ContentTarget; label: string; icon: string }[] = [
   { value: 'linkedin',    label: 'LinkedIn',    icon: 'work' },
   { value: 'facebook',    label: 'Facebook',    icon: 'groups' },
-  { value: 'instagram',   label: 'Instagram',   icon: 'photo_camera' },
   { value: 'newsletter',  label: 'Newsletter',  icon: 'email' },
   { value: 'podcast',     label: 'Podcast',     icon: 'mic' },
-  { value: 'images',      label: 'Images',      icon: 'image' },
 ];
 
 const FREQUENCY_OPTIONS: { value: ScheduleFrequency; label: string; sub: string; icon: string }[] = [

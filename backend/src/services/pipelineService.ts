@@ -4,16 +4,18 @@ import { PIPELINE_STEP_ORDER } from '../schemas/pipelineSchemas';
 
 // Maps ContentTarget values (wizard) → content platform (Phase 9 v2).
 // 'images' is RETIRED as a standalone output: image prompts are embedded inside
-// LinkedIn/Facebook/Instagram. 'images' maps to undefined → no output (no-op).
+// LinkedIn/Facebook. 'images' maps to undefined → no output (no-op).
+// 'instagram' is RETIRED from the MVP (Sprint 1): tolerated as a legacy target on
+// existing cases but maps to undefined → no output (no-op), so old cases never crash.
 const CONTENT_TARGET_TO_PLATFORM: Record<string, ContentPlatform | undefined> = {
   linkedin:   'linkedin',
   facebook:   'facebook',
-  instagram:  'instagram',
+  instagram:  undefined,
   newsletter: 'newsletter',
   podcast:    'podcast',
   images:     undefined,
 };
-const ALL_CONTENT_PLATFORMS: ContentPlatform[] = ['linkedin', 'facebook', 'instagram', 'newsletter', 'podcast'];
+const ALL_CONTENT_PLATFORMS: ContentPlatform[] = ['linkedin', 'facebook', 'newsletter', 'podcast'];
 import {
   ResearchContextSchema,
   FactCheckReportSchema,

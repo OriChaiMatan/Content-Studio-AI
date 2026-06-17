@@ -4,7 +4,6 @@ import {
   GeneratedOutputSchema,
   LinkedInBreakdownSchema,
   FacebookBreakdownSchema,
-  InstagramBreakdownSchema,
   NewsletterBreakdownSchema,
   PodcastBreakdownSchema,
   type GeneratedOutput,
@@ -32,30 +31,6 @@ export interface PlatformSpec {
 
 const SEP = '─────────────────────────────────';
 
-const imagePromptProps = {
-  prompt:         { type: 'string', description: 'Image-generation prompt. ALWAYS in English.' },
-  aspectRatio:    { type: 'string', description: 'e.g. "1:1", "1.91:1", "4:5"' },
-  visualStyle:    { type: 'string' },
-  mood:           { type: 'string' },
-  negativePrompt: { type: 'string' },
-};
-const imagePromptRequired = ['prompt', 'aspectRatio', 'visualStyle', 'mood', 'negativePrompt'];
-
-function img(raw: unknown, role: 'primary' | 'alternative') {
-  const o = (raw ?? {}) as Record<string, unknown>;
-  // Default the decorative fields (schema requires each ≥1 char). Claude
-  // intermittently returns them empty, which would fail validation and force an
-  // avoidable mock fallback — these defaults keep a valid image prompt without
-  // touching the core `prompt`. Same pattern as the aspectRatio default.
-  return {
-    role,
-    prompt:         String(o.prompt ?? ''),
-    aspectRatio:    String(o.aspectRatio ?? '') || '1:1',
-    visualStyle:    String(o.visualStyle ?? '') || 'clean editorial photography',
-    mood:           String(o.mood ?? '') || 'professional',
-    negativePrompt: String(o.negativePrompt ?? '') || 'low quality, blurry, distorted, watermark, text artifacts',
-  };
-}
 
 function words(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length;
@@ -121,7 +96,7 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
       'Tone: credible and substantive. NO emoji by default. Not clickbait.',
       'STRUCTURE AS AN ARGUMENT: hook = the thesis reframed in one sharp line; context = the MINIMUM setup; insight = the core argument (WHY the thesis holds across the sources + its implication); takeaways = consequences/so-what, NOT a list of source facts.',
       'HARD LENGTH: the assembled post (hook + context + insight + numbered takeaways + cta + hashtags) must be 650–1400 characters. TARGET ~950–1150 characters and NEVER exceed ~1250 in your own estimate — the 1400 ceiling is a hard cutoff, so leave margin. Per-section budget: hook ≤100 chars (one line); context ≤2 sentences; insight ≤2 sentences; exactly 3 takeaways of ≤1 line (~110 chars) each (4 only if each is very short); cta ≤100 chars. Be concise — every section must earn its length.',
-      'Return the breakdown: hook, context, insight, takeaways (3–5), cta, hashtags (0–3), imagePrompt (1).',
+      'Return the breakdown: hook, context, insight, takeaways (3–5), cta, hashtags (0–3).',
     ].join('\n'),
     tool: {
       name: 'record_linkedin_content',
@@ -133,9 +108,8 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
           takeaways: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 5 },
           cta: { type: 'string' },
           hashtags: { type: 'array', items: { type: 'string' }, minItems: 0, maxItems: 3 },
-          imagePrompt: { type: 'object', properties: imagePromptProps, required: imagePromptRequired },
         },
-        required: ['hook', 'context', 'insight', 'takeaways', 'cta', 'hashtags', 'imagePrompt'],
+        required: ['hook', 'context', 'insight', 'takeaways', 'cta', 'hashtags'],
       },
     },
     finalize: (raw, input) => {
@@ -146,7 +120,6 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
         cta: str(raw.cta),
         // Phase 11D.5 — render bare topics as '#'-prefixed, de-duplicated hashtags.
         hashtags: normalizeHashtags(strArr(raw.hashtags)),
-        imagePrompt: img(raw.imagePrompt, 'primary'),
       });
       const assemble = (bd: typeof breakdown) => [
         bd.hook, '', bd.context, '', bd.insight, '',
@@ -223,7 +196,7 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
       }
       return GeneratedOutputSchema.parse({
         platform: 'linkedin', title: input.brief.caseTitle, readyToPublish, breakdown,
-        metadata: baseMeta(input, { hashtags: breakdown.hashtags, imagePrompts: [breakdown.imagePrompt], ...(linkedinLengthRepaired ? { linkedinLengthRepaired: true } : {}) }),
+        metadata: baseMeta(input, { hashtags: breakdown.hashtags, ...(linkedinLengthRepaired ? { linkedinLengthRepaired: true } : {}) }),
       });
     },
   },
@@ -236,7 +209,7 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
       'PLATFORM: Facebook. Purpose: community, conversation, human tone.',
       'Tone: warm, personal, conversational — must NOT read like LinkedIn. First person welcome.',
       'Length: around 150–500 words.',
-      'Return the breakdown: hook, story, personalInterpretation, communityQuestion, hashtags (0–2), imagePrompt (1).',
+      'Return the breakdown: hook, story, personalInterpretation, communityQuestion, hashtags (0–2).',
     ].join('\n'),
     tool: {
       name: 'record_facebook_content',
@@ -247,9 +220,8 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
           hook: { type: 'string' }, story: { type: 'string' }, personalInterpretation: { type: 'string' },
           communityQuestion: { type: 'string' },
           hashtags: { type: 'array', items: { type: 'string' }, minItems: 0, maxItems: 2 },
-          imagePrompt: { type: 'object', properties: imagePromptProps, required: imagePromptRequired },
         },
-        required: ['hook', 'story', 'personalInterpretation', 'communityQuestion', 'hashtags', 'imagePrompt'],
+        required: ['hook', 'story', 'personalInterpretation', 'communityQuestion', 'hashtags'],
       },
     },
     finalize: (raw, input) => {
@@ -257,7 +229,6 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
         hook: str(raw.hook), story: str(raw.story), personalInterpretation: str(raw.personalInterpretation),
         // Phase 11D.5 — same '#'-rendering fix as LinkedIn.
         communityQuestion: str(raw.communityQuestion), hashtags: normalizeHashtags(strArr(raw.hashtags)),
-        imagePrompt: img(raw.imagePrompt, 'primary'),
       });
       const readyToPublish = [
         breakdown.hook, '', breakdown.story, '', breakdown.personalInterpretation, '',
@@ -265,46 +236,7 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
       ].join('\n').trim();
       return GeneratedOutputSchema.parse({
         platform: 'facebook', title: input.brief.caseTitle, readyToPublish, breakdown,
-        metadata: baseMeta(input, { hashtags: breakdown.hashtags, imagePrompts: [breakdown.imagePrompt] }),
-      });
-    },
-  },
-
-  // ── Instagram ───────────────────────────────────────────────────────────────
-  instagram: {
-    maxTokens: 1500,
-    longform: false,
-    instruction: [
-      'PLATFORM: Instagram. Purpose: visual-first, attention, emotion. NOT a carousel.',
-      'Tone: punchy, emotive, scroll-stopping. Emoji allowed.',
-      'Length: around 80–250 words (the caption).',
-      'Return the breakdown: hook (strong first line), body, cta, hashtags (5–8), primaryImagePrompt, alternativeImagePrompt (two DISTINCT prompts).',
-    ].join('\n'),
-    tool: {
-      name: 'record_instagram_content',
-      description: 'Record the Instagram breakdown.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          hook: { type: 'string' }, body: { type: 'string' }, cta: { type: 'string' },
-          hashtags: { type: 'array', items: { type: 'string' }, minItems: 5, maxItems: 8 },
-          primaryImagePrompt: { type: 'object', properties: imagePromptProps, required: imagePromptRequired },
-          alternativeImagePrompt: { type: 'object', properties: imagePromptProps, required: imagePromptRequired },
-        },
-        required: ['hook', 'body', 'cta', 'hashtags', 'primaryImagePrompt', 'alternativeImagePrompt'],
-      },
-    },
-    finalize: (raw, input) => {
-      const breakdown = InstagramBreakdownSchema.parse({
-        // Phase 11D.5 — same '#'-rendering fix as LinkedIn.
-        hook: str(raw.hook), body: str(raw.body), cta: str(raw.cta), hashtags: normalizeHashtags(strArr(raw.hashtags)),
-        primaryImagePrompt: img(raw.primaryImagePrompt, 'primary'),
-        alternativeImagePrompt: img(raw.alternativeImagePrompt, 'alternative'),
-      });
-      const readyToPublish = [breakdown.hook, '', breakdown.body, '', breakdown.cta, '', breakdown.hashtags.join(' ')].join('\n').trim();
-      return GeneratedOutputSchema.parse({
-        platform: 'instagram', title: input.brief.caseTitle, readyToPublish, breakdown,
-        metadata: baseMeta(input, { hashtags: breakdown.hashtags, imagePrompts: [breakdown.primaryImagePrompt, breakdown.alternativeImagePrompt] }),
+        metadata: baseMeta(input, { hashtags: breakdown.hashtags }),
       });
     },
   },

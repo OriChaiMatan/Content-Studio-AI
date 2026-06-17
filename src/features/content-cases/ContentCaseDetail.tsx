@@ -27,12 +27,12 @@ const STYLE_LABELS: Record<ContentStyle, string> = {
 };
 
 const TARGET_LABELS: Record<ContentTarget, string> = {
-  linkedin: 'LinkedIn', facebook: 'Facebook', instagram: 'Instagram',
+  linkedin: 'LinkedIn', facebook: 'Facebook',
   newsletter: 'Newsletter', podcast: 'Podcast', images: 'Images',
 };
 
 const TARGET_ICONS: Record<ContentTarget, string> = {
-  linkedin: 'work', facebook: 'groups', instagram: 'photo_camera',
+  linkedin: 'work', facebook: 'groups',
   newsletter: 'email', podcast: 'mic', images: 'image',
 };
 
@@ -348,8 +348,8 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
 
   const allTargets: { value: ContentTarget; icon: string }[] = [
     { value: 'linkedin', icon: 'work' }, { value: 'facebook', icon: 'groups' },
-    { value: 'instagram', icon: 'photo_camera' }, { value: 'newsletter', icon: 'email' },
-    { value: 'podcast', icon: 'mic' }, { value: 'images', icon: 'image' },
+    { value: 'newsletter', icon: 'email' },
+    { value: 'podcast', icon: 'mic' },
   ];
 
   function handleEdit() {

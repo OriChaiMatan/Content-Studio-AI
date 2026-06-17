@@ -21,7 +21,7 @@ export type ContentStyle =
 // Simplified wizard — which platforms to generate outputs for
 // Note: 'images' maps to the 'image_prompt' platform in the DB
 export type ContentTarget =
-  | 'linkedin' | 'facebook' | 'instagram' | 'newsletter' | 'podcast' | 'images';
+  | 'linkedin' | 'facebook' | 'newsletter' | 'podcast' | 'images';
 
 // A structured claim the source makes (Phase 8 new shape).
 export interface Claim {
@@ -73,10 +73,8 @@ export type SourceStatus = 'new' | 'used' | 'ignored' | 'error';
 export type Platform =
   | 'linkedin'
   | 'facebook'
-  | 'instagram'
   | 'newsletter'
-  | 'podcast'
-  | 'image_prompt';
+  | 'podcast';
 
 export type CaseStatus =
   | 'draft'
@@ -184,7 +182,6 @@ export interface OutputMetadata {
   researchConfidence?: number | null;
   factCheckAccuracy?: number | null;
   hashtags?: string[];
-  imagePrompts?: Array<Record<string, unknown>>;
   readingTimeMinutes?: number | null;       // newsletter
   estimatedDurationMinutes?: number | null; // podcast
   estimatedWordCount?: number | null;       // podcast

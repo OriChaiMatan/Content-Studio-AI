@@ -48,7 +48,7 @@ function makePipeline(stage: 'idle' | 'research' | 'fact_check' | 'completed'): 
 // ── Output helpers ────────────────────────────────────────
 
 function makeOutputs(caseId: string): ContentOutput[] {
-  const platforms = ['linkedin', 'facebook', 'instagram', 'newsletter', 'podcast', 'image_prompt'] as const;
+  const platforms = ['linkedin', 'facebook', 'newsletter', 'podcast'] as const;
   const data: Record<string, { title: string; body: string }> = {
     linkedin: {
       title: 'Quantum Supremacy & Global Logistics',
@@ -58,10 +58,6 @@ function makeOutputs(caseId: string): ContentOutput[] {
       title: "How Quantum Computers Are Solving the World's Logistics Problem",
       body: `Did you know that quantum computers can solve shipping route problems that would take a classical computer weeks to crack — all in under 10 minutes?\n\nWe dug deep into the research, and the results are staggering. Early adopters in global shipping are already seeing 23% fuel savings and dramatically more accurate demand forecasts.\n\nHere's what's changing:\n✅ Real-time re-routing during disruptions\n✅ Better demand predictions\n✅ Lower delivery costs\n\nThe quantum revolution is here — and it's starting with your supply chain.`,
     },
-    instagram: {
-      title: 'Quantum × Logistics Visual Story',
-      body: `Slide 1: "Your shipping routes are about to get a quantum upgrade 🚢⚛️"\nSlide 2: Classical computers: weeks to solve. Quantum computers: under 10 minutes.\nSlide 3: Real companies are saving 23% on fuel costs RIGHT NOW.\nSlide 4: How? Quantum algorithms + live traffic data + predictive modeling.\nSlide 5: The supply chain of 2026 is being built today.\nSlide 6: Are you ahead of the curve?\nSlide 7: Drop a 💡 if you want a deep-dive thread.\n\n#QuantumComputing #Logistics #Innovation #FutureOfWork #Tech`,
-    },
     newsletter: {
       title: 'Weekly Digest: Quantum Computing Meets Global Supply Chain',
       body: `This week, we're exploring one of the most consequential technological intersections of our decade: quantum computing and supply chain optimization.\n\n**What we covered:**\n\nQuantum error correction has crossed a critical threshold, enabling stable long-form calculations on real-world logistics datasets. Three major shipping companies have begun pilot programs, with results suggesting a 15–23% reduction in operational fuel costs.\n\nThe Silicon Photonics angle: New chip architectures that leverage light instead of electrons are extending quantum coherence times, making practical quantum logistics systems economically viable for the first time.\n\n**What to watch next week:**\nThe EU's proposed regulatory framework for quantum-assisted trade routing decisions.\n\n*— Alex Rivera, Lead Researcher*`,
@@ -69,10 +65,6 @@ function makeOutputs(caseId: string): ContentOutput[] {
     podcast: {
       title: 'Ep. 38 Outline: Quantum Logistics Revolution',
       body: `EPISODE OUTLINE — "Green Horizon" Episode 38\n\nTitle: "The Quantum Logistics Revolution: How Qubits Are Saving the Planet One Shipping Route at a Time"\n\n[COLD OPEN – 0:00-1:30]\nHook: The container ship that chose its route using a quantum algorithm\n\n[SEGMENT 1 – 1:30-12:00]\nWhat quantum computing actually is (no jargon version)\nGuest intro: Dr. Marcus Chen, MIT Quantum Systems Lab\n\n[SEGMENT 2 – 12:00-28:00]\nThe logistics problem that classical computers can't solve\nHow quantum annealing changes the math\nReal-world pilot results from ShipNext and Maersk Digital\n\n[SEGMENT 3 – 28:00-40:00]\nEnvironmental angle: 23% fuel reduction = real emissions impact\nTimeline: when does this become mainstream?\n\n[CLOSE – 40:00-45:00]\nKey takeaways + listener action items`,
-    },
-    image_prompt: {
-      title: 'Visual: Quantum Supply Chain Concept',
-      body: `Photorealistic concept illustration, ultra-wide cinematic composition. A vast global logistics network visualized as interconnected light pathways over a dark Earth map. Quantum probability clouds (soft blue-violet glows) emanate from major port cities — Shanghai, Rotterdam, Los Angeles. Container ships rendered as luminous data packets traveling along optimized golden routing lines. In the foreground, a translucent quantum processor chip with visible qubit lattice structure floats above the scene. Palette: deep navy, electric blue, warm amber. Mood: technological optimism. Style: scientific visualization meets editorial design. Aspect ratio: 16:9.`,
     },
   };
 
@@ -107,7 +99,7 @@ export const mockContentCases: ContentCase[] = [
     goalCustom: null,
     contentStyle: 'professional',
     styleCustom: null,
-    contentTargets: ['linkedin','facebook','instagram','newsletter','podcast','images'],
+    contentTargets: ['linkedin','facebook','newsletter','podcast','images'],
     targetAudience: 'Logistics executives and supply chain managers at Fortune 500 companies',
     industry: 'Technology & Logistics',
     experienceLevel: 'expert',
@@ -183,7 +175,7 @@ export const mockContentCases: ContentCase[] = [
     goalCustom: null,
     contentStyle: 'professional',
     styleCustom: null,
-    contentTargets: ['linkedin','facebook','instagram','newsletter','podcast','images'],
+    contentTargets: ['linkedin','facebook','newsletter','podcast','images'],
     targetAudience: 'Policy makers, AI researchers, and technology-curious general public',
     industry: 'Artificial Intelligence & Policy',
     experienceLevel: 'intermediate',
@@ -254,7 +246,7 @@ export const mockContentCases: ContentCase[] = [
     goalCustom: null,
     contentStyle: 'professional',
     styleCustom: null,
-    contentTargets: ['linkedin','facebook','instagram','newsletter','podcast','images'],
+    contentTargets: ['linkedin','facebook','newsletter','podcast','images'],
     targetAudience: 'Environmental advocates, policy professionals, and sustainability-focused investors',
     industry: 'Energy & Environment',
     experienceLevel: 'intermediate',
@@ -310,7 +302,7 @@ export const mockContentCases: ContentCase[] = [
     goalCustom: null,
     contentStyle: 'professional',
     styleCustom: null,
-    contentTargets: ['linkedin','facebook','instagram','newsletter','podcast','images'],
+    contentTargets: ['linkedin','facebook','newsletter','podcast','images'],
     targetAudience: 'HR leaders and remote team managers',
     industry: 'Human Resources & Future of Work',
     experienceLevel: 'intermediate',
@@ -346,7 +338,7 @@ export const mockContentCases: ContentCase[] = [
     goalCustom: null,
     contentStyle: 'professional',
     styleCustom: null,
-    contentTargets: ['linkedin','facebook','instagram','newsletter','podcast','images'],
+    contentTargets: ['linkedin','facebook','newsletter','podcast','images'],
     targetAudience: 'Independent creators and digital entrepreneurs',
     industry: 'Web3 & Creator Economy',
     experienceLevel: 'beginner',

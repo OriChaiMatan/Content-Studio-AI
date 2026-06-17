@@ -437,23 +437,13 @@ export type ContentPackage = z.infer<typeof ContentPackageSchema>;
 //
 // ContentOutput v2 = readyToPublish (editable) + breakdown (read-only,
 // platform-specific) + metadata. Hashtag bounds per product decision:
-//   LinkedIn 0–3 · Facebook 0–2 · Instagram 5–8.
-// Image prompts are embedded only in LinkedIn / Facebook / Instagram.
+//   LinkedIn 0–3 · Facebook 0–2.
+// Image prompts are embedded only in LinkedIn / Facebook.
 // Newsletter & Podcast have no image prompt.
 // ═════════════════════════════════════════════════════════════════════════════
 
-export const CONTENT_PLATFORMS = ['linkedin', 'facebook', 'instagram', 'newsletter', 'podcast'] as const;
+export const CONTENT_PLATFORMS = ['linkedin', 'facebook', 'newsletter', 'podcast'] as const;
 export type ContentPlatform = (typeof CONTENT_PLATFORMS)[number];
-
-export const ImagePromptV2Schema = z.object({
-  role:           z.enum(['primary', 'alternative']),
-  prompt:         z.string().min(10),
-  aspectRatio:    z.string().min(1),
-  visualStyle:    z.string().min(1),
-  mood:           z.string().min(1),
-  negativePrompt: z.string().min(1),
-});
-export type ImagePromptV2 = z.infer<typeof ImagePromptV2Schema>;
 
 export const LinkedInBreakdownSchema = z.object({
   hook:        z.string().min(1),
@@ -462,7 +452,6 @@ export const LinkedInBreakdownSchema = z.object({
   takeaways:   z.array(z.string().min(1)).min(1).max(6),
   cta:         z.string().min(1),
   hashtags:    z.array(z.string().min(1)).min(0).max(3),   // 0–3
-  imagePrompt: ImagePromptV2Schema,
 });
 
 export const FacebookBreakdownSchema = z.object({
@@ -471,16 +460,6 @@ export const FacebookBreakdownSchema = z.object({
   personalInterpretation: z.string().min(1),
   communityQuestion:      z.string().min(1),
   hashtags:               z.array(z.string().min(1)).min(0).max(2),   // 0–2
-  imagePrompt:            ImagePromptV2Schema,
-});
-
-export const InstagramBreakdownSchema = z.object({
-  hook:                   z.string().min(1),
-  body:                   z.string().min(1),
-  cta:                    z.string().min(1),
-  hashtags:               z.array(z.string().min(1)).min(5).max(8),   // 5–8
-  primaryImagePrompt:     ImagePromptV2Schema,
-  alternativeImagePrompt: ImagePromptV2Schema,
 });
 
 export const NewsletterBreakdownSchema = z.object({
@@ -541,7 +520,6 @@ export const ContentMetadataSchema = z.object({
   researchConfidence:       z.number().int().min(0).max(100).nullable().optional(),
   factCheckAccuracy:        z.number().int().min(0).max(100).nullable().optional(),
   hashtags:                 z.array(z.string()).optional(),
-  imagePrompts:             z.array(ImagePromptV2Schema).optional(),
   readingTimeMinutes:       z.number().nullable().optional(),       // newsletter
   practicalTakeawaysRepaired: z.boolean().optional(),               // Phase 11D.3 — empty required array backfilled deterministically (no Claude retry)
   linkedinLengthRepaired:   z.boolean().optional(),                 // Phase 11D.4 — assembled post trimmed to ≤1400 deterministically (no Claude retry)
@@ -559,7 +537,6 @@ const baseOutputShape = {
 export const GeneratedOutputSchema = z.discriminatedUnion('platform', [
   z.object({ platform: z.literal('linkedin'),   breakdown: LinkedInBreakdownSchema,   ...baseOutputShape }),
   z.object({ platform: z.literal('facebook'),   breakdown: FacebookBreakdownSchema,   ...baseOutputShape }),
-  z.object({ platform: z.literal('instagram'),  breakdown: InstagramBreakdownSchema,  ...baseOutputShape }),
   z.object({ platform: z.literal('newsletter'), breakdown: NewsletterBreakdownSchema, ...baseOutputShape }),
   z.object({ platform: z.literal('podcast'),    breakdown: PodcastBreakdownSchema,    ...baseOutputShape }),
 ]);

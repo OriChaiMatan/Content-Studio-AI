@@ -5,19 +5,15 @@ import type { Platform, CaseStatus, OutputStatus } from '../../types';
 const platformLabels: Record<Platform, string> = {
   linkedin:     'LinkedIn',
   facebook:     'Facebook',
-  instagram:    'Instagram',
   newsletter:   'Newsletter',
   podcast:      'Podcast',
-  image_prompt: 'Image Prompt',
 };
 
 const platformColors: Record<Platform, string> = {
   linkedin:     'bg-secondary-container/60 text-on-secondary-container',
   facebook:     'bg-primary-fixed/60 text-on-primary-fixed',
-  instagram:    'bg-tertiary-fixed/60 text-on-tertiary-fixed',
   newsletter:   'bg-tertiary-container/30 text-on-tertiary-container',
   podcast:      'bg-secondary-container/60 text-on-secondary-container',
-  image_prompt: 'bg-surface-variant text-on-surface-variant',
 };
 
 interface PlatformBadgeProps { platform: Platform; }

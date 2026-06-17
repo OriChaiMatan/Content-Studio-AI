@@ -2,7 +2,6 @@ import {
   GeneratedOutputSchema,
   type GeneratedOutput,
   type GeneratorInput,
-  type ImagePromptV2,
 } from '../schemas/aiContractSchemas';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -10,8 +9,8 @@ import {
 //
 // Deterministically builds a v2 GeneratedOutput (readyToPublish + breakdown +
 // metadata) for one platform from a GeneratorInput projection. Honors output
-// language (en/he) and the product hashtag bounds (LI 0–3, FB 0–2, IG 5–8).
-// Image prompts embedded only in LinkedIn / Facebook / Instagram.
+// language (en/he) and the product hashtag bounds (LI 0–3, FB 0–2).
+// Image prompts embedded only in LinkedIn / Facebook.
 //
 // Used as the normal path while CONTENT_GENERATION_ENABLED=false (generatorVersion
 // "mock-2", degraded=false) and as the fallback when a real Claude generator
@@ -71,26 +70,6 @@ function hashtags(input: GeneratorInput, min: number, max: number): string[] {
   return out.slice(0, max);
 }
 
-function img(role: 'primary' | 'alternative', title: string, topic: string, aspect: string, lang: 'en' | 'he'): ImagePromptV2 {
-  return lang === 'he'
-    ? {
-        role,
-        prompt: `תמונת עריכה המייצגת את ${title}. דגש על ${topic}. קומפוזיציה נקייה עם מטאפורה ויזואלית חזקה.`,
-        aspectRatio: aspect,
-        visualStyle: 'אסתטיקה מודרנית ונקייה, טיפוגרפיה ברורה',
-        mood: 'מקצועי ומעורר השראה',
-        negativePrompt: 'מטושטש, עמוס, טקסט על התמונה, איכות נמוכה, סימני מים',
-      }
-    : {
-        role,
-        prompt: `Editorial image representing ${title}. Focus on ${topic}. Clean composition with a strong visual metaphor.`,
-        aspectRatio: aspect,
-        visualStyle: 'Clean modern aesthetic, bold typography',
-        mood: 'Professional and thought-provoking',
-        negativePrompt: 'blurry, cluttered, text overlays, low quality, watermarks',
-      };
-}
-
 // Primary material, preferring verified facts then research.
 function material(input: GeneratorInput) {
   const topic = input.research.mainTopics[0] || input.brief.caseTitle;
@@ -130,45 +109,28 @@ export function generateMockContent(input: GeneratorInput): GeneratedOutput {
     case 'linkedin': {
       const tags = hashtags(input, 0, 3);
       const takeaways = (claims.length > 0 ? claims : input.research.keyInsights).slice(0, 5);
-      const ip = img('primary', caseTitle, topic, '1.91:1', lang);
       const breakdown = {
         hook, context: input.research.summary, insight,
         takeaways: takeaways.length > 0 ? takeaways : [insight],
-        cta: t.cta, hashtags: tags, imagePrompt: ip,
+        cta: t.cta, hashtags: tags,
       };
       const readyToPublish = [
         hook, '', SEP, '', insight, '', angle, '', t.takeaways,
         breakdown.takeaways.map((x, i) => `${i + 1}. ${x}`).join('\n'),
         '', t.cta, ...(tags.length ? ['', tags.join(' ')] : []),
       ].join('\n').trim();
-      return GeneratedOutputSchema.parse({ platform: 'linkedin', title: caseTitle, readyToPublish, breakdown, metadata: meta({ hashtags: tags, imagePrompts: [ip] }) });
+      return GeneratedOutputSchema.parse({ platform: 'linkedin', title: caseTitle, readyToPublish, breakdown, metadata: meta({ hashtags: tags }) });
     }
 
     case 'facebook': {
       const tags = hashtags(input, 0, 2);
-      const ip = img('primary', caseTitle, topic, '1.91:1', lang);
       const cq = lang === 'he' ? `איך אתם רואים את ההשפעה של ${topic}?` : `How do you see ${topic} playing out?`;
       const breakdown = {
         hook, story: input.research.summary, personalInterpretation: angle,
-        communityQuestion: cq, hashtags: tags, imagePrompt: ip,
+        communityQuestion: cq, hashtags: tags,
       };
       const readyToPublish = [hook, '', input.research.summary, '', angle, '', cq, ...(tags.length ? ['', tags.join(' ')] : [])].join('\n').trim();
-      return GeneratedOutputSchema.parse({ platform: 'facebook', title: `${caseTitle}`, readyToPublish, breakdown, metadata: meta({ hashtags: tags, imagePrompts: [ip] }) });
-    }
-
-    case 'instagram': {
-      const tags = hashtags(input, 5, 8);
-      const primary = img('primary', caseTitle, topic, '1:1', lang);
-      const alternative = img('alternative', caseTitle, topic, '4:5', lang);
-      const strong = (lang === 'he' ? `${topic} משנה הכול.` : `${topic} changes everything.`);
-      const body = [insight, '', `${angle} 👇`].join('\n');
-      const breakdown = {
-        hook: strong.length > 120 ? strong.slice(0, 117) + '…' : strong,
-        body, cta: t.cta, hashtags: tags,
-        primaryImagePrompt: primary, alternativeImagePrompt: alternative,
-      };
-      const readyToPublish = [breakdown.hook, '', body, '', t.cta, '', tags.join(' ')].join('\n').trim();
-      return GeneratedOutputSchema.parse({ platform: 'instagram', title: `${caseTitle}`, readyToPublish, breakdown, metadata: meta({ hashtags: tags, imagePrompts: [primary, alternative] }) });
+      return GeneratedOutputSchema.parse({ platform: 'facebook', title: `${caseTitle}`, readyToPublish, breakdown, metadata: meta({ hashtags: tags }) });
     }
 
     case 'newsletter': {

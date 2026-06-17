@@ -49,7 +49,7 @@ export function engineSystem(lang: 'en' | 'he'): string {
     '- Fact discipline governs HOW you state a claim (assert / hedge / omit), NOT which story you tell. A thesis resting on an uncertain or inferred claim is still the spine — change the WORDING per its register, never demote the story: assert = state plainly; hedge = "coaches argue…", "early signs suggest…", "reportedly"; speculate = "could…", "one possible implication…", "an emerging question is…".',
     '- Use ONLY facts present in the provided material. Never invent facts, statistics, names, quotes, dates, or events.',
     '- VERIFIED claims are safe to state. HEDGE or OMIT uncertain claims. NEVER state conflicting claims as fact.',
-    '- Each platform has a distinct purpose, structure, rhythm, and tone. Follow the platform instructions precisely. Do NOT make every platform sound the same; in particular, Facebook/Instagram must not read like LinkedIn.',
+    '- Each platform has a distinct purpose, structure, rhythm, and tone. Follow the platform instructions precisely. Do NOT make every platform sound the same; in particular, Facebook must not read like LinkedIn.',
     `- LANGUAGE: write ALL readyToPublish and breakdown text in ${language}. Proper nouns and product/company/technology names (e.g. Microsoft, Azure, AI, Security Copilot) may stay in their original language. Image-prompt fields must ALWAYS be written in ENGLISH (they feed an image model).`,
     '- readyToPublish must be the final, copy-paste-ready text for the platform. The breakdown must contain the same content decomposed into its named parts (they must be consistent).',
     '- Return ONLY the structured result via the provided tool. No preamble, no markdown fences, no extra fields.',

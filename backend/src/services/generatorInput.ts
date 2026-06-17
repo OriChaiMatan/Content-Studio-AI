@@ -17,13 +17,12 @@ import {
 
 const GENERATOR_VERSION = 'gen-1';
 
-// Per-platform knobs (hashtag bounds per product decision; image counts).
+// Per-platform knobs (hashtag bounds per product decision).
 export const PLATFORM_CONFIG: Record<ContentPlatform, Record<string, unknown>> = {
-  linkedin:   { imagePromptCount: 1, maxHashtags: 3, takeawayCount: [3, 5] },
-  facebook:   { imagePromptCount: 1, maxHashtags: 2, requireCommunityQuestion: true, allowFirstPerson: true },
-  instagram:  { imagePromptCount: 2, minHashtags: 5, maxHashtags: 8, strongFirstLine: true },
-  newsletter: { imagePromptCount: 0, computeReadingTime: true, subjectMaxChars: 120, previewMaxChars: 150, wordTarget: [600, 900] },
-  podcast:    { imagePromptCount: 0, computeDuration: true, wordsPerMinute: 150, durationMinutes: [30, 45], chapterCountHint: [6, 9] },
+  linkedin:   { maxHashtags: 3, takeawayCount: [3, 5] },
+  facebook:   { maxHashtags: 2, requireCommunityQuestion: true, allowFirstPerson: true },
+  newsletter: { computeReadingTime: true, subjectMaxChars: 120, previewMaxChars: 150, wordTarget: [600, 900] },
+  podcast:    { computeDuration: true, wordsPerMinute: 150, durationMinutes: [30, 45], chapterCountHint: [6, 9] },
 };
 
 function resolveLang(run: PipelineRun, c: ContentCase): 'en' | 'he' {
