@@ -4,13 +4,28 @@ import { TopBar } from '../../components/layout/TopBar';
 import { PlatformBadge } from '../../components/ui/Badge';
 import { Icon } from '../../components/ui/Icon';
 import { useLibraryStore } from '../../stores/libraryStore';
-import type { LibraryRunGroup, LibraryItem } from '../../types';
+import type { LibraryRunGroup, LibraryItem, Platform } from '../../types';
+
+// Human label for the platform filter chips (badge component isn't a toggle).
+const PLATFORM_LABEL: Record<Platform, string> = {
+  linkedin:   'LinkedIn',
+  facebook:   'Facebook',
+  newsletter: 'Newsletter',
+  podcast:    'Podcast',
+};
 
 // ── Individual output item (inside an expanded run card) ──
 
 function OutputItem({ item }: { item: LibraryItem }) {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied]     = useState(false);
   const isLong = item.body.length > 200;
+
+  function copy() {
+    navigator.clipboard?.writeText(item.body);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
 
   return (
     <div className="border border-outline-variant/20 rounded-lg bg-surface-container-lowest overflow-hidden">
@@ -20,7 +35,7 @@ function OutputItem({ item }: { item: LibraryItem }) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-medium text-on-surface truncate text-start" dir="auto">{item.title}</p>
-          <p dir="auto" className={`text-[12px] text-on-surface-variant mt-0.5 text-start ${!expanded && isLong ? 'line-clamp-2' : ''}`}>
+          <p dir="auto" className={`text-[12px] text-on-surface-variant mt-0.5 text-start whitespace-pre-wrap ${!expanded && isLong ? 'line-clamp-2' : ''}`}>
             {item.body}
           </p>
           {isLong && (
@@ -31,11 +46,11 @@ function OutputItem({ item }: { item: LibraryItem }) {
         </div>
         <div className="flex gap-1 shrink-0">
           <button
-            onClick={() => navigator.clipboard?.writeText(item.body)}
+            onClick={copy}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors"
             title="Copy to clipboard"
           >
-            <Icon name="content_copy" size="sm" />
+            <Icon name={copied ? 'check' : 'content_copy'} size="sm" className={copied ? 'text-green-600' : ''} />
           </button>
         </div>
       </div>
@@ -46,7 +61,8 @@ function OutputItem({ item }: { item: LibraryItem }) {
 // ── Run card ──────────────────────────────────────────────
 
 function RunCard({ group }: { group: LibraryRunGroup }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen]     = useState(false);
+  const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
 
   const runDate = new Date(group.runDate).toLocaleDateString('en-US', {
@@ -56,11 +72,20 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
     hour: '2-digit', minute: '2-digit',
   });
 
+  // Preview / copy source: the first approved output in the run.
+  const primary = group.items[0];
+
+  function copyPrimary() {
+    if (!primary) return;
+    navigator.clipboard?.writeText(primary.body);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   return (
     <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm overflow-hidden transition-all hover:shadow-md">
-      {/* Card header — always visible.
-          NOTE: converted from <button> to <div role="button"> to avoid nesting
-          the "Open Review" <button> inside another <button> (invalid HTML). */}
+      {/* Card header — always visible. <div role="button"> so the action buttons
+          below aren't nested inside a <button> (invalid HTML). */}
       <div
         role="button"
         tabIndex={0}
@@ -68,9 +93,9 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => !o); } }}
         className="w-full text-left px-5 py-4 flex items-start gap-4 cursor-pointer select-none"
       >
-        {/* Run status dot */}
-        <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
-          <Icon name="check_circle" size="sm" className="text-green-700" />
+        {/* Saved-asset icon */}
+        <div className="w-9 h-9 rounded-lg bg-secondary-container/60 flex items-center justify-center shrink-0 mt-0.5">
+          <Icon name="bookmark" size="sm" className="text-on-secondary-container" />
         </div>
 
         {/* Run info */}
@@ -89,8 +114,15 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
             ))}
           </div>
 
+          {/* Content preview snippet (first approved output) */}
+          {primary && (
+            <p dir="auto" className="text-[12.5px] leading-relaxed text-on-surface-variant mt-2.5 line-clamp-2 text-start whitespace-pre-wrap">
+              {primary.body}
+            </p>
+          )}
+
           {/* Stats row */}
-          <div className="flex items-center gap-4 mt-2 text-[11px] text-on-surface-variant">
+          <div className="flex items-center gap-4 mt-2.5 text-[11px] text-on-surface-variant">
             <span className="flex items-center gap-1">
               <Icon name="check_circle" size="sm" className="text-green-600" />
               <span><span className="font-bold text-on-surface">{group.approvedCount}</span> approved</span>
@@ -104,22 +136,33 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
           </div>
         </div>
 
+        {/* Actions */}
         <div className="flex items-center gap-2 shrink-0 mt-0.5" onClick={e => e.stopPropagation()}>
+          {primary && (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); copyPrimary(); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+                copied ? 'bg-green-100 text-green-700' : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'
+              }`}
+              title="Copy the approved content"
+            >
+              <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          )}
           {group.runId && (
             <button
               type="button"
               onClick={() => navigate(`/cases/${group.caseId}/review?runId=${group.runId}`)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-surface-container hover:bg-secondary-container hover:text-on-secondary-container transition-colors"
-              title="Open Review page for this run"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80 transition-colors"
+              title="View the approved content for this run"
             >
-              <Icon name="rate_review" size="sm" />
-              Open Review
+              <Icon name="visibility" size="sm" />
+              View Content
             </button>
           )}
-          <Icon
-            name={open ? 'expand_less' : 'expand_more'}
-            className="text-outline"
-          />
+          <Icon name={open ? 'expand_less' : 'expand_more'} className="text-outline" />
         </div>
       </div>
 
@@ -142,8 +185,16 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
 
 export function LibraryPage() {
   const { runs, loading, filteredRuns, setQuery, fetchLibrary } = useLibraryStore();
+  const navigate = useNavigate();
+  const [platformFilter, setPlatformFilter] = useState<Platform | 'all'>('all');
 
-  const displayRuns = filteredRuns();
+  // Platforms actually present in the library (for the filter chips).
+  const availablePlatforms = [...new Set(runs.flatMap(r => r.platforms))];
+
+  const searched = filteredRuns();
+  const displayRuns = platformFilter === 'all'
+    ? searched
+    : searched.filter(g => g.platforms.includes(platformFilter));
 
   return (
     <>
@@ -168,15 +219,40 @@ export function LibraryPage() {
 
           {/* Stats bar */}
           {runs.length > 0 && (
-            <div className="flex items-center gap-6 mb-6 text-[13px] text-on-surface-variant">
+            <div className="flex items-center gap-6 mb-5 text-[13px] text-on-surface-variant">
               <span>
-                <span className="font-bold text-on-surface">{runs.length}</span> pipeline run{runs.length !== 1 ? 's' : ''} in library
+                <span className="font-bold text-on-surface">{runs.length}</span> saved asset{runs.length !== 1 ? 's' : ''}
               </span>
               <span>
                 <span className="font-bold text-on-surface">
                   {runs.reduce((n, r) => n + r.approvedCount, 0)}
-                </span> total approved outputs
+                </span> approved outputs
               </span>
+            </div>
+          )}
+
+          {/* Platform filter chips */}
+          {availablePlatforms.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2 mb-6">
+              <button
+                onClick={() => setPlatformFilter('all')}
+                className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
+                  platformFilter === 'all' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                }`}
+              >
+                All
+              </button>
+              {availablePlatforms.map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPlatformFilter(p)}
+                  className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
+                    platformFilter === p ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                  }`}
+                >
+                  {PLATFORM_LABEL[p] ?? p}
+                </button>
+              ))}
             </div>
           )}
 
@@ -188,19 +264,34 @@ export function LibraryPage() {
             </div>
 
           ) : displayRuns.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
-              <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
-                <Icon name="auto_stories" size="xl" className="text-outline" />
+            runs.length > 0 ? (
+              // Has content, but the current search/filter matched nothing.
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
+                  <Icon name="search_off" size="xl" className="text-outline" />
+                </div>
+                <p className="text-[16px] font-medium text-on-surface-variant">No matching content</p>
+                <p className="text-[14px] text-outline mt-1">Try a different search term or platform filter.</p>
               </div>
-              <p className="text-[16px] font-medium text-on-surface-variant">
-                {runs.length > 0 ? 'No results for your search' : 'Library is empty'}
-              </p>
-              <p className="text-[14px] text-outline mt-1">
-                {runs.length > 0
-                  ? 'Try a different search term.'
-                  : 'Approve outputs from the Review page to save them here.'}
-              </p>
-            </div>
+            ) : (
+              // Truly empty library.
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
+                  <Icon name="auto_stories" size="xl" className="text-outline" />
+                </div>
+                <p className="text-[16px] font-semibold text-on-surface">No approved content yet</p>
+                <p className="text-[14px] text-on-surface-variant mt-1 max-w-sm">
+                  Approved drafts will appear here as reusable content assets.
+                </p>
+                <button
+                  onClick={() => navigate('/cases/new')}
+                  className="mt-6 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-on-primary text-[13px] font-medium hover:bg-primary/90 transition-colors"
+                >
+                  <Icon name="add" size="sm" />
+                  Create Content Case
+                </button>
+              </div>
+            )
 
           ) : (
             <div className="space-y-4 max-w-3xl">
