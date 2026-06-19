@@ -167,11 +167,6 @@ async function produce(input: GeneratorInput): Promise<GeneratedOutput> {
   if (!contentGenerationConfig.enabled) {
     return generateMockContent(input);
   }
-  // Podcast gated separately → mock fallback (degraded), no Claude podcast call.
-  if (platform === 'podcast' && !contentGenerationConfig.podcastEnabled) {
-    console.warn('[contentGen:podcast] podcast generation disabled — using mock fallback.');
-    return mockFallback(input);
-  }
 
   const client = getContentClient();
   if (!client) {

@@ -442,7 +442,9 @@ export type ContentPackage = z.infer<typeof ContentPackageSchema>;
 // Newsletter & Podcast have no image prompt.
 // ═════════════════════════════════════════════════════════════════════════════
 
-export const CONTENT_PLATFORMS = ['linkedin', 'facebook', 'newsletter', 'podcast'] as const;
+// Podcast retired from the active MVP (deferred, like Instagram & image generation).
+// Legacy podcast outputs in the DB still render; the platform is no longer generated.
+export const CONTENT_PLATFORMS = ['linkedin', 'facebook', 'newsletter'] as const;
 export type ContentPlatform = (typeof CONTENT_PLATFORMS)[number];
 
 export const LinkedInBreakdownSchema = z.object({
@@ -476,27 +478,6 @@ export const NewsletterBreakdownSchema = z.object({
   practicalTakeaways: z.array(z.string().min(1)).min(1).max(8),
   closingInsight:     z.string().min(1),
   cta:                z.string().min(1),
-});
-
-export const PodcastChapterSchema = z.object({
-  title:   z.string().min(1),
-  summary: z.string().min(1),
-});
-
-export const PodcastBreakdownSchema = z.object({
-  title:              z.string().min(1),
-  description:        z.string().min(1),
-  chapters:           z.array(PodcastChapterSchema).min(1).max(12),
-  openingHook:        z.string().min(1),
-  background:         z.string().min(1),
-  whatHappened:       z.string().min(1),
-  whyItMatters:       z.string().min(1),
-  biggerPicture:      z.string().min(1),
-  whatMostPeopleMiss: z.string().min(1),
-  practicalActions:   z.array(z.string().min(1)).min(1).max(10),
-  closingThoughts:    z.string().min(1),
-  cta:                z.string().min(1),
-  fullScript:         z.string().min(50),
 });
 
 // Thesis Preservation Score (Phase 10E.2) — deterministic post-generation measure
@@ -544,7 +525,6 @@ export const GeneratedOutputSchema = z.discriminatedUnion('platform', [
   z.object({ platform: z.literal('linkedin'),   breakdown: LinkedInBreakdownSchema,   ...baseOutputShape }),
   z.object({ platform: z.literal('facebook'),   breakdown: FacebookBreakdownSchema,   ...baseOutputShape }),
   z.object({ platform: z.literal('newsletter'), breakdown: NewsletterBreakdownSchema, ...baseOutputShape }),
-  z.object({ platform: z.literal('podcast'),    breakdown: PodcastBreakdownSchema,    ...baseOutputShape }),
 ]);
 export type GeneratedOutput = z.infer<typeof GeneratedOutputSchema>;
 

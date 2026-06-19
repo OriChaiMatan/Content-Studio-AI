@@ -42,7 +42,6 @@ const TARGET_OPTIONS: { value: ContentTarget; label: string; icon: string }[] = 
   { value: 'linkedin',    label: 'LinkedIn',    icon: 'work' },
   { value: 'facebook',    label: 'Facebook',    icon: 'groups' },
   { value: 'newsletter',  label: 'Newsletter',  icon: 'email' },
-  { value: 'podcast',     label: 'Podcast',     icon: 'mic' },
 ];
 
 const FREQUENCY_OPTIONS: { value: ScheduleFrequency; label: string; sub: string; icon: string }[] = [
@@ -82,7 +81,7 @@ function Step1Goal({ form, update }: { form: WizardFormData; update: UpdateFn })
   return (
     <div className="space-y-6">
       <Input
-        label="Case Name *"
+        label="What are you creating content about? *"
         type="text"
         value={form.title}
         onChange={e => update('title', e.target.value)}
@@ -193,7 +192,7 @@ function Step2StyleTargets({ form, update }: { form: WizardFormData; update: Upd
       </div>
 
       <div className="flex flex-col gap-2">
-        <label className="text-[14px] font-medium text-on-surface-variant">Content Targets *</label>
+        <label className="text-[14px] font-medium text-on-surface-variant">Where should we publish? *</label>
         <p className="text-[12px] text-on-surface-variant -mt-1">
           Select the platforms to generate content for. At least one required.
         </p>
@@ -241,7 +240,7 @@ function Step3Schedule({ form, update }: { form: WizardFormData; update: UpdateF
       </div>
 
       <div className="flex flex-col gap-2">
-        <label className="text-[14px] font-medium text-on-surface-variant">Generate Schedule</label>
+        <label className="text-[14px] font-medium text-on-surface-variant">When should content be generated?</label>
         <p className="text-[12px] text-on-surface-variant -mt-1">
           When should this case generate new content? You can always use <strong>Generate Now</strong> regardless of this setting.
         </p>

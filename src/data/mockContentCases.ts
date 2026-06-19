@@ -48,7 +48,7 @@ function makePipeline(stage: 'idle' | 'research' | 'fact_check' | 'completed'): 
 // ── Output helpers ────────────────────────────────────────
 
 function makeOutputs(caseId: string): ContentOutput[] {
-  const platforms = ['linkedin', 'facebook', 'newsletter', 'podcast'] as const;
+  const platforms = ['linkedin', 'facebook', 'newsletter'] as const;
   const data: Record<string, { title: string; body: string }> = {
     linkedin: {
       title: 'Quantum Supremacy & Global Logistics',
@@ -61,10 +61,6 @@ function makeOutputs(caseId: string): ContentOutput[] {
     newsletter: {
       title: 'Weekly Digest: Quantum Computing Meets Global Supply Chain',
       body: `This week, we're exploring one of the most consequential technological intersections of our decade: quantum computing and supply chain optimization.\n\n**What we covered:**\n\nQuantum error correction has crossed a critical threshold, enabling stable long-form calculations on real-world logistics datasets. Three major shipping companies have begun pilot programs, with results suggesting a 15–23% reduction in operational fuel costs.\n\nThe Silicon Photonics angle: New chip architectures that leverage light instead of electrons are extending quantum coherence times, making practical quantum logistics systems economically viable for the first time.\n\n**What to watch next week:**\nThe EU's proposed regulatory framework for quantum-assisted trade routing decisions.\n\n*— Alex Rivera, Lead Researcher*`,
-    },
-    podcast: {
-      title: 'Ep. 38 Outline: Quantum Logistics Revolution',
-      body: `EPISODE OUTLINE — "Green Horizon" Episode 38\n\nTitle: "The Quantum Logistics Revolution: How Qubits Are Saving the Planet One Shipping Route at a Time"\n\n[COLD OPEN – 0:00-1:30]\nHook: The container ship that chose its route using a quantum algorithm\n\n[SEGMENT 1 – 1:30-12:00]\nWhat quantum computing actually is (no jargon version)\nGuest intro: Dr. Marcus Chen, MIT Quantum Systems Lab\n\n[SEGMENT 2 – 12:00-28:00]\nThe logistics problem that classical computers can't solve\nHow quantum annealing changes the math\nReal-world pilot results from ShipNext and Maersk Digital\n\n[SEGMENT 3 – 28:00-40:00]\nEnvironmental angle: 23% fuel reduction = real emissions impact\nTimeline: when does this become mainstream?\n\n[CLOSE – 40:00-45:00]\nKey takeaways + listener action items`,
     },
   };
 
@@ -99,7 +95,7 @@ export const mockContentCases: ContentCase[] = [
     goalCustom: null,
     contentStyle: 'professional',
     styleCustom: null,
-    contentTargets: ['linkedin','facebook','newsletter','podcast','images'],
+    contentTargets: ['linkedin','facebook','newsletter','images'],
     targetAudience: 'Logistics executives and supply chain managers at Fortune 500 companies',
     industry: 'Technology & Logistics',
     experienceLevel: 'expert',
@@ -175,7 +171,7 @@ export const mockContentCases: ContentCase[] = [
     goalCustom: null,
     contentStyle: 'professional',
     styleCustom: null,
-    contentTargets: ['linkedin','facebook','newsletter','podcast','images'],
+    contentTargets: ['linkedin','facebook','newsletter','images'],
     targetAudience: 'Policy makers, AI researchers, and technology-curious general public',
     industry: 'Artificial Intelligence & Policy',
     experienceLevel: 'intermediate',
@@ -246,12 +242,12 @@ export const mockContentCases: ContentCase[] = [
     goalCustom: null,
     contentStyle: 'professional',
     styleCustom: null,
-    contentTargets: ['linkedin','facebook','newsletter','podcast','images'],
+    contentTargets: ['linkedin','facebook','newsletter','images'],
     targetAudience: 'Environmental advocates, policy professionals, and sustainability-focused investors',
     industry: 'Energy & Environment',
     experienceLevel: 'intermediate',
     writingStyle: 'Passionate yet evidence-based; solutions-focused',
-    goals: 'Highlight breakthroughs in sustainable energy for small island nations. Build audience for Green Horizon podcast.',
+    goals: 'Highlight breakthroughs in sustainable energy for small island nations. Build audience for Green Horizon sustainability content.',
     aiInstructions: 'Emphasize human stories alongside data. Include actionable next steps for readers.',
     schedule: { frequency: 'monthly', time: '10:00', dayOfWeek: null, dayOfMonth: 1 },
     sources: [
@@ -302,7 +298,7 @@ export const mockContentCases: ContentCase[] = [
     goalCustom: null,
     contentStyle: 'professional',
     styleCustom: null,
-    contentTargets: ['linkedin','facebook','newsletter','podcast','images'],
+    contentTargets: ['linkedin','facebook','newsletter','images'],
     targetAudience: 'HR leaders and remote team managers',
     industry: 'Human Resources & Future of Work',
     experienceLevel: 'intermediate',
@@ -338,7 +334,7 @@ export const mockContentCases: ContentCase[] = [
     goalCustom: null,
     contentStyle: 'professional',
     styleCustom: null,
-    contentTargets: ['linkedin','facebook','newsletter','podcast','images'],
+    contentTargets: ['linkedin','facebook','newsletter','images'],
     targetAudience: 'Independent creators and digital entrepreneurs',
     industry: 'Web3 & Creator Economy',
     experienceLevel: 'beginner',

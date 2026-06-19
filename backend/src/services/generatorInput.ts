@@ -22,7 +22,6 @@ export const PLATFORM_CONFIG: Record<ContentPlatform, Record<string, unknown>> =
   linkedin:   { maxHashtags: 3, takeawayCount: [3, 5] },
   facebook:   { maxHashtags: 2, requireCommunityQuestion: true, allowFirstPerson: true },
   newsletter: { computeReadingTime: true, subjectMaxChars: 120, previewMaxChars: 150, wordTarget: [600, 900] },
-  podcast:    { computeDuration: true, wordsPerMinute: 150, durationMinutes: [30, 45], chapterCountHint: [6, 9] },
 };
 
 function resolveLang(run: PipelineRun, c: ContentCase): 'en' | 'he' {

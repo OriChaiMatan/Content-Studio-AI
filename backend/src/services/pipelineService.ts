@@ -7,15 +7,17 @@ import { PIPELINE_STEP_ORDER } from '../schemas/pipelineSchemas';
 // LinkedIn/Facebook. 'images' maps to undefined → no output (no-op).
 // 'instagram' is RETIRED from the MVP (Sprint 1): tolerated as a legacy target on
 // existing cases but maps to undefined → no output (no-op), so old cases never crash.
+// 'podcast' is likewise RETIRED (deferred from the MVP): tolerated as a legacy target
+// but maps to undefined → no output, so it is never generated for new or old cases.
 const CONTENT_TARGET_TO_PLATFORM: Record<string, ContentPlatform | undefined> = {
   linkedin:   'linkedin',
   facebook:   'facebook',
   instagram:  undefined,
   newsletter: 'newsletter',
-  podcast:    'podcast',
+  podcast:    undefined,
   images:     undefined,
 };
-const ALL_CONTENT_PLATFORMS: ContentPlatform[] = ['linkedin', 'facebook', 'newsletter', 'podcast'];
+const ALL_CONTENT_PLATFORMS: ContentPlatform[] = ['linkedin', 'facebook', 'newsletter'];
 import {
   ResearchContextSchema,
   FactCheckReportSchema,

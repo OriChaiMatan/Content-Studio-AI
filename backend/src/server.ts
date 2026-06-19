@@ -16,7 +16,6 @@ const server = app.listen(PORT, () => {
     cwd: process.cwd(),
     CONTENT_GENERATION_ENABLED: process.env.CONTENT_GENERATION_ENABLED ?? '(unset)',
     enabledResolved: contentGenerationConfig.enabled,
-    podcastEnabled: contentGenerationConfig.podcastEnabled,
     apiKeyPresent: (process.env.ANTHROPIC_API_KEY ?? '').length > 0,
     model: contentGenerationConfig.model,
   }));

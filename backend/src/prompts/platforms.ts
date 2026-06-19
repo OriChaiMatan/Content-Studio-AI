@@ -5,7 +5,6 @@ import {
   LinkedInBreakdownSchema,
   FacebookBreakdownSchema,
   NewsletterBreakdownSchema,
-  PodcastBreakdownSchema,
   type GeneratedOutput,
   type GeneratorInput,
   type ContentPlatform,
@@ -356,54 +355,6 @@ export const PLATFORM_SPECS: Record<ContentPlatform, PlatformSpec> = {
       return GeneratedOutputSchema.parse({
         platform: 'newsletter', title: breakdown.subject, readyToPublish, breakdown,
         metadata: baseMeta(input, { readingTimeMinutes, ...(practicalTakeawaysRepaired ? { practicalTakeawaysRepaired: true } : {}) }),
-      });
-    },
-  },
-
-  // ── Podcast ───────────────────────────────────────────────────────────────
-  podcast: {
-    maxTokens: 16000,
-    longform: true,
-    instruction: [
-      'PLATFORM: Podcast (deep-dive expert episode). Spoken style — NOT an article. Write to be read aloud.',
-      'Target: a 30–45 minute episode (roughly 4,500–6,750 spoken words in fullScript).',
-      'Return the breakdown: title, description, chapters (each {title, summary}), openingHook, background, whatHappened, whyItMatters, biggerPicture, whatMostPeopleMiss, practicalActions, closingThoughts, cta, fullScript. No image prompt.',
-      'fullScript is the complete spoken script.',
-    ].join('\n'),
-    tool: {
-      name: 'record_podcast_content',
-      description: 'Record the podcast breakdown.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          title: { type: 'string' }, description: { type: 'string' },
-          chapters: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'object', properties: { title: { type: 'string' }, summary: { type: 'string' } }, required: ['title', 'summary'] } },
-          openingHook: { type: 'string' }, background: { type: 'string' }, whatHappened: { type: 'string' },
-          whyItMatters: { type: 'string' }, biggerPicture: { type: 'string' }, whatMostPeopleMiss: { type: 'string' },
-          practicalActions: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 10 },
-          closingThoughts: { type: 'string' }, cta: { type: 'string' }, fullScript: { type: 'string' },
-        },
-        required: ['title', 'description', 'chapters', 'openingHook', 'background', 'whatHappened',
-          'whyItMatters', 'biggerPicture', 'whatMostPeopleMiss', 'practicalActions', 'closingThoughts', 'cta', 'fullScript'],
-      },
-    },
-    finalize: (raw, input) => {
-      const chapters = Array.isArray(raw.chapters)
-        ? (raw.chapters as Record<string, unknown>[]).map(c => ({ title: str(c.title), summary: str(c.summary) }))
-        : [];
-      const breakdown = PodcastBreakdownSchema.parse({
-        title: str(raw.title), description: str(raw.description), chapters,
-        openingHook: str(raw.openingHook), background: str(raw.background), whatHappened: str(raw.whatHappened),
-        whyItMatters: str(raw.whyItMatters), biggerPicture: str(raw.biggerPicture), whatMostPeopleMiss: str(raw.whatMostPeopleMiss),
-        practicalActions: strArr(raw.practicalActions), closingThoughts: str(raw.closingThoughts),
-        cta: str(raw.cta), fullScript: str(raw.fullScript),
-      });
-      const readyToPublish = [`🎙️ ${breakdown.title}`, '', SEP, '', breakdown.fullScript].join('\n').trim();
-      const estimatedWordCount = words(breakdown.fullScript);
-      const estimatedDurationMinutes = Math.max(1, Math.round(estimatedWordCount / 150));
-      return GeneratedOutputSchema.parse({
-        platform: 'podcast', title: breakdown.title, readyToPublish, breakdown,
-        metadata: baseMeta(input, { estimatedWordCount, estimatedDurationMinutes }),
       });
     },
   },

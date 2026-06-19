@@ -377,7 +377,6 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
   const allTargets: { value: ContentTarget; icon: string }[] = [
     { value: 'linkedin', icon: 'work' }, { value: 'facebook', icon: 'groups' },
     { value: 'newsletter', icon: 'email' },
-    { value: 'podcast', icon: 'mic' },
   ];
 
   function handleEdit() {

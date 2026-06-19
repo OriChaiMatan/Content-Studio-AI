@@ -153,33 +153,5 @@ export function generateMockContent(input: GeneratorInput): GeneratedOutput {
       return GeneratedOutputSchema.parse({ platform: 'newsletter', title: subject, readyToPublish: body.trim(), breakdown, metadata: meta({ readingTimeMinutes }) });
     }
 
-    case 'podcast': {
-      const title = `${caseTitle} — ${t.episode}`;
-      const chapters = input.research.mainTopics.slice(0, 6).map((m, i) => ({ title: `${t.chapter} ${i + 1}: ${m}`, summary: m }));
-      const safeChapters = chapters.length > 0 ? chapters : [{ title: `${t.chapter} 1`, summary: topic }];
-      const actions = (claims.length > 0 ? claims : input.research.suggestedAngles).slice(0, 5);
-      const fullScript = [
-        `[INTRO] ${hook}`, insight, '',
-        `[BACKGROUND] ${input.research.summary}`, '',
-        `[WHAT HAPPENED] ${claims.join(' ')}`, '',
-        `[WHY IT MATTERS] ${angle}`, '',
-        `[BIGGER PICTURE] ${input.research.keyInsights.join(' ')}`, '',
-        `[CLOSING] ${t.cta}`,
-      ].join('\n');
-      const breakdown = {
-        title, description: input.research.summary,
-        chapters: safeChapters,
-        openingHook: hook, background: input.research.summary,
-        whatHappened: claims.join(' ') || input.research.summary,
-        whyItMatters: angle, biggerPicture: input.research.keyInsights.join(' ') || insight,
-        whatMostPeopleMiss: input.research.risks.join(' ') || angle,
-        practicalActions: actions.length > 0 ? actions : [angle],
-        closingThoughts: insight, cta: t.cta, fullScript,
-      };
-      const estimatedWordCount = words(fullScript);
-      const estimatedDurationMinutes = Math.max(1, Math.round(estimatedWordCount / 150));
-      const readyToPublish = [`🎙️ ${title}`, '', SEP, '', fullScript].join('\n').trim();
-      return GeneratedOutputSchema.parse({ platform: 'podcast', title, readyToPublish, breakdown, metadata: meta({ estimatedWordCount, estimatedDurationMinutes }) });
-    }
   }
 }
