@@ -153,6 +153,13 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
   const refreshCase          = useContentCasesStore(s => s.refreshCase);
   const fetchLibrary         = useLibraryStore(s => s.fetchLibrary);
 
+  // The page renders outputs from useLiveCase's LOCAL state, which only refreshes on the
+  // 5s poll — so optimistic STORE updates were invisible (the real bug). Subscribe to the
+  // status DIRECTLY from the store so Approve/Reject reflect instantly; the `output` prop
+  // still drives body/breakdown/scores (which don't change on approve/reject).
+  const liveStatus = useContentCasesStore(s => s.getCaseById(caseId)?.outputs.find(o => o.id === output.id)?.status);
+  const status = liveStatus ?? output.status;
+
   // Keep local edit state in sync when the store updates (e.g. after Regenerate)
   useEffect(() => {
     setBody(output.body);
@@ -160,8 +167,8 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
   }, [output.body]);
 
   async function handleApprove() {
-    if (approving || output.status === 'approved') return;
-    const prev = output.status;
+    if (approving || status === 'approved') return;
+    const prev = status;
     setApproving(true);
     setActionError(null);
     setOutputStatusLocal(caseId, output.id, 'approved');   // optimistic — instant
@@ -179,8 +186,8 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
   }
 
   async function handleReject() {
-    if (rejecting || output.status === 'rejected') return;
-    const prev = output.status;
+    if (rejecting || status === 'rejected') return;
+    const prev = status;
     setRejecting(true);
     setActionError(null);
     setOutputStatusLocal(caseId, output.id, 'rejected');   // optimistic — instant
@@ -225,7 +232,7 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
     draft:    'border-l-outline-variant',
     approved: 'border-l-green-400',
     rejected: 'border-l-error',
-  }[output.status];
+  }[status];
 
   const busy = approving || rejecting || saving || regenerating;
 
@@ -246,7 +253,7 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
           {isResearchDegraded(output) && <ResearchDegradedBadge />}
           {isDegraded(output) && <DegradedBadge />}
           <ThesisPreservationBadge output={output} />
-          <OutputStatusBadge status={output.status} />
+          <OutputStatusBadge status={status} />
         </div>
       </div>
 
@@ -337,7 +344,7 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
             <>
               <Button size="sm" variant="outline"
                 onClick={() => setEditing(true)}
-                disabled={output.status === 'approved' || busy}
+                disabled={status === 'approved' || busy}
               >
                 <Icon name="edit" size="sm" />
                 Edit
@@ -351,7 +358,7 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
                 {regenerating ? 'Regenerating…' : 'Regenerate'}
               </Button>
               <div className="flex-1" />
-              {output.status !== 'rejected' && (
+              {status !== 'rejected' && (
                 <Button size="sm" variant="danger"
                   onClick={handleReject}
                   loading={rejecting}
@@ -361,7 +368,7 @@ function OutputCard({ output, caseId, isActive, onSelect }: OutputCardProps) {
                   {rejecting ? 'Rejecting…' : 'Reject'}
                 </Button>
               )}
-              {output.status !== 'approved' && (
+              {status !== 'approved' && (
                 <Button size="sm"
                   onClick={handleApprove}
                   loading={approving}
@@ -397,6 +404,9 @@ export function ContentCaseReview() {
   // ?runId= case (previously a conditional refresh).
   const caseItem = useLiveCase(id);
   const loading  = useContentCasesStore(s => s.loading);
+  // Live status from the STORE (not the useLiveCase poll) so the tab icons + approved
+  // count reflect optimistic approve/reject instantly, like the card itself.
+  const liveOutputs = useContentCasesStore(s => s.getCaseById(id ?? '')?.outputs);
   const [activePlatform, setActivePlatform] = useState<Platform>('linkedin');
 
   if (!caseItem) {
@@ -421,7 +431,8 @@ export function ContentCaseReview() {
     ? c.outputs.filter(o => o.pipelineRunId === targetRunId)
     : c.outputs;
 
-  const approvedCount = reviewOutputs.filter(o => o.status === 'approved').length;
+  const statusOf = (o: ContentOutput) => liveOutputs?.find(x => x.id === o.id)?.status ?? o.status;
+  const approvedCount = reviewOutputs.filter(o => statusOf(o) === 'approved').length;
   const totalCount    = reviewOutputs.length;
 
   const sortedOutputs = [...reviewOutputs].sort((a, b) =>
@@ -509,8 +520,8 @@ export function ContentCaseReview() {
             >
               <Icon name={platformIcon[output.platform]} size="sm" />
               {output.platform.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-              {output.status === 'approved' && <Icon name="check_circle" size="sm" className="text-green-600" />}
-              {output.status === 'rejected' && <Icon name="cancel" size="sm" className="text-error" />}
+              {statusOf(output) === 'approved' && <Icon name="check_circle" size="sm" className="text-green-600" />}
+              {statusOf(output) === 'rejected' && <Icon name="cancel" size="sm" className="text-error" />}
             </button>
           ))}
         </div>
