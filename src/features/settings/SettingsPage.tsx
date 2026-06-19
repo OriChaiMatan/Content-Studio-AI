@@ -1,84 +1,291 @@
-import { useState } from 'react';
 import { TopBar } from '../../components/layout/TopBar';
 import { SectionCard } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Toggle } from '../../components/ui/Toggle';
-import { Button } from '../../components/ui/Button';
+import { Icon } from '../../components/ui/Icon';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
+import type { Language } from '../../types';
 
-// Read-only status row for the WhatsApp section (Phase 13G).
-function StatusRow({ label, value }: { label: string; value: string }) {
+// ── Language segmented control (instant-save) ─────────────────────────────────
+// Used for BOTH App language and Content output language — they are independent
+// persistent settings, so each instance carries its own value + onChange.
+const LANG_OPTIONS: { value: Language; label: string; sub: string }[] = [
+  { value: 'en', label: 'English', sub: 'English (US)' },
+  { value: 'he', label: 'Hebrew', sub: 'עברית' },
+];
+
+function LanguageSegmented({
+  value, onChange, ariaLabel,
+}: { value: Language; onChange: (v: Language) => void; ariaLabel: string }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-on-surface-variant">{label}</span>
-      <span className="font-medium text-on-surface">{value}</span>
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className="inline-flex gap-1 p-1 rounded-xl bg-surface-container-low border border-outline-variant/30"
+    >
+      {LANG_OPTIONS.map(opt => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(opt.value)}
+            className={[
+              'flex items-center gap-2 px-4 py-2 rounded-lg text-[14px] font-medium transition-colors',
+              active
+                ? 'bg-surface text-primary shadow-sm'
+                : 'text-on-surface-variant hover:text-on-surface',
+            ].join(' ')}
+          >
+            {active && <Icon name="check" size="sm" />}
+            <span>{opt.label}</span>
+            <span className="text-[12px] text-on-surface-variant/70">{opt.sub}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-export function SettingsPage() {
-  const { user, updateUser, updateNotification } = useSettingsStore();
-  // Phase 13G — real authenticated user (carries WhatsApp status); read-only here.
+// ── WhatsApp — premium connected-channel card (read-only status) ──────────────
+function StatusPill({ connected }: { connected: boolean }) {
+  return (
+    <span
+      className={[
+        'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold',
+        connected ? 'bg-green-100 text-green-700' : 'bg-surface-container text-on-surface-variant',
+      ].join(' ')}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500' : 'bg-outline'}`} />
+      {connected ? 'Connected' : 'Not connected'}
+    </span>
+  );
+}
+
+function DetailRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="flex items-center justify-between text-[13px]">
+      <span className="text-on-surface-variant">{label}</span>
+      <span className={`font-medium ${accent ? 'text-green-700' : 'text-on-surface'}`}>{value}</span>
+    </div>
+  );
+}
+
+function WhatsAppCard() {
   const authUser = useAuthStore(s => s.user);
   const wa = authUser?.whatsapp;
-  const waNotificationsOn = !!wa && !wa.optOut && !!authUser?.notifications.generationComplete;
-  const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const connected = !!wa?.linked;
+  const notificationsOn = !!wa && !wa.optOut && !!authUser?.notifications.generationComplete;
 
-  function handleSave() {
-    setSaveState('saving');
-    setTimeout(() => {
-      updateUser({ name, email });
-      setSaveState('saved');
-      setTimeout(() => setSaveState('idle'), 2000);
-    }, 900);
-  }
+  return (
+    <div className="rounded-2xl border border-outline-variant/40 overflow-hidden shadow-sm">
+      <div className="flex items-start gap-4 p-5 bg-gradient-to-br from-green-50 to-surface-container-lowest">
+        {/* Channel mark */}
+        <div className="w-12 h-12 rounded-xl bg-green-600 flex items-center justify-center shrink-0 shadow-sm">
+          <Icon name="chat" className="text-white" />
+        </div>
 
-  function handleDiscard() {
-    setName(user.name);
-    setEmail(user.email);
-    setSaveState('idle');
-  }
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-[16px] font-semibold text-on-surface">WhatsApp</h4>
+            <StatusPill connected={connected} />
+          </div>
+          <p className="text-[13px] text-on-surface-variant mt-1 max-w-md">
+            Send articles and sources directly to your AI workspace.
+          </p>
+
+          {connected ? (
+            <div className="mt-4 space-y-2 rounded-xl bg-surface-container-lowest/70 border border-outline-variant/30 p-4">
+              <DetailRow label="Phone" value={wa?.phoneE164 ?? '—'} />
+              <DetailRow
+                label="Verification"
+                value={wa?.verified ? 'Verified' : 'Pending'}
+                accent={wa?.verified}
+              />
+              <DetailRow label="Notifications" value={notificationsOn ? 'On' : 'Off'} />
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl bg-surface-container-lowest/70 border border-outline-variant/30 p-4">
+              <p className="text-[13px] text-on-surface-variant">
+                Connect WhatsApp during sign-up to forward content into your workspace from your phone.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+export function SettingsPage() {
+  const { user, updateUser, updateNotification } = useSettingsStore();
+  const outputLanguage = user.defaultOutputLanguage ?? 'he';
+
+  const initials = user.name
+    .split(' ')
+    .map(n => n[0])
+    .filter(Boolean)
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <>
-      <TopBar title="Settings" searchPlaceholder="Search settings..." />
+      <TopBar title="Settings" />
 
-      <main className="flex-1 p-8 max-w-5xl mx-auto w-full">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+      <main className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-3xl mx-auto w-full">
 
-          {/* Left column */}
-          <div className="md:col-span-8 space-y-6">
+          {/* Header */}
+          <div className="mb-6">
+            <p className="text-[15px] text-on-surface-variant">
+              Manage your account, preferences, and integrations
+            </p>
+            <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] text-on-surface-variant">
+              <Icon name="cloud_done" size="sm" className="text-green-600" />
+              Changes are saved automatically
+            </p>
+          </div>
 
-            {/* Account */}
-            <SectionCard title="Account" icon="person">
-              <div className="grid grid-cols-1 gap-6">
-                <Input
-                  label="Full Name"
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                />
-                <Input
-                  label="Email Address"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                />
+          <div className="space-y-6">
+
+            {/* ── 1. Profile ──────────────────────────────────── */}
+            <SectionCard title="Profile" icon="account_circle">
+              <div className="flex flex-col sm:flex-row items-start gap-6">
+                {/* Avatar */}
+                <div className="flex flex-col items-center gap-2 shrink-0">
+                  <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-on-primary text-2xl font-bold shadow-sm overflow-hidden">
+                    {user.avatarUrl ? (
+                      <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                    ) : (
+                      initials
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[12px] font-medium text-primary hover:underline"
+                  >
+                    Update photo
+                  </button>
+                </div>
+
+                {/* Identity fields */}
+                <div className="flex-1 min-w-0 w-full space-y-5">
+                  <Input
+                    label="Full name"
+                    type="text"
+                    value={user.name}
+                    onChange={e => updateUser({ name: e.target.value })}
+                  />
+                  <Input
+                    label="Email address"
+                    type="email"
+                    value={user.email}
+                    onChange={e => updateUser({ email: e.target.value })}
+                  />
+                  <div>
+                    <p className="text-[14px] font-medium text-on-surface-variant mb-1.5">Role</p>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container text-[13px] font-medium">
+                      <Icon name="workspace_premium" size="sm" />
+                      {user.role}
+                    </span>
+                  </div>
+                </div>
               </div>
             </SectionCard>
 
-            {/* Notifications */}
+            {/* ── 2. Integrations (WhatsApp prominent) ─────────── */}
+            <SectionCard title="Integrations" icon="hub">
+              <WhatsAppCard />
+
+              {/* Future channels — signals extensibility */}
+              <div className="mt-5 pt-5 border-t border-outline-variant/30">
+                <p className="text-[12px] font-medium text-on-surface-variant mb-3">More integrations</p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { name: 'Notion', icon: 'description' },
+                    { name: 'Google Drive', icon: 'cloud' },
+                    { name: 'RSS', icon: 'rss_feed' },
+                    { name: 'Slack', icon: 'forum' },
+                  ].map(ch => (
+                    <span
+                      key={ch.name}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-low border border-outline-variant/30 text-[12px] text-on-surface-variant/80"
+                    >
+                      <Icon name={ch.icon} size="sm" />
+                      {ch.name}
+                      <span className="ml-1 text-[10px] uppercase tracking-wide text-outline">Soon</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </SectionCard>
+
+            {/* ── 3. Preferences ──────────────────────────────── */}
+            <SectionCard title="Preferences" icon="tune">
+              <div className="space-y-7">
+                {/* App language */}
+                <div>
+                  <p className="text-[15px] font-medium text-on-surface">App language</p>
+                  <p className="text-[13px] text-on-surface-variant mb-3">
+                    Language for the interface, menus, and navigation.
+                  </p>
+                  <LanguageSegmented
+                    ariaLabel="App language"
+                    value={user.language}
+                    onChange={v => updateUser({ language: v })}
+                  />
+                </div>
+
+                {/* Content output language — separate persistent setting */}
+                <div>
+                  <p className="text-[15px] font-medium text-on-surface">Content output language</p>
+                  <p className="text-[13px] text-on-surface-variant mb-3">
+                    Default language for new content cases. You can still change it per case.
+                  </p>
+                  <LanguageSegmented
+                    ariaLabel="Content output language"
+                    value={outputLanguage}
+                    onChange={v => updateUser({ defaultOutputLanguage: v })}
+                  />
+                </div>
+
+                {/* Timezone — placeholder for future scheduling control */}
+                <div>
+                  <p className="text-[15px] font-medium text-on-surface">Timezone</p>
+                  <p className="text-[13px] text-on-surface-variant mb-3">
+                    Used for scheduled generation. Coming soon.
+                  </p>
+                  <select
+                    disabled
+                    className="bg-surface-container-low border border-outline-variant/40 rounded-lg text-[14px] text-on-surface-variant px-3 py-2 cursor-not-allowed opacity-70"
+                  >
+                    <option>Asia/Jerusalem (UTC+3)</option>
+                  </select>
+                </div>
+              </div>
+            </SectionCard>
+
+            {/* ── 4. Notifications ────────────────────────────── */}
             <SectionCard title="Notifications" icon="notifications_active">
               <div className="space-y-4">
                 <Toggle
                   id="notif-generation"
                   label="Generation Complete"
-                  description="Notify when AI content draft is ready"
+                  description="Notify when an AI content draft is ready"
                   checked={user.notifications.generationComplete}
                   onChange={v => updateNotification('generationComplete', v)}
+                />
+                <Toggle
+                  id="notif-draft"
+                  label="Draft Ready for Review"
+                  description="Daily summary of items pending editorial approval"
+                  checked={user.notifications.draftReady}
+                  onChange={v => updateNotification('draftReady', v)}
                 />
                 <Toggle
                   id="notif-factcheck"
@@ -87,108 +294,10 @@ export function SettingsPage() {
                   checked={user.notifications.factCheckConflict}
                   onChange={v => updateNotification('factCheckConflict', v)}
                 />
-                <Toggle
-                  id="notif-draft"
-                  label="Draft Ready For Review"
-                  description="Daily summary of items pending editorial approval"
-                  checked={user.notifications.draftReady}
-                  onChange={v => updateNotification('draftReady', v)}
-                />
               </div>
             </SectionCard>
 
-            {/* WhatsApp (read-only status — Phase 13G) */}
-            <SectionCard title="WhatsApp" icon="chat">
-              {wa?.linked ? (
-                <div className="space-y-3 text-[14px]">
-                  <StatusRow label="Connected" value="Yes" />
-                  <StatusRow label="Phone" value={wa.phoneE164 ?? '—'} />
-                  <StatusRow label="Verified" value={wa.verified ? 'Yes' : 'No'} />
-                  <StatusRow label="Notifications" value={waNotificationsOn ? 'On' : 'Off'} />
-                </div>
-              ) : (
-                <p className="text-[14px] text-on-surface-variant">Not connected</p>
-              )}
-            </SectionCard>
           </div>
-
-          {/* Right column */}
-          <div className="md:col-span-4 space-y-6">
-
-            {/* Language */}
-            <div className="bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-outline-variant/30">
-              <h3 className="text-[22px] font-serif font-medium text-primary mb-4 flex items-center gap-2">
-                <span className="material-symbols-outlined">translate</span>
-                Language
-              </h3>
-              <div className="space-y-2">
-                {[
-                  { value: 'en', label: 'English (US)' },
-                  { value: 'he', label: 'Hebrew (עברית)' },
-                ].map(lang => {
-                  const isActive = user.language === lang.value;
-                  return (
-                    <label
-                      key={lang.value}
-                      className={[
-                        'flex items-center gap-4 p-4 rounded-lg border cursor-pointer transition-colors',
-                        isActive
-                          ? 'bg-secondary-container text-on-secondary-container border-primary/20'
-                          : 'bg-surface-container-low hover:bg-surface-container border-transparent',
-                      ].join(' ')}
-                    >
-                      <input
-                        type="radio"
-                        name="lang"
-                        value={lang.value}
-                        checked={isActive}
-                        onChange={() => updateUser({ language: lang.value as 'en' | 'he' })}
-                        className="w-5 h-5 text-primary border-outline-variant"
-                      />
-                      <span className="text-[14px] font-medium flex-1">{lang.label}</span>
-                      {isActive && <span className="material-symbols-outlined text-primary">check_circle</span>}
-                    </label>
-                  );
-                })}
-              </div>
-              <p className="mt-4 text-[11px] text-on-surface-variant">
-                Interface mirroring and typography will adjust automatically based on your selection.
-              </p>
-            </div>
-
-            {/* Profile visual */}
-            <div className="bg-primary-container p-8 rounded-xl text-on-primary-container flex flex-col items-center text-center gap-4">
-              <div className="w-24 h-24 rounded-full bg-primary flex items-center justify-center text-on-primary text-2xl font-bold shadow-lg border-4 border-surface">
-                {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-              </div>
-              <div>
-                <h4 className="text-[22px] font-serif font-medium">{user.name}</h4>
-                <p className="text-[14px] text-on-primary-container/80">{user.role}</p>
-              </div>
-              <button className="bg-surface text-primary font-bold px-6 py-2 rounded-full text-[14px] hover:bg-surface-bright transition-colors active:scale-95">
-                Update Photo
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer actions */}
-        <div className="mt-8 pt-6 border-t border-outline-variant flex justify-end items-center gap-6">
-          <Button variant="ghost" onClick={handleDiscard}>
-            Discard Changes
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleSave}
-            loading={saveState === 'saving'}
-            className={saveState === 'saved' ? '!bg-green-600' : ''}
-          >
-            {saveState === 'saved' ? (
-              <><span className="material-symbols-outlined text-base">check</span> Changes Saved</>
-            ) : (
-              <><span className="material-symbols-outlined text-base">save</span> Save Changes</>
-            )}
-          </Button>
         </div>
       </main>
     </>

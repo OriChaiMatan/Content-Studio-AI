@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button';
 import { Icon } from '../../../components/ui/Icon';
 import { Input } from '../../../components/ui/Input';
 import { useContentCasesStore } from '../../../stores/contentCasesStore';
+import { useSettingsStore } from '../../../stores/settingsStore';
 import type { WizardFormData, Language, ContentGoal, ContentStyle, ContentTarget, ScheduleFrequency } from '../../../types';
 
 // ── Option definitions ────────────────────────────────────
@@ -320,8 +321,14 @@ function Step3Schedule({ form, update }: { form: WizardFormData; update: UpdateF
 export function CreateCaseWizard() {
   const navigate = useNavigate();
   const createCase = useContentCasesStore(s => s.createCase);
+  // Seed the output language from the user's default-output-language setting
+  // (overridable per case below). Falls back to the Hebrew-first MVP default.
+  const defaultOutputLanguage = useSettingsStore(s => s.user.defaultOutputLanguage);
   const [step, setStep]       = useState(0);
-  const [form, setForm]       = useState<WizardFormData>(emptyForm);
+  const [form, setForm]       = useState<WizardFormData>(() => ({
+    ...emptyForm,
+    language: defaultOutputLanguage ?? emptyForm.language,
+  }));
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 

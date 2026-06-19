@@ -296,7 +296,11 @@ export interface User {
   email: string;
   role: string;
   avatarUrl: string | null;
+  // App/UI language — drives interface mirroring and typography.
   language: Language;
+  // Default output language for NEW content cases (separate from the UI language;
+  // overridable per case in the wizard). Frontend-only setting (Settings polish).
+  defaultOutputLanguage: Language;
   notifications: {
     generationComplete: boolean;
     factCheckConflict: boolean;

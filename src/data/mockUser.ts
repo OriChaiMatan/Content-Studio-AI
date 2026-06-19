@@ -7,6 +7,7 @@ export const mockUser: User = {
   role: 'Lead Researcher',
   avatarUrl: null,
   language: 'en',
+  defaultOutputLanguage: 'he',
   notifications: {
     generationComplete: true,
     factCheckConflict: true,
