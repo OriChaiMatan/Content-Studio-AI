@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
 import { CaseStatusBadge, PlatformBadge, OutputStatusBadge } from '../../components/ui/Badge';
@@ -9,7 +9,7 @@ import { SourcesPanel } from './SourcesPanel';
 import { useLiveCase } from './useLiveCase';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { api } from '../../lib/api';
-import type { ContentGoal, ContentStyle, ContentTarget, Language, ContentCase, ScheduleFrequency } from '../../types';
+import type { ContentGoal, ContentStyle, ContentTarget, Language, ContentCase, ContentOutput, PipelineStep, Schedule, ScheduleFrequency, CaseStatus } from '../../types';
 
 // ── Human-readable labels for new enum fields ─────────────
 
@@ -49,8 +49,70 @@ const DOW_OPTIONS = [
   { value: 6, label: 'Saturday' },
 ];
 
-// Flat settings-update payload sent to PATCH /cases/:id. ContentCase exposes a NESTED
-// `schedule` object for reading, but the backend update API takes FLAT schedule fields.
+// ── Derived helpers (frontend-only; real output/run/source data) ──────────────
+
+const IN_PROGRESS_STATUSES: CaseStatus[] = ['research', 'fact_check', 'generating'];
+const DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function runOutputs(c: ContentCase): ContentOutput[] {
+  return c.currentRun ? c.outputs.filter(o => o.pipelineRunId === c.currentRun!.id) : c.outputs;
+}
+function pendingDraftsOf(c: ContentCase): number {
+  return runOutputs(c).filter(o => o.status === 'draft').length;
+}
+
+function humanizeSchedule(s: Schedule): string {
+  switch (s.frequency) {
+    case 'manual':  return 'Manual';
+    case 'daily':   return s.time ? `Daily · ${s.time}` : 'Daily';
+    case 'weekly':  return `Weekly · ${DOW_SHORT[s.dayOfWeek ?? 1]}${s.time ? ` ${s.time}` : ''}`;
+    case 'monthly': return `Monthly · Day ${s.dayOfMonth ?? 1}${s.time ? ` ${s.time}` : ''}`;
+    default:        return 'Manual';
+  }
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Meaningful per-step state label (replaces abstract confidence %).
+const STEP_LABELS: Record<string, { idle: string; running: string; completed: string; error: string }> = {
+  research:         { idle: 'Research Pending',    running: 'Researching…',      completed: 'Research Complete',    error: 'Research Failed' },
+  fact_check:       { idle: 'Fact Check Pending',  running: 'Fact Checking…',    completed: 'Fact Check Complete',  error: 'Fact Check Failed' },
+  content_creation: { idle: 'Content Pending',     running: 'Generating…',       completed: 'Content Generated',    error: 'Generation Failed' },
+};
+function stepLabel(step: PipelineStep): string {
+  return STEP_LABELS[step.name]?.[step.status] ?? step.name.replace('_', ' ');
+}
+
+// Research integrity → High / Medium / Low (from the research step's integrity, or confidence).
+function researchIntegrityLevel(step: PipelineStep): { label: 'High' | 'Medium' | 'Low'; color: string } | null {
+  if (step.name !== 'research' || step.status !== 'completed') return null;
+  const r = step.research;
+  if (r) {
+    if (r.degraded || r.status === 'degraded') return { label: 'Low', color: 'text-error' };
+    if (r.status === 'mock') return { label: 'Medium', color: 'text-amber-600' };
+    return { label: 'High', color: 'text-green-700' };
+  }
+  if (step.confidence != null) {
+    if (step.confidence >= 80) return { label: 'High', color: 'text-green-700' };
+    if (step.confidence >= 50) return { label: 'Medium', color: 'text-amber-600' };
+    return { label: 'Low', color: 'text-error' };
+  }
+  return null;
+}
+
+const RUNNING_LABEL: Record<string, string> = {
+  research: 'Researching…', fact_check: 'Fact checking…', generating: 'Generating content…',
+};
+function prettyStepName(name: string): string {
+  return name === 'content_creation' ? 'content generation' : name.replace('_', ' ');
+}
+
+// ── Page ──────────────────────────────────────────────────
+
 type CaseSettingsUpdate =
   Partial<Pick<ContentCase, 'contentGoal' | 'contentStyle' | 'language' | 'contentTargets'>> & {
     scheduleFrequency?:  ScheduleFrequency;
@@ -61,40 +123,96 @@ type CaseSettingsUpdate =
 
 export function ContentCaseDetail() {
   // ── ALL hooks must be called unconditionally before any early return ──────────
-
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  // Live, auto-refreshing case (same pattern as the pipeline page — polls GET
-  // /cases/:id every 5s so scheduled runs, step progress, completion, and new
-  // WhatsApp sources show without a manual refresh). The hook also seeds the store
-  // on mount, so the previous one-shot fetchCaseById effect is no longer needed.
-  const caseItem      = useLiveCase(id);
-  const loading       = useContentCasesStore(s => s.loading);
-  const refreshCase   = useContentCasesStore(s => s.refreshCase);
-  const deleteCase    = useContentCasesStore(s => s.deleteCase);
+  const caseItem    = useLiveCase(id);
+  const loading     = useContentCasesStore(s => s.loading);
+  const refreshCase = useContentCasesStore(s => s.refreshCase);
+  const deleteCase  = useContentCasesStore(s => s.deleteCase);
 
-  // Local state
   const [editingSettings, setEditingSettings] = useState(false);
   const [savingSettings,  setSavingSettings]  = useState(false);
+  const [configOpen,      setConfigOpen]      = useState(false);
   const [confirmDelete,   setConfirmDelete]   = useState(false);
   const [deleting,        setDeleting]        = useState(false);
   const [deleteError,     setDeleteError]     = useState<string | null>(null);
 
-  // ── Early return — safe now that all hooks are above ─────────────────────────
+  const sourcesRef = useRef<HTMLDivElement>(null);
+  function scrollToSources() {
+    sourcesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ── Early return — not found / loading (with TopBar + a way back) ────────────
   if (!caseItem) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-3 text-on-surface-variant">
-        {loading
-          ? <><span className="material-symbols-outlined animate-spin">refresh</span><span className="text-[14px]">Loading…</span></>
-          : <p className="text-[14px]">Case not found.</p>
-        }
-      </div>
+      <>
+        <TopBar title="Content Case" />
+        <main className="flex-1 flex items-center justify-center p-8">
+          {loading ? (
+            <div className="flex items-center gap-3 text-on-surface-variant">
+              <span className="material-symbols-outlined animate-spin">refresh</span>
+              <span className="text-[14px]">Loading case…</span>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center">
+                <Icon name="search_off" size="xl" className="text-outline" />
+              </div>
+              <div>
+                <p className="text-[16px] font-medium text-on-surface">Case not found</p>
+                <p className="text-[13px] text-on-surface-variant mt-1">It may have been deleted or the link is incorrect.</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => navigate('/cases')}>
+                <Icon name="arrow_back" size="sm" />
+                Back to Cases
+              </Button>
+            </div>
+          )}
+        </main>
+      </>
     );
   }
 
   const c = caseItem;
-  const canReview = c.status === 'in_review' || c.status === 'completed';
+  const currentOutputs = runOutputs(c);
+  const approvedCount  = currentOutputs.filter(o => o.status === 'approved').length;
+  const pending        = pendingDraftsOf(c);
+  const newSources     = c.sources.filter(s => s.status === 'new').length;
+  const usedSources    = c.sources.filter(s => s.status === 'used').length;
+  const failedStep     = c.pipeline.find(s => s.status === 'error');
+  const isRunning      = IN_PROGRESS_STATUSES.includes(c.status);
+
+  // ── "What is happening now?" headline ──
+  let statusHeadline: string;
+  let statusTone: 'neutral' | 'active' | 'ready' | 'error' = 'neutral';
+  if (failedStep) {
+    statusHeadline = `Run failed at ${prettyStepName(failedStep.name)}`;
+    statusTone = 'error';
+  } else if (isRunning) {
+    statusHeadline = RUNNING_LABEL[c.status] ?? 'Pipeline running…';
+    statusTone = 'active';
+  } else if (pending > 0) {
+    statusHeadline = `${pending} draft${pending !== 1 ? 's' : ''} ready for review`;
+    statusTone = 'ready';
+  } else if (c.status === 'completed') {
+    statusHeadline = 'Completed — all outputs reviewed';
+  } else if (c.status === 'in_review') {
+    statusHeadline = 'All outputs reviewed';
+  } else if (c.status === 'draft') {
+    statusHeadline = c.sources.length === 0 ? 'Draft — add sources to begin' : 'Ready to generate';
+  } else {
+    statusHeadline = '';
+  }
+
+  // ── "What should I do next?" — single state-aware primary action ──
+  const cta: { label: string; icon: string; run: () => void } = (() => {
+    if (pending > 0)            return { label: 'Review Content', icon: 'rate_review', run: () => navigate(`/cases/${c.id}/review`) };
+    if (isRunning)             return { label: 'View Pipeline',  icon: 'visibility',  run: () => navigate(`/cases/${c.id}/pipeline`) };
+    if (c.sources.length === 0) return { label: 'Add Sources',    icon: 'note_add',    run: scrollToSources };
+    if (newSources > 0)        return { label: c.status === 'draft' ? 'Start Pipeline' : 'Generate Now', icon: 'play_arrow', run: () => navigate(`/cases/${c.id}/pipeline`) };
+    return { label: 'View in Library', icon: 'auto_stories', run: () => navigate('/library') };
+  })();
 
   async function handleDeleteCase() {
     setDeleting(true);
@@ -109,22 +227,19 @@ export function ContentCaseDetail() {
     }
   }
 
+  const aboutLine = [GOAL_LABELS[c.contentGoal], c.targetAudience].filter(Boolean).join(' · ');
+
   return (
     <>
       <TopBar
         title={c.title}
         actions={
           <div className="flex items-center gap-2">
-            {/* Delete confirmation inline in header */}
             {confirmDelete ? (
               <div className="flex items-center gap-2 bg-error-container/60 border border-error/20 rounded-xl px-3 py-1.5">
                 <span className="text-[12px] text-error font-medium">Delete this case?</span>
-                <Button variant="danger" size="sm" onClick={handleDeleteCase} loading={deleting} disabled={deleting}>
-                  Confirm
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
-                  Cancel
-                </Button>
+                <Button variant="danger" size="sm" onClick={handleDeleteCase} loading={deleting} disabled={deleting}>Confirm</Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancel</Button>
               </div>
             ) : (
               <button
@@ -136,20 +251,14 @@ export function ContentCaseDetail() {
               </button>
             )}
             <Button variant="secondary" size="sm" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
-              <Icon name={c.status === 'draft' ? 'play_arrow' : 'schema'} size="sm" />
-              {c.status === 'draft' ? 'Start Pipeline' : 'Pipeline'}
+              <Icon name="schema" size="sm" />
+              Pipeline
             </Button>
-            {canReview && (
-              <Button size="sm" onClick={() => navigate(`/cases/${c.id}/review`)}>
-                <Icon name="rate_review" size="sm" />
-                Review Outputs
-              </Button>
-            )}
           </div>
         }
       />
 
-      <main className="flex-1 p-8 overflow-y-auto space-y-6">
+      <main className="flex-1 p-8 overflow-y-auto space-y-6 max-w-6xl mx-auto w-full">
         {deleteError && (
           <div className="flex items-center gap-3 bg-error-container/60 border border-error/20 rounded-xl px-4 py-3">
             <Icon name="error" className="text-error shrink-0" size="sm" />
@@ -157,193 +266,248 @@ export function ContentCaseDetail() {
           </div>
         )}
 
-        {/* ── Header card ─────────────────────────────── */}
-        <div className="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant/30 shadow-sm flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <CaseStatusBadge status={c.status} />
-              <span className="text-[12px] text-on-surface-variant uppercase font-bold tracking-wider">{c.language}</span>
+        {/* ── A. Smart header: about · status · next action ─────────── */}
+        <div className="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant/30 shadow-sm">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <CaseStatusBadge status={c.status} />
+                <span className="text-[12px] text-on-surface-variant uppercase font-bold tracking-wider">{c.language}</span>
+                <span className="flex items-center gap-1 text-[12px] text-on-surface-variant">
+                  <Icon name="schedule" size="sm" className="text-outline" />
+                  {humanizeSchedule(c.schedule)}
+                </span>
+              </div>
+              <h2 className="text-[28px] font-serif text-on-surface mb-1 truncate">{c.title}</h2>
+              {aboutLine && <p className="text-[14px] text-on-surface-variant">{aboutLine}</p>}
+
+              {/* What's happening now */}
+              {statusHeadline && (
+                <div className="flex items-center gap-2 mt-3">
+                  <Icon
+                    name={statusTone === 'error' ? 'error' : statusTone === 'active' ? 'autorenew' : statusTone === 'ready' ? 'rate_review' : 'check_circle'}
+                    size="sm"
+                    className={statusTone === 'error' ? 'text-error' : statusTone === 'active' ? 'text-tertiary' : statusTone === 'ready' ? 'text-green-600' : 'text-outline'}
+                  />
+                  <span className={`text-[14px] font-medium ${statusTone === 'error' ? 'text-error' : 'text-on-surface'}`}>{statusHeadline}</span>
+                </div>
+              )}
             </div>
-            <h2 className="text-[28px] font-serif text-on-surface mb-1">{c.title}</h2>
-            <p className="text-[14px] text-on-surface-variant">{c.targetAudience}</p>
-          </div>
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            <p className="text-[11px] text-on-surface-variant">
-              Created {new Date(c.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </p>
-            <p className="text-[11px] text-on-surface-variant">
-              Updated {new Date(c.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </p>
-            <div className="flex items-center gap-1 text-[12px] text-on-surface-variant">
-              <Icon name="schedule" size="sm" className="text-outline" />
-              <span className="capitalize">{c.schedule.frequency}</span>
-              {c.schedule.time && <span>at {c.schedule.time}</span>}
+
+            {/* Single primary next action */}
+            <div className="shrink-0">
+              <Button onClick={cta.run}>
+                <Icon name={cta.icon} size="sm" />
+                {cta.label}
+              </Button>
             </div>
           </div>
         </div>
 
-        {/* ── 2-column: config + outputs/pipeline ─────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* Left: Case Settings */}
-          <div className="lg:col-span-2 space-y-5">
-
-            {/* ── Case Settings (new wizard fields) ────────────── */}
-            <CaseSettingsCard
-              c={c}
-              editing={editingSettings}
-              saving={savingSettings}
-              onEdit={() => setEditingSettings(true)}
-              onCancel={() => setEditingSettings(false)}
-              onSave={async (updates) => {
-                setSavingSettings(true);
-                try {
-                  await api.patch<ContentCase>(`/cases/${c.id}`, updates);
-                  await refreshCase(c.id);
-                  setEditingSettings(false);
-                } catch { /* silently fail */ }
-                finally { setSavingSettings(false); }
-              }}
-            />
-
-            {/* Legacy: show only if case has old-wizard data */}
-            {(c.targetAudience || c.industry) && (
-              <Card accent className="p-5">
-                <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Icon name="groups" className="text-outline" size="sm" />
-                  Audience
-                </h4>
-                <div className="grid grid-cols-3 gap-4">
-                  {c.targetAudience && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Target</p><p className="text-[14px] text-on-surface mt-1">{c.targetAudience}</p></div>}
-                  {c.industry && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Industry</p><p className="text-[14px] text-on-surface mt-1">{c.industry}</p></div>}
-                  {c.experienceLevel && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Level</p><p className="text-[14px] text-on-surface mt-1 capitalize">{c.experienceLevel}</p></div>}
+        {/* ── B. Status strip: pipeline state · approval · sources · last run ─── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatTile
+            icon="schema"
+            label="Pipeline"
+            value={failedStep ? 'Failed' : isRunning ? 'Running' : c.status === 'draft' ? 'Not started' : 'Complete'}
+            tone={failedStep ? 'error' : isRunning ? 'active' : 'neutral'}
+          />
+          <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant/30">
+            <p className="text-[11px] uppercase font-bold text-outline tracking-wider mb-1">Approval</p>
+            {currentOutputs.length > 0 ? (
+              <>
+                <p className="text-[15px] font-medium text-on-surface">
+                  {approvedCount}/{currentOutputs.length} approved
+                  {pending > 0 && <span className="text-on-surface-variant font-normal"> · {pending} pending</span>}
+                </p>
+                <div className="h-1.5 rounded-full bg-surface-container-high overflow-hidden mt-2">
+                  <div className="h-full bg-green-500 transition-all" style={{ width: `${(approvedCount / currentOutputs.length) * 100}%` }} />
                 </div>
-              </Card>
+              </>
+            ) : (
+              <p className="text-[14px] text-on-surface-variant">No outputs yet</p>
             )}
-            {(c.writingStyle || c.goals) && (
-              <Card accent className="p-5">
-                <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Icon name="edit_note" className="text-outline" size="sm" />
-                  Writing Style & Goals
-                </h4>
-                <div className="space-y-3">
-                  {c.writingStyle && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Style</p><p className="text-[14px] text-on-surface mt-1">{c.writingStyle}</p></div>}
-                  {c.goals && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Goals</p><p className="text-[14px] text-on-surface mt-1">{c.goals}</p></div>}
-                  {c.aiInstructions && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">AI Instructions</p><p className="text-[14px] text-on-surface mt-1 bg-surface-container-low rounded-lg p-3 italic">{c.aiInstructions}</p></div>}
-                </div>
-              </Card>
+          </div>
+          <StatTile
+            icon="article"
+            label="Sources"
+            value={c.sources.length === 0 ? 'None yet' : `${newSources} new${usedSources > 0 ? ` · ${usedSources} used` : ''}`}
+            tone={newSources > 0 ? 'active' : 'neutral'}
+          />
+          <StatTile
+            icon="history"
+            label="Last run"
+            value={c.currentRun?.completedAt ? formatDateTime(c.currentRun.completedAt) : c.currentRun?.startedAt ? 'In progress' : 'Never'}
+            tone="neutral"
+          />
+        </div>
+
+        {/* ── C. Outputs (rich) ───────────────────────────────────────── */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
+              <Icon name="auto_awesome" className="text-outline" size="sm" />
+              Outputs
+            </h4>
+            {pending > 0 && (
+              <Button size="sm" onClick={() => navigate(`/cases/${c.id}/review`)}>
+                <Icon name="rate_review" size="sm" />
+                Review Content
+              </Button>
             )}
           </div>
 
-          {/* Right: Outputs + Pipeline */}
-          <div className="space-y-4">
-            <Card className="p-5">
-              <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Icon name="auto_awesome" className="text-outline" size="sm" />
-                Outputs
-              </h4>
-              {(() => {
-                // Only show outputs from the current (most recent) run.
-                // Outputs from older runs are preserved in DB but shown via the Library.
-                const currentRunId = c.currentRun?.id;
-                const currentOutputs = currentRunId
-                  ? c.outputs.filter(o => o.pipelineRunId === currentRunId)
-                  : c.outputs;
-                return currentOutputs.length === 0 ? (
-                <div className="flex flex-col items-center py-6 text-center gap-2">
-                  <Icon name="pending" size="xl" className="text-outline" />
-                  <p className="text-[13px] text-on-surface-variant">
-                    {c.status === 'draft'
-                      ? 'Add sources below, then start the pipeline.'
-                      : 'Pipeline is running — outputs will appear here.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {currentOutputs.map(output => (
-                    <div key={output.id} className="flex items-center gap-2 py-2 border-b border-outline-variant/20 last:border-0">
-                      <PlatformBadge platform={output.platform} />
-                      <div className="flex-1" />
-                      <OutputStatusBadge status={output.status} />
-                    </div>
-                  ))}
-                  {canReview && (
-                    <Button fullWidth className="mt-3" onClick={() => navigate(`/cases/${c.id}/review`)}>
-                      <Icon name="rate_review" size="sm" />
-                      Review All
-                    </Button>
-                  )}
-                </div>
-              );
-              })()}
+          {currentOutputs.length === 0 ? (
+            <Card className="p-6">
+              <div className="flex flex-col items-center py-4 text-center gap-2">
+                <Icon name="pending" size="xl" className="text-outline" />
+                <p className="text-[13px] text-on-surface-variant">
+                  {c.status === 'draft' ? 'Add sources below, then start the pipeline.' : isRunning ? 'Pipeline is running — outputs will appear here.' : 'No outputs for the current run.'}
+                </p>
+              </div>
             </Card>
-
-            <Card className="p-5">
-              <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Icon name="schema" className="text-outline" size="sm" />
-                Pipeline
-              </h4>
-              {/* Source lifecycle summary */}
-              {(() => {
-                const newCount  = c.sources.filter(s => s.status === 'new').length;
-                const usedCount = c.sources.filter(s => s.status === 'used').length;
-                const noNew = c.sources.length > 0 && newCount === 0;
-                return (
-                  <div className={[
-                    'flex items-center gap-2 mb-3 text-[12px] rounded-lg px-3 py-2',
-                    noNew ? 'bg-surface-container-high text-on-surface-variant' : 'bg-surface-container-low text-on-surface-variant',
-                  ].join(' ')}>
-                    <Icon name="article" size="sm" className={noNew ? 'text-outline' : 'text-primary'} />
-                    {c.sources.length === 0 ? (
-                      <span>No sources yet</span>
-                    ) : (
-                      <span>
-                        <span className="font-bold text-primary">{newCount} new</span>
-                        {usedCount > 0 && <> · <span className="font-bold">{usedCount} used</span></>}
-                        {noNew && <span className="text-outline"> — add new sources to run again</span>}
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {currentOutputs.map(output => (
+                <Card key={output.id} className="p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <PlatformBadge platform={output.platform} />
+                    <OutputStatusBadge status={output.status} />
+                  </div>
+                  <p className="text-[14px] font-medium text-on-surface truncate" dir="auto">{output.title}</p>
+                  <p className="text-[12px] text-on-surface-variant mt-1 line-clamp-2 whitespace-pre-wrap text-start" dir="auto">{output.body}</p>
+                  <div className="flex items-center gap-3 mt-3 pt-2 border-t border-outline-variant/20 text-[11px] text-on-surface-variant">
+                    {output.contentScore != null && (
+                      <span className="flex items-center gap-1">
+                        <Icon name="insights" size="sm" className="text-primary" />
+                        Score <span className="font-bold text-on-surface">{output.contentScore}</span>
                       </span>
                     )}
+                    <span className="flex items-center gap-1 ml-auto">
+                      <Icon name="schedule" size="sm" className="text-outline" />
+                      {formatDateTime(output.generatedAt)}
+                    </span>
                   </div>
-                );
-              })()}
-              <div className="space-y-2 mb-4">
-                {c.pipeline.map(step => (
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* ── Pipeline progress (meaningful states) ───────────────────── */}
+        <section>
+          <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Icon name="conversion_path" className="text-outline" size="sm" />
+            Pipeline Progress
+          </h4>
+          <Card className="p-5">
+            <div className="space-y-3">
+              {c.pipeline.map(step => {
+                const integrity = researchIntegrityLevel(step);
+                return (
                   <div key={step.id} className="flex items-center gap-3">
                     <div className={[
                       'w-6 h-6 rounded-full flex items-center justify-center shrink-0',
                       step.status === 'completed' ? 'bg-primary text-on-primary' :
                       step.status === 'running'   ? 'bg-secondary-container text-on-secondary-container' :
+                      step.status === 'error'     ? 'bg-error-container text-error' :
                       'bg-surface-container text-outline',
                     ].join(' ')}>
-                      {step.status === 'completed' ? (
-                        <Icon name="check" size="sm" />
-                      ) : step.status === 'running' ? (
-                        <span className="material-symbols-outlined text-xs animate-spin">refresh</span>
-                      ) : (
-                        <Icon name="circle" size="sm" />
-                      )}
+                      {step.status === 'completed' ? <Icon name="check" size="sm" />
+                        : step.status === 'running' ? <span className="material-symbols-outlined text-xs animate-spin">refresh</span>
+                        : step.status === 'error' ? <Icon name="close" size="sm" />
+                        : <Icon name="circle" size="sm" />}
                     </div>
-                    <p className={`text-[13px] capitalize ${step.status === 'idle' ? 'text-outline' : 'text-on-surface'}`}>
-                      {step.name.replace('_', ' ')}
+                    <p className={`text-[13px] ${step.status === 'idle' ? 'text-outline' : step.status === 'error' ? 'text-error font-medium' : 'text-on-surface'}`}>
+                      {stepLabel(step)}
                     </p>
-                    {step.confidence !== null && (
-                      <span className="ml-auto text-[11px] text-primary font-bold">{step.confidence}%</span>
+                    {integrity && (
+                      <span className={`ml-auto text-[11px] font-bold ${integrity.color}`}>
+                        Research Integrity {integrity.label}
+                      </span>
                     )}
                   </div>
-                ))}
-              </div>
-              <Button variant="secondary" size="sm" fullWidth onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
-                {c.status === 'draft' ? 'Start Pipeline' : 'View Pipeline'}
-              </Button>
-            </Card>
-          </div>
-        </div>
+                );
+              })}
+            </div>
+            <Button variant="secondary" size="sm" fullWidth className="mt-4" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
+              {c.status === 'draft' ? 'Start Pipeline' : 'View Pipeline'}
+            </Button>
+          </Card>
+        </section>
 
-        {/* ── Content Sources workspace (full width) ───── */}
-        <SourcesPanel caseId={c.id} />
+        {/* ── D. Sources workspace (primary, above configuration) ──────── */}
+        <section ref={sourcesRef}>
+          <SourcesPanel caseId={c.id} />
+        </section>
+
+        {/* ── E. Configuration (compact, secondary, collapsible) ───────── */}
+        <section>
+          <button
+            type="button"
+            onClick={() => setConfigOpen(o => !o)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container transition-colors"
+          >
+            <Icon name="tune" size="sm" className="text-outline" />
+            <span className="text-[13px] font-medium text-on-surface">Case configuration</span>
+            <span className="text-[12px] text-on-surface-variant truncate hidden sm:block">
+              {GOAL_LABELS[c.contentGoal]} · {STYLE_LABELS[c.contentStyle]} · {c.language === 'en' ? 'English' : 'Hebrew'} · {humanizeSchedule(c.schedule)}
+            </span>
+            <Icon name={configOpen ? 'expand_less' : 'expand_more'} size="sm" className="text-outline ml-auto" />
+          </button>
+
+          {configOpen && (
+            <div className="mt-3 space-y-4">
+              <CaseSettingsCard
+                c={c}
+                editing={editingSettings}
+                saving={savingSettings}
+                onEdit={() => setEditingSettings(true)}
+                onCancel={() => setEditingSettings(false)}
+                onSave={async (updates) => {
+                  setSavingSettings(true);
+                  try {
+                    await api.patch<ContentCase>(`/cases/${c.id}`, updates);
+                    await refreshCase(c.id);
+                    setEditingSettings(false);
+                  } catch { /* silently fail */ }
+                  finally { setSavingSettings(false); }
+                }}
+              />
+
+              {(c.writingStyle || c.goals || c.aiInstructions) && (
+                <Card accent className="p-5">
+                  <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Icon name="edit_note" className="text-outline" size="sm" />
+                    Writing Style & Goals
+                  </h4>
+                  <div className="space-y-3">
+                    {c.writingStyle && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Style</p><p className="text-[14px] text-on-surface mt-1">{c.writingStyle}</p></div>}
+                    {c.goals && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Goals</p><p className="text-[14px] text-on-surface mt-1">{c.goals}</p></div>}
+                    {c.aiInstructions && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">AI Instructions</p><p className="text-[14px] text-on-surface mt-1 bg-surface-container-low rounded-lg p-3 italic">{c.aiInstructions}</p></div>}
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+        </section>
 
       </main>
     </>
+  );
+}
+
+// ── Status tile ───────────────────────────────────────────
+function StatTile({ icon, label, value, tone }: { icon: string; label: string; value: string; tone: 'neutral' | 'active' | 'error' }) {
+  const valueColor = tone === 'error' ? 'text-error' : tone === 'active' ? 'text-tertiary' : 'text-on-surface';
+  return (
+    <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant/30">
+      <p className="text-[11px] uppercase font-bold text-outline tracking-wider mb-1 flex items-center gap-1">
+        <Icon name={icon} size="sm" className="text-outline" />
+        {label}
+      </p>
+      <p className={`text-[15px] font-medium ${valueColor}`}>{value}</p>
+    </div>
   );
 }
 
@@ -364,7 +528,6 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
   const [style,   setStyle]   = useState<ContentStyle>(c.contentStyle);
   const [lang,    setLang]    = useState<Language>(c.language);
   const [targets, setTargets] = useState<ContentTarget[]>(c.contentTargets);
-  // Schedule editing state (seeded from the case's nested schedule).
   const [freq, setFreq] = useState<ScheduleFrequency>(c.schedule.frequency);
   const [time, setTime] = useState<string>(c.schedule.time ?? '09:00');
   const [dow,  setDow]  = useState<number>(c.schedule.dayOfWeek ?? 1);
@@ -421,6 +584,10 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
             <div>
               <p className="text-[11px] text-outline uppercase font-bold tracking-wider">Language</p>
               <p className="text-[14px] text-on-surface mt-1">{c.language === 'en' ? 'English' : 'Hebrew'}</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-outline uppercase font-bold tracking-wider">Schedule</p>
+              <p className="text-[14px] text-on-surface mt-1">{humanizeSchedule(c.schedule)}</p>
             </div>
           </div>
           <div>
@@ -498,7 +665,7 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
 
           {/* Generate Schedule */}
           <div>
-            <p className="text-[12px] font-medium text-on-surface-variant mb-1.5">Generate Schedule</p>
+            <p className="text-[12px] font-medium text-on-surface-variant mb-1.5">When should content be generated?</p>
             <div className="grid grid-cols-2 gap-1.5">
               {FREQ_OPTIONS.map(opt => (
                 <button key={opt.value} type="button" onClick={() => setFreq(opt.value)}
@@ -545,7 +712,6 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
             <Button size="sm" variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Button>
             <Button size="sm" onClick={() => onSave({
                 contentGoal: goal, contentStyle: style, language: lang, contentTargets: targets,
-                // Null irrelevant schedule fields by frequency (mirrors the create wizard).
                 scheduleFrequency:  freq,
                 scheduleTime:       freq === 'manual' ? null : time,
                 scheduleDayOfWeek:  freq === 'weekly'  ? dow : null,
