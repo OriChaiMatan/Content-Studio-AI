@@ -88,6 +88,15 @@ export function researchIntegrity(researchContext: unknown) {
   };
 }
 
+// The winning thesis (narrative spine) for a run — the one-sentence primaryAngle
+// chosen by the synthesis service. Null on legacy/mock runs that have no
+// synthesis.primaryAngle. Surfaced so the Review page can show the editorial thesis.
+export function runThesis(researchContext: unknown): string | null {
+  const rc = researchContext as { synthesis?: { primaryAngle?: { thesis?: unknown } } } | null;
+  const t = rc?.synthesis?.primaryAngle?.thesis;
+  return typeof t === 'string' && t.trim().length > 0 ? t.trim() : null;
+}
+
 function serializePipelineStep(s: PipelineStep, research: ReturnType<typeof researchIntegrity> = null) {
   return {
     id:          s.id,
@@ -111,6 +120,7 @@ function serializeRun(r: PipelineRun) {
     startedAt:        r.startedAt.toISOString(),
     completedAt:      r.completedAt ? r.completedAt.toISOString() : null,
     research:         researchIntegrity(r.researchContext),   // Phase 10D.0 — pipeline-level
+    thesis:           runThesis(r.researchContext),           // the winning narrative spine
   };
 }
 

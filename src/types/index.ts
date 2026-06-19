@@ -147,6 +147,7 @@ export interface PipelineRunSummary {
   startedAt: string;            // ISO 8601
   completedAt: string | null;
   research?: ResearchIntegrity | null;   // Phase 10D.0 — pipeline-level integrity
+  thesis?: string | null;                // the winning narrative spine (primaryAngle.thesis)
 }
 
 // ── PipelineStep ───────────────────────────────────────────
