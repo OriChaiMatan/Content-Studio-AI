@@ -166,6 +166,8 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
   const [saving,    setSaving]          = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [actionError, setActionError]   = useState<string | null>(null);
+  const [copyState,  setCopyState]  = useState<'idle' | 'copied' | 'error'>('idle');
+  const [shareState, setShareState] = useState<'idle' | 'shared' | 'copied' | 'error'>('idle');
 
   const updateOutputStatus   = useContentCasesStore(s => s.updateOutputStatus);
   const setOutputStatusLocal = useContentCasesStore(s => s.setOutputStatusLocal);
@@ -180,7 +182,10 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
   const liveStatus = useContentCasesStore(s => s.getCaseById(caseId)?.outputs.find(o => o.id === output.id)?.status);
   const status = liveStatus ?? output.status;
 
-  useEffect(() => { setBody(output.body); setEditing(false); }, [output.body, output.id]);
+  useEffect(() => {
+    setBody(output.body); setEditing(false);
+    setCopyState('idle'); setShareState('idle');
+  }, [output.body, output.id]);
 
   async function handleApprove() {
     if (approving || status === 'approved') return;
@@ -231,12 +236,127 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
     } finally { setRegenerating(false); }
   }
 
+  // Copy the full ready-to-publish body of the active output, with brief feedback.
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(output.body);
+      setCopyState('copied');
+    } catch {
+      setCopyState('error');
+    }
+    setTimeout(() => setCopyState('idle'), 2000);
+  }
+
+  // Share via the native Web Share API when available; otherwise fall back to
+  // copying the content. A dismissed native sheet (AbortError) is not an error.
+  async function handleShare() {
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: output.title, text: output.body });
+        setShareState('shared');
+        setTimeout(() => setShareState('idle'), 2000);
+        return;
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return; // user cancelled
+        // any other failure → fall through to the copy fallback
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(`${output.title}\n\n${output.body}`);
+      setShareState('copied');
+    } catch {
+      setShareState('error');
+    }
+    setTimeout(() => setShareState('idle'), 2000);
+  }
+
   const busy = approving || rejecting || saving || regenerating;
   const hasBreakdown = !!output.breakdown && Object.keys(output.breakdown).length > 0;
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      {/* ── Action bar (top, above the draft — stays visible while reading) ── */}
+      <div className="shrink-0 border-b border-outline-variant bg-surface px-8 py-3 flex items-center gap-2 flex-wrap">
+        {editing ? (
+          <>
+            <Button onClick={handleSaveEdit} loading={saving} disabled={busy}>
+              <Icon name="save" size="sm" />
+              {saving ? 'Saving…' : 'Save Edit'}
+            </Button>
+            <Button variant="ghost" onClick={() => { setEditing(false); setBody(output.body); }} disabled={busy}>
+              Cancel
+            </Button>
+          </>
+        ) : (
+          <>
+            {/* Copy + Share — clearly accessible */}
+            <Button size="sm" variant="outline" onClick={handleCopy} disabled={busy}>
+              <Icon name={copyState === 'copied' ? 'check' : copyState === 'error' ? 'error' : 'content_copy'} size="sm" />
+              {copyState === 'copied' ? 'Copied' : copyState === 'error' ? 'Copy failed' : 'Copy'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleShare} disabled={busy}>
+              <Icon name={shareState === 'shared' ? 'check' : shareState === 'copied' ? 'content_copy' : shareState === 'error' ? 'error' : 'share'} size="sm" />
+              {shareState === 'shared' ? 'Shared' : shareState === 'copied' ? 'Copied for sharing' : shareState === 'error' ? 'Share failed' : 'Share'}
+            </Button>
+
+            <span className="w-px h-6 bg-outline-variant/60 mx-1" />
+
+            {/* Edit + Regenerate — utility actions */}
+            <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={status === 'approved' || busy}>
+              <Icon name="edit" size="sm" />
+              Edit
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleRegenerate} loading={regenerating} disabled={busy}>
+              <Icon name="refresh" size="sm" />
+              {regenerating ? 'Regenerating…' : 'Regenerate'}
+            </Button>
+
+            <div className="flex-1" />
+
+            {/* Reviewed-state indicator */}
+            {status === 'approved' && (
+              <span className="flex items-center gap-1.5 text-[13px] font-medium text-green-700">
+                <Icon name="check_circle" size="sm" /> Approved
+              </span>
+            )}
+            {status === 'rejected' && (
+              <span className="flex items-center gap-1.5 text-[13px] font-medium text-error">
+                <Icon name="cancel" size="sm" /> Rejected
+              </span>
+            )}
+
+            {/* Reject — destructive, secondary to Approve */}
+            {status !== 'rejected' && (
+              <Button size="sm" variant="danger" onClick={handleReject} loading={rejecting} disabled={busy}>
+                <Icon name="cancel" size="sm" />
+                {rejecting ? 'Rejecting…' : 'Reject'}
+              </Button>
+            )}
+
+            {/* Approve — most prominent action when pending */}
+            {status !== 'approved' && (
+              <Button onClick={handleApprove} loading={approving} disabled={busy} className="px-6">
+                <Icon name="check_circle" size="sm" />
+                {approving ? 'Approving…' : 'Approve'}
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Action error */}
+      {actionError && (
+        <div className="shrink-0 mx-8 mt-2 flex items-center gap-2 bg-error-container/50 border border-error/20 rounded-lg px-3 py-2">
+          <Icon name="error" size="sm" className="text-error shrink-0" />
+          <p className="text-[12px] text-on-error-container">{actionError}</p>
+          <button onClick={() => setActionError(null)} className="ml-auto text-outline hover:text-on-surface">
+            <Icon name="close" size="sm" />
+          </button>
+        </div>
+      )}
+
+      {/* ── Scrollable reading pane — the draft body (viewport-bounded height) ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 max-h-[calc(100vh-300px)]">
         <div className="max-w-[72ch] mx-auto space-y-6">
 
           {/* Draft header */}
@@ -267,7 +387,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
               rows={18}
               dir="auto"
               style={{ unicodeBidi: 'plaintext', textAlign: 'start' }}
-              className="w-full bg-surface-container-low border border-primary rounded-xl text-[15px] leading-relaxed text-on-surface px-4 py-3 font-sans resize-y focus:ring-2 focus:ring-primary"
+              className="w-full bg-surface-container-low border border-primary rounded-xl text-[15px] leading-relaxed text-on-surface px-4 py-3 font-sans resize-y overflow-y-auto max-h-[calc(100vh-340px)] focus:ring-2 focus:ring-primary"
             />
           ) : (
             <article className="border-t border-outline-variant/30 pt-5">
@@ -282,61 +402,6 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
           {/* Editorial Breakdown — prominent structured panel */}
           {!editing && hasBreakdown && <EditorialBreakdown breakdown={output.breakdown!} />}
         </div>
-      </div>
-
-      {/* Action error */}
-      {actionError && (
-        <div className="mx-8 mb-2 flex items-center gap-2 bg-error-container/50 border border-error/20 rounded-lg px-3 py-2">
-          <Icon name="error" size="sm" className="text-error shrink-0" />
-          <p className="text-[12px] text-on-error-container">{actionError}</p>
-          <button onClick={() => setActionError(null)} className="ml-auto text-outline hover:text-on-surface">
-            <Icon name="close" size="sm" />
-          </button>
-        </div>
-      )}
-
-      {/* Decision bar — Approve is the dominant action when pending */}
-      <div className="border-t border-outline-variant bg-surface px-8 py-4 flex items-center gap-3 flex-wrap">
-        {editing ? (
-          <>
-            <Button onClick={handleSaveEdit} loading={saving} disabled={busy}>
-              <Icon name="save" size="sm" />
-              {saving ? 'Saving…' : 'Save Edit'}
-            </Button>
-            <Button variant="ghost" onClick={() => { setEditing(false); setBody(output.body); }} disabled={busy}>
-              Cancel
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)} disabled={status === 'approved' || busy}>
-              <Icon name="edit" size="sm" />
-              Edit
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleRegenerate} loading={regenerating} disabled={busy}>
-              <Icon name="refresh" size="sm" />
-              {regenerating ? 'Regenerating…' : 'Regenerate'}
-            </Button>
-            <div className="flex-1" />
-            {status === 'approved' && (
-              <span className="flex items-center gap-1.5 text-[13px] font-medium text-green-700">
-                <Icon name="check_circle" size="sm" /> Approved
-              </span>
-            )}
-            {status !== 'rejected' && (
-              <Button size="sm" variant="danger" onClick={handleReject} loading={rejecting} disabled={busy}>
-                <Icon name="cancel" size="sm" />
-                {rejecting ? 'Rejecting…' : 'Reject'}
-              </Button>
-            )}
-            {status !== 'approved' && (
-              <Button onClick={handleApprove} loading={approving} disabled={busy} className="px-6">
-                <Icon name="check_circle" size="sm" />
-                {approving ? 'Approving…' : 'Approve'}
-              </Button>
-            )}
-          </>
-        )}
       </div>
     </div>
   );
@@ -489,7 +554,7 @@ export function ContentCaseReview() {
             )}
           </div>
         ) : (
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 min-h-0 flex overflow-hidden">
 
             {/* Left rail — progress + output navigation */}
             <aside className="hidden md:flex md:flex-col w-72 shrink-0 border-r border-outline-variant bg-surface-container-low/40 overflow-y-auto">
@@ -535,7 +600,7 @@ export function ContentCaseReview() {
             </aside>
 
             {/* Main draft pane */}
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               {/* Mobile tab bar */}
               <div className="md:hidden flex gap-2 overflow-x-auto px-4 py-2 border-b border-outline-variant bg-surface">
                 {sortedOutputs.map(output => (
