@@ -14,6 +14,7 @@ import pipelineRouter from './api/routes/pipeline';
 import outputsRouter  from './api/routes/outputs';
 import libraryRouter  from './api/routes/library';
 import whatsappRouter from './api/routes/whatsapp';
+import telegramRouter from './api/routes/telegram';
 
 const app = express();
 
@@ -54,6 +55,11 @@ app.use('/api/integrations/whatsapp', express.raw({ type: '*/*', limit: '1mb' })
 app.use(express.json({ limit: '16mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// ── Telegram webhook (PUBLIC) — Phase 2 ───────────────────────────────────────
+// Uses the global JSON parser above; trust is the X-Telegram-Bot-Api-Secret-Token
+// header verified inside the router (fail closed). No HMAC/raw body needed.
+app.use('/api/integrations/telegram', telegramRouter);
 
 // ── Auth routes (PUBLIC) — Phase 12 ───────────────────────────────────────────
 // register/login/logout/me. /me self-guards with requireAuth.

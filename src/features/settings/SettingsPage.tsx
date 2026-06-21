@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react';
 import { TopBar } from '../../components/layout/TopBar';
 import { SectionCard } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Toggle } from '../../components/ui/Toggle';
 import { Icon } from '../../components/ui/Icon';
+import { Button } from '../../components/ui/Button';
+import { api, ApiError } from '../../lib/api';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
 import type { Language } from '../../types';
@@ -120,6 +123,96 @@ function WhatsAppCard() {
   );
 }
 
+// ── Telegram — interactive connect-via-deep-link card ─────────────────────────
+function TelegramCard() {
+  const [connected, setConnected] = useState<boolean | null>(null);
+  const [username,  setUsername]  = useState<string | null>(null);
+  const [link,      setLink]      = useState<string | null>(null);
+  const [busy,      setBusy]      = useState(false);
+  const [error,     setError]     = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.get<{ connected: boolean; username: string | null }>('/integrations/telegram/status')
+      .then(s => { if (alive) { setConnected(s.connected); setUsername(s.username); } })
+      .catch(() => { if (alive) setConnected(false); });
+    return () => { alive = false; };
+  }, []);
+
+  async function connect() {
+    setBusy(true); setError(null);
+    try {
+      const r = await api.post<{ linkUrl: string; expiresAt: string }>('/integrations/telegram/link-token', {});
+      setLink(r.linkUrl);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) { setConnected(true); }
+      else if (e instanceof ApiError && e.status === 503) { setError('Telegram isn’t configured on the server yet.'); }
+      else { setError('Could not start Telegram connection. Please try again.'); }
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-outline-variant/40 overflow-hidden shadow-sm">
+      <div className="flex items-start gap-4 p-5 bg-gradient-to-br from-sky-50 to-surface-container-lowest">
+        <div className="w-12 h-12 rounded-xl bg-sky-500 flex items-center justify-center shrink-0 shadow-sm">
+          <Icon name="send" className="text-white" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-[16px] font-semibold text-on-surface">Telegram</h4>
+            <StatusPill connected={connected === true} />
+          </div>
+          <p className="text-[13px] text-on-surface-variant mt-1 max-w-md">
+            Forward links and notes to your AI workspace from Telegram.
+          </p>
+
+          {connected ? (
+            <div className="mt-4 space-y-2 rounded-xl bg-surface-container-lowest/70 border border-outline-variant/30 p-4">
+              <DetailRow label="Account" value={username ? `@${username}` : 'Linked'} />
+              <DetailRow label="Status" value="Verified" accent />
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl bg-surface-container-lowest/70 border border-outline-variant/30 p-4">
+              {!link ? (
+                <>
+                  <p className="text-[13px] text-on-surface-variant mb-3">
+                    Connect your Telegram account, then send articles and notes to the bot to add them as sources.
+                  </p>
+                  <Button size="sm" onClick={connect} loading={busy} disabled={busy}>
+                    <Icon name="link" size="sm" />
+                    Connect Telegram
+                  </Button>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <ol className="text-[13px] text-on-surface-variant list-decimal ms-5 space-y-1">
+                    <li>Open the link below and tap <span className="font-medium text-on-surface">Start</span> in Telegram.</li>
+                    <li>You’ll get a confirmation message from the bot.</li>
+                    <li>Come back here — the status updates on your next visit.</li>
+                  </ol>
+                  <a
+                    href={link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-500 text-white text-[13px] font-semibold hover:bg-sky-600 transition-colors"
+                  >
+                    <Icon name="open_in_new" size="sm" />
+                    Open in Telegram
+                  </a>
+                  <p className="text-[11px] text-outline break-all">{link}</p>
+                  <p className="text-[11px] text-amber-700">This link expires in 10 minutes and can be used once.</p>
+                </div>
+              )}
+              {error && <p className="text-[12px] text-error mt-2">{error}</p>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export function SettingsPage() {
   const { user, updateUser, updateNotification } = useSettingsStore();
@@ -201,6 +294,7 @@ export function SettingsPage() {
             {/* ── 2. Integrations (WhatsApp prominent) ─────────── */}
             <SectionCard title="Integrations" icon="hub">
               <WhatsAppCard />
+              <TelegramCard />
 
               {/* Future channels — signals extensibility */}
               <div className="mt-5 pt-5 border-t border-outline-variant/30">

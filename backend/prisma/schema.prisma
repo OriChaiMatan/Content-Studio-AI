@@ -145,6 +145,8 @@ model User {
   // Phase 13B — optional 1:1 WhatsApp channel identity. Nullable so legacy/seed
   // users (and any future passwordless flows) remain valid without a number.
   whatsappIdentity        WhatsAppIdentity?
+  // Optional 1:1 Telegram channel identity (additional channel; nullable).
+  telegramIdentity        TelegramIdentity?
   // Phase 13D — short-lived pending sources awaiting a case selection / manual text.
   // Now one-to-many: a user may hold one pending per channel (whatsapp/telegram).
   whatsappPendingSource   WhatsAppPendingSource[]
@@ -461,4 +463,40 @@ model WhatsAppPendingSource {
   @@unique([channel, externalId])
   @@index([userId])
   @@map("whatsapp_pending_sources")
+}
+
+// TelegramIdentity — Phase 2 of Telegram ingestion. Maps a Telegram user to an app
+// user. Created/verified by the /start token binding in a later phase; until then
+// no rows exist, so inbound Telegram users get an onboarding-required reply.
+model TelegramIdentity {
+  id             String    @id @default(cuid())
+  userId         String    @unique           // one Telegram account per user (MVP)
+  // Null until /start binding completes — the token row is created at link-token
+  // time, before the Telegram user is known. @unique tolerates multiple NULLs.
+  telegramUserId String?   @unique           // Telegram numeric user id (stored as string)
+  chatId         String?                      // private chat id used for sending
+  username       String?                      // @handle (optional, may change)
+  displayName    String?                      // first/last name snapshot
+  verified       Boolean   @default(false)
+  verifyToken    String?                      // single-use /start binding token (later phase)
+  verifyExpires  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("telegram_identities")
+}
+
+// ChannelInboundDedup — generic inbound idempotency. One row per processed
+// provider update/message id; the @@unique enforces "process once" via a P2002 on
+// insert (mirrors the WhatsApp waMessageId dedup, but channel-agnostic).
+model ChannelInboundDedup {
+  id         String   @id @default(cuid())
+  channel    String                          // 'telegram' (whatsapp uses its own message log)
+  externalId String                          // provider id — Telegram update_id (as string)
+  createdAt  DateTime @default(now())
+
+  @@unique([channel, externalId])
+  @@map("channel_inbound_dedup")
 }

@@ -1,4 +1,5 @@
 import { reply } from './whatsappSend';
+import { sendTelegram } from './telegramSend';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Channel-agnostic outbound dispatcher.
@@ -25,8 +26,10 @@ export async function channelSend(
   switch (channel) {
     case 'whatsapp':
       return reply(externalId, body, kind);
+    case 'telegram':
+      // Telegram has no per-kind logging table; kind is intentionally unused.
+      return sendTelegram(externalId, body);
     default:
-      // Telegram (and any future channel) lands here until its transport exists.
       console.warn(`[channelSend] no transport for channel "${channel}" — message not sent`);
       return false;
   }
