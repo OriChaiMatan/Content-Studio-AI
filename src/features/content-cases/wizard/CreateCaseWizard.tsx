@@ -368,7 +368,7 @@ export function CreateCaseWizard() {
         }
       />
 
-      <main className="flex-1 overflow-y-auto p-8">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="max-w-2xl mx-auto">
 
           {/* Step indicators */}
@@ -384,19 +384,19 @@ export function CreateCaseWizard() {
                   ].join(' ')}>
                     {i < step ? <Icon name="check" size="sm" /> : i + 1}
                   </div>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${i === step ? 'text-primary' : i < step ? 'text-green-600' : 'text-outline'}`}>
+                  <span className={`hidden sm:block text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${i === step ? 'text-primary' : i < step ? 'text-green-600' : 'text-outline'}`}>
                     {label}
                   </span>
                 </div>
                 {i < STEPS.length - 1 && (
-                  <div className={`w-16 h-0.5 rounded-full mb-4 ${i < step ? 'bg-green-400' : 'bg-outline-variant'}`} />
+                  <div className={`w-8 sm:w-16 h-0.5 rounded-full sm:mb-4 ${i < step ? 'bg-green-400' : 'bg-outline-variant'}`} />
                 )}
               </div>
             ))}
           </div>
 
           {/* Step content */}
-          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm p-8 min-h-[380px]">
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm p-5 md:p-8 min-h-[380px]">
             {step === 0 && <Step1Goal form={form} update={update} />}
             {step === 1 && <Step2StyleTargets form={form} update={update} />}
             {step === 2 && <Step3Schedule form={form} update={update} />}

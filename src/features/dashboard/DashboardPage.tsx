@@ -185,7 +185,7 @@ export function DashboardPage() {
     return (
       <>
         <TopBar title="Dashboard" />
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <div className="flex items-center gap-3 text-on-surface-variant">
             <span className="material-symbols-outlined animate-spin">refresh</span>
             <span className="text-[14px]">Loading dashboard…</span>
@@ -200,7 +200,7 @@ export function DashboardPage() {
     return (
       <>
         <TopBar title="Dashboard" />
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <div className="flex flex-col items-center justify-center py-20 text-center max-w-md mx-auto">
             <div className="w-20 h-20 rounded-full bg-surface-container flex items-center justify-center mb-6">
               <Icon name="auto_stories" size="xl" className="text-outline" />
@@ -224,7 +224,7 @@ export function DashboardPage() {
     <>
       <TopBar title="Dashboard" />
 
-      <main className="flex-1 p-8 space-y-8 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-8 space-y-8 overflow-y-auto">
 
         {/* A. Smart header */}
         <div className="flex items-start justify-between gap-6 flex-wrap">

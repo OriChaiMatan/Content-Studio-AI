@@ -246,7 +246,7 @@ export function ContentCasePipeline() {
         }
       />
 
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         <div className="max-w-2xl mx-auto">
 
           {/* Page header */}

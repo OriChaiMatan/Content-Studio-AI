@@ -91,58 +91,64 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
         tabIndex={0}
         onClick={() => setOpen(o => !o)}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => !o); } }}
-        className="w-full text-left px-5 py-4 flex items-start gap-4 cursor-pointer select-none"
+        className="w-full text-left px-5 py-4 flex flex-col md:flex-row md:items-start gap-3 md:gap-4 cursor-pointer select-none"
       >
-        {/* Saved-asset icon */}
-        <div className="w-9 h-9 rounded-lg bg-secondary-container/60 flex items-center justify-center shrink-0 mt-0.5">
-          <Icon name="bookmark" size="sm" className="text-on-secondary-container" />
-        </div>
-
-        {/* Run info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <p className="text-[15px] font-medium text-on-surface">{group.caseTitle}</p>
-            <span className="text-[11px] text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full">
-              {runDate} · {runTime}
-            </span>
+        {/* Icon + info — a row at every width; actions stack below on mobile */}
+        <div className="flex items-start gap-4 flex-1 min-w-0">
+          {/* Saved-asset icon */}
+          <div className="w-9 h-9 rounded-lg bg-secondary-container/60 flex items-center justify-center shrink-0 mt-0.5">
+            <Icon name="bookmark" size="sm" className="text-on-secondary-container" />
           </div>
 
-          {/* Platform chips */}
-          <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {group.platforms.map(p => (
-              <PlatformBadge key={p} platform={p} />
-            ))}
-          </div>
-
-          {/* Content preview snippet (first approved output) */}
-          {primary && (
-            <p dir="auto" className="text-[12.5px] leading-relaxed text-on-surface-variant mt-2.5 line-clamp-2 text-start whitespace-pre-wrap">
-              {primary.body}
-            </p>
-          )}
-
-          {/* Stats row */}
-          <div className="flex items-center gap-4 mt-2.5 text-[11px] text-on-surface-variant">
-            <span className="flex items-center gap-1">
-              <Icon name="check_circle" size="sm" className="text-green-600" />
-              <span><span className="font-bold text-on-surface">{group.approvedCount}</span> approved</span>
-            </span>
-            {group.sourceCount > 0 && (
-              <span className="flex items-center gap-1">
-                <Icon name="article" size="sm" className="text-outline" />
-                <span><span className="font-bold text-on-surface">{group.sourceCount}</span> source{group.sourceCount !== 1 ? 's' : ''}</span>
+          {/* Run info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <p className="text-[15px] font-medium text-on-surface">{group.caseTitle}</p>
+              <span className="text-[11px] text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full whitespace-nowrap">
+                {runDate} · {runTime}
               </span>
+            </div>
+
+            {/* Platform chips */}
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {group.platforms.map(p => (
+                <PlatformBadge key={p} platform={p} />
+              ))}
+            </div>
+
+            {/* Content preview snippet (first approved output) */}
+            {primary && (
+              <p dir="auto" className="text-[12.5px] leading-relaxed text-on-surface-variant mt-2.5 line-clamp-2 text-start whitespace-pre-wrap">
+                {primary.body}
+              </p>
             )}
+
+            {/* Stats row */}
+            <div className="flex items-center gap-4 mt-2.5 text-[11px] text-on-surface-variant">
+              <span className="flex items-center gap-1">
+                <Icon name="check_circle" size="sm" className="text-green-600" />
+                <span><span className="font-bold text-on-surface">{group.approvedCount}</span> approved</span>
+              </span>
+              {group.sourceCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <Icon name="article" size="sm" className="text-outline" />
+                  <span><span className="font-bold text-on-surface">{group.sourceCount}</span> source{group.sourceCount !== 1 ? 's' : ''}</span>
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2 shrink-0 mt-0.5" onClick={e => e.stopPropagation()}>
+        {/* Actions — inline on desktop; full-width bottom row on mobile */}
+        <div
+          className="flex items-center gap-2 shrink-0 w-full md:w-auto md:mt-0.5 border-t md:border-t-0 border-outline-variant/20 pt-3 md:pt-0"
+          onClick={e => e.stopPropagation()}
+        >
           {primary && (
             <button
               type="button"
               onClick={e => { e.stopPropagation(); copyPrimary(); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+              className={`flex flex-1 md:flex-none items-center justify-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
                 copied ? 'bg-green-100 text-green-700' : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'
               }`}
               title="Copy the approved content"
@@ -155,14 +161,14 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
             <button
               type="button"
               onClick={() => navigate(`/cases/${group.caseId}/review?runId=${group.runId}`)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80 transition-colors"
+              className="flex flex-1 md:flex-none items-center justify-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-[12px] font-medium bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80 transition-colors"
               title="View the approved content for this run"
             >
               <Icon name="visibility" size="sm" />
               View Content
             </button>
           )}
-          <Icon name={open ? 'expand_less' : 'expand_more'} className="text-outline" />
+          <Icon name={open ? 'expand_less' : 'expand_more'} className="text-outline shrink-0" />
         </div>
       </div>
 
@@ -215,7 +221,7 @@ export function LibraryPage() {
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-8 bg-surface">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-surface">
 
           {/* Stats bar */}
           {runs.length > 0 && (
@@ -306,7 +312,7 @@ export function LibraryPage() {
         </div>
 
         {/* Footer */}
-        <footer className="h-14 px-8 bg-surface-container-low flex items-center border-t border-outline-variant">
+        <footer className="h-14 px-4 md:px-8 bg-surface-container-low flex items-center border-t border-outline-variant">
           <p className="text-[11px] text-on-surface-variant">
             {displayRuns.reduce((n, r) => n + r.approvedCount, 0)} approved outputs across{' '}
             {displayRuns.length} run{displayRuns.length !== 1 ? 's' : ''}

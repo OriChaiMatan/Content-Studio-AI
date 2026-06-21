@@ -784,7 +784,7 @@ export function SourcesPanel({ caseId }: SourcesPanelProps) {
             )}
           </div>
         ) : (
-          <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1 -mr-1">
+          <div className="space-y-2 max-h-[360px] md:max-h-[440px] overflow-y-auto pr-1 -mr-1">
             {sources.map(source => (
               <SourceRow
                 key={source.id}

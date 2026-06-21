@@ -1,6 +1,8 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useUiStore } from '../../stores/uiStore';
 import { Icon } from '../ui/Icon';
 
 const navItems = [
@@ -14,18 +16,39 @@ export function Sidebar() {
   const user = useSettingsStore(s => s.user);
   const logout = useAuthStore(s => s.logout);
   const navigate = useNavigate();
+  const location = useLocation();
+  const mobileNavOpen = useUiStore(s => s.mobileNavOpen);
+  const closeMobileNav = useUiStore(s => s.closeMobileNav);
+
+  // Auto-close the mobile drawer on any route change (covers nav clicks, the CTA,
+  // footer actions, and browser back/forward). No-op on md+ where it's static.
+  useEffect(() => { closeMobileNav(); }, [location.pathname, closeMobileNav]);
 
   return (
-    <aside className="h-screen w-72 flex flex-col fixed left-0 top-0 bg-surface-container shadow-sm z-50 p-4 gap-6">
-      {/* Logo */}
+    <aside
+      className={[
+        'h-screen w-72 flex flex-col fixed left-0 top-0 bg-surface-container shadow-sm z-50 p-4 gap-6',
+        // Off-canvas on mobile (slide in when open); always visible from md up.
+        'transition-transform duration-200 ease-out md:translate-x-0',
+        mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
+      ].join(' ')}
+    >
+      {/* Logo + mobile close */}
       <div className="flex items-center gap-4 px-2 py-4">
-        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary">
+        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary shrink-0">
           <Icon name="auto_stories" />
         </div>
-        <div>
-          <h1 className="text-[22px] font-serif font-bold text-primary leading-7">Content Studio AI</h1>
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-serif font-bold text-primary leading-7 truncate">Content Studio AI</h1>
           <p className="text-[11px] font-sans text-on-surface-variant tracking-wide">Editorial Content System</p>
         </div>
+        <button
+          onClick={closeMobileNav}
+          className="md:hidden ml-auto w-10 h-10 -mr-1 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-variant/50 transition-colors"
+          aria-label="Close menu"
+        >
+          <Icon name="close" />
+        </button>
       </div>
 
       {/* New Content Case CTA */}
@@ -45,7 +68,7 @@ export function Sidebar() {
             to={item.to}
             end={item.to === '/'}
             className={({ isActive }) => [
-              'flex items-center gap-4 px-4 py-2 rounded-xl text-[14px] font-sans transition-colors',
+              'flex items-center gap-4 px-4 py-2.5 rounded-xl text-[14px] font-sans transition-colors',
               isActive
                 ? 'bg-secondary-container text-on-secondary-container font-bold'
                 : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50',

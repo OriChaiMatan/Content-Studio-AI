@@ -174,7 +174,7 @@ export function VerifyWhatsAppPage() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-[34rem] space-y-6 rounded-xl border border-outline-variant bg-surface-container-lowest p-8 shadow-sm">
+      <div className="w-full max-w-[34rem] space-y-6 rounded-xl border border-outline-variant bg-surface-container-lowest p-5 md:p-8 shadow-sm">
         {children}
       </div>
     </div>

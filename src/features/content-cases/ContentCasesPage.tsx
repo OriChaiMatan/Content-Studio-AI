@@ -134,7 +134,7 @@ export function ContentCasesPage() {
         }
       />
 
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         {/* Loading state */}
         {loading && cases.length === 0 && (
           <div className="flex items-center justify-center py-24 gap-3 text-on-surface-variant">

@@ -276,7 +276,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
   return (
     <div className="flex flex-col h-full">
       {/* ── Action bar (top, above the draft — stays visible while reading) ── */}
-      <div className="shrink-0 border-b border-outline-variant bg-surface px-8 py-3 flex items-center gap-2 flex-wrap">
+      <div className="shrink-0 border-b border-outline-variant bg-surface px-4 md:px-8 py-3 flex items-center gap-2 flex-wrap">
         {editing ? (
           <>
             <Button onClick={handleSaveEdit} loading={saving} disabled={busy}>
@@ -289,26 +289,26 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
           </>
         ) : (
           <>
-            {/* Copy + Share — clearly accessible */}
-            <Button size="sm" variant="outline" onClick={handleCopy} disabled={busy}>
+            {/* Copy + Share — clearly accessible (icon-only below sm to avoid 3-row wrap) */}
+            <Button size="sm" variant="outline" onClick={handleCopy} disabled={busy} title="Copy">
               <Icon name={copyState === 'copied' ? 'check' : copyState === 'error' ? 'error' : 'content_copy'} size="sm" />
-              {copyState === 'copied' ? 'Copied' : copyState === 'error' ? 'Copy failed' : 'Copy'}
+              <span className="hidden sm:inline">{copyState === 'copied' ? 'Copied' : copyState === 'error' ? 'Copy failed' : 'Copy'}</span>
             </Button>
-            <Button size="sm" variant="outline" onClick={handleShare} disabled={busy}>
+            <Button size="sm" variant="outline" onClick={handleShare} disabled={busy} title="Share">
               <Icon name={shareState === 'shared' ? 'check' : shareState === 'copied' ? 'content_copy' : shareState === 'error' ? 'error' : 'share'} size="sm" />
-              {shareState === 'shared' ? 'Shared' : shareState === 'copied' ? 'Copied for sharing' : shareState === 'error' ? 'Share failed' : 'Share'}
+              <span className="hidden sm:inline">{shareState === 'shared' ? 'Shared' : shareState === 'copied' ? 'Copied for sharing' : shareState === 'error' ? 'Share failed' : 'Share'}</span>
             </Button>
 
-            <span className="w-px h-6 bg-outline-variant/60 mx-1" />
+            <span className="hidden sm:block w-px h-6 bg-outline-variant/60 mx-1" />
 
-            {/* Edit + Regenerate — utility actions */}
-            <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={status === 'approved' || busy}>
+            {/* Edit + Regenerate — utility actions (icon-only below sm) */}
+            <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={status === 'approved' || busy} title="Edit">
               <Icon name="edit" size="sm" />
-              Edit
+              <span className="hidden sm:inline">Edit</span>
             </Button>
-            <Button size="sm" variant="ghost" onClick={handleRegenerate} loading={regenerating} disabled={busy}>
+            <Button size="sm" variant="ghost" onClick={handleRegenerate} loading={regenerating} disabled={busy} title="Regenerate">
               <Icon name="refresh" size="sm" />
-              {regenerating ? 'Regenerating…' : 'Regenerate'}
+              <span className="hidden sm:inline">{regenerating ? 'Regenerating…' : 'Regenerate'}</span>
             </Button>
 
             <div className="flex-1" />
@@ -356,7 +356,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
       )}
 
       {/* ── Scrollable reading pane — the draft body (viewport-bounded height) ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 max-h-[calc(100vh-300px)]">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 py-6 max-h-[calc(100dvh-360px)] md:max-h-[calc(100vh-300px)]">
         <div className="max-w-[72ch] mx-auto space-y-6">
 
           {/* Draft header */}
@@ -424,7 +424,7 @@ export function ContentCaseReview() {
     return (
       <>
         <TopBar title="Review" />
-        <main className="flex-1 flex items-center justify-center p-8">
+        <main className="flex-1 flex items-center justify-center p-4 md:p-8">
           {loading
             ? <div className="flex items-center gap-3 text-on-surface-variant"><span className="material-symbols-outlined animate-spin">refresh</span><span className="text-[14px]">Loading…</span></div>
             : <div className="flex flex-col items-center text-center gap-4">
@@ -492,7 +492,7 @@ export function ContentCaseReview() {
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Historical-run banner */}
         {isHistorical && (
-          <div className="px-8 py-2.5 bg-secondary-container/40 border-b border-outline-variant flex items-center gap-3 text-[13px] text-on-secondary-container">
+          <div className="px-4 md:px-8 py-2.5 bg-secondary-container/40 border-b border-outline-variant flex items-center gap-3 text-[13px] text-on-secondary-container">
             <Icon name="history" size="sm" />
             <span>Viewing outputs from a previous run.{' '}
               <button onClick={() => navigate(`/cases/${c.id}/review`)} className="font-bold underline hover:no-underline">Switch to current run</button>
@@ -501,7 +501,7 @@ export function ContentCaseReview() {
         )}
 
         {/* ── Rich review header ─────────────────────────────── */}
-        <div className="px-8 py-5 bg-surface-container-low border-b border-outline-variant">
+        <div className="px-4 md:px-8 py-5 bg-surface-container-low border-b border-outline-variant">
           <div className="flex items-center gap-3 flex-wrap text-[12px] text-on-surface-variant mb-2">
             <span className="inline-flex items-center gap-1.5 font-medium text-on-surface">
               <Icon name={isHistorical ? 'history' : 'bolt'} size="sm" className="text-primary" />

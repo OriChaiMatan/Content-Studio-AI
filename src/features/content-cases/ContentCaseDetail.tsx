@@ -148,7 +148,7 @@ export function ContentCaseDetail() {
     return (
       <>
         <TopBar title="Content Case" />
-        <main className="flex-1 flex items-center justify-center p-8">
+        <main className="flex-1 flex items-center justify-center p-4 md:p-8">
           {loading ? (
             <div className="flex items-center gap-3 text-on-surface-variant">
               <span className="material-symbols-outlined animate-spin">refresh</span>
@@ -258,7 +258,7 @@ export function ContentCaseDetail() {
         }
       />
 
-      <main className="flex-1 p-8 overflow-y-auto space-y-6 max-w-6xl mx-auto w-full">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto space-y-6 max-w-6xl mx-auto w-full">
         {deleteError && (
           <div className="flex items-center gap-3 bg-error-container/60 border border-error/20 rounded-xl px-4 py-3">
             <Icon name="error" className="text-error shrink-0" size="sm" />
@@ -268,7 +268,7 @@ export function ContentCaseDetail() {
 
         {/* ── A. Smart header: about · status · next action ─────────── */}
         <div className="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant/30 shadow-sm">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <CaseStatusBadge status={c.status} />
@@ -278,7 +278,7 @@ export function ContentCaseDetail() {
                   {humanizeSchedule(c.schedule)}
                 </span>
               </div>
-              <h2 className="text-[28px] font-serif text-on-surface mb-1 truncate">{c.title}</h2>
+              <h2 className="text-[22px] md:text-[28px] font-serif text-on-surface mb-1 line-clamp-2 md:truncate">{c.title}</h2>
               {aboutLine && <p className="text-[14px] text-on-surface-variant">{aboutLine}</p>}
 
               {/* What's happening now */}
@@ -294,9 +294,9 @@ export function ContentCaseDetail() {
               )}
             </div>
 
-            {/* Single primary next action */}
-            <div className="shrink-0">
-              <Button onClick={cta.run}>
+            {/* Single primary next action — full width on mobile, inline on desktop */}
+            <div className="shrink-0 w-full md:w-auto">
+              <Button onClick={cta.run} className="w-full md:w-auto">
                 <Icon name={cta.icon} size="sm" />
                 {cta.label}
               </Button>
@@ -628,7 +628,7 @@ function RunHistorySection({ caseId, runs, outputs, onNavigate }: {
           </div>
         </Card>
       ) : (
-        <div className="max-h-[440px] overflow-y-auto space-y-2 rounded-xl border border-outline-variant/30 bg-surface-container-low/30 p-3">
+        <div className="max-h-[360px] md:max-h-[440px] overflow-y-auto space-y-2 rounded-xl border border-outline-variant/30 bg-surface-container-low/30 p-3">
           {runs.map(run => (
             <RunHistoryCard key={run.id} run={run} outputs={byRun.get(run.id) ?? []} caseId={caseId} onNavigate={onNavigate} />
           ))}
