@@ -5,6 +5,49 @@ import { Input, Textarea } from '../../components/ui/Input';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import type { ContentSource, SourceStatus, SourceType, SourceIntelligence } from '../../types';
 
+// ── URL helpers (Phase A/B) ───────────────────────────────
+// Social hosts whose posts often can't be auto-extracted (login/JS walls). Drives
+// the pre-submit hint and the source-aware "paste post text" fallback wording.
+const SOCIAL_HOST_RE = /(^|\.)(facebook\.com|fb\.com|linkedin\.com|x\.com|twitter\.com|instagram\.com|reddit\.com|youtube\.com|youtu\.be)$/i;
+const HAS_SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+// Prepend https:// when the user omits a scheme, then validate shape. Returns the
+// normalized absolute URL, or null when it still isn't a valid http(s) URL.
+function normalizeUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const withScheme = HAS_SCHEME_RE.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const u = new URL(withScheme);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    if (!u.hostname.includes('.')) return null; // reject schemeless host with no dot/TLD
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function isSocialUrl(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+  const withScheme = HAS_SCHEME_RE.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    return SOCIAL_HOST_RE.test(new URL(withScheme).hostname);
+  } catch {
+    return false;
+  }
+}
+
+// Source-aware wording for the manual-paste CTA (req. 7):
+//   social post → "Paste post text manually"
+//   generic page (partial extraction) → "Paste page text manually"
+//   article / other → "Add article text manually"
+function manualPasteLabel(source: ContentSource): string {
+  if (source.type === 'url' && isSocialUrl(source.content)) return 'Paste post text manually';
+  if (source.type === 'url' && source.extractionStatus === 'partial') return 'Paste page text manually';
+  return 'Add article text manually';
+}
+
 // ── Source Intelligence section ──────────────────────────
 
 function IntelligenceSection({ intel }: { intel: SourceIntelligence }) {
@@ -127,6 +170,17 @@ function ExtractionStatusLine({ source }: { source: ContentSource }) {
       </p>
     );
   }
+  if (status === 'partial') {
+    return (
+      <p className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
+        <Icon name="info" size="sm" />
+        <span>
+          Limited extraction{source.extractedTitle ? <> — “<bdi>{source.extractedTitle}</bdi>”</> : ''}.
+          {' '}Analysis is based on the page preview — paste the full text for best results.
+        </span>
+      </p>
+    );
+  }
   if (status === 'failed') {
     return (
       <p className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
@@ -225,7 +279,25 @@ function AddSourceForm({ onAdd, onAddMany, onCancel }: AddFormProps) {
       // batch; 0–1 → the existing single POST (behaviour unchanged). text/pdf are
       // always a single source.
       if (type === 'url') {
-        const urls = content.split('\n').map(u => u.trim()).filter(Boolean);
+        const rawLines = content.split('\n').map(u => u.trim()).filter(Boolean);
+        // Phase A — normalize (prepend https://) + validate shape. Block submit on
+        // any invalid line so a bad URL is never sent to the server.
+        const urls: string[] = [];
+        const invalid: string[] = [];
+        for (const line of rawLines) {
+          const n = normalizeUrl(line);
+          if (n) urls.push(n); else invalid.push(line);
+        }
+        if (invalid.length > 0) {
+          setError(`These don’t look like valid URLs:\n` + invalid.map(u => `• ${u}`).join('\n'));
+          setSaving(false);
+          return;
+        }
+        if (urls.length === 0) {
+          setError('Please enter at least one URL.');
+          setSaving(false);
+          return;
+        }
         if (urls.length > 1) {
           const { added, failed } = await onAddMany(urls.map(u => ({ type: 'url', label, content: u })));
           if (failed.length === 0) return; // all added → parent closes the form
@@ -236,7 +308,7 @@ function AddSourceForm({ onAdd, onAddMany, onCancel }: AddFormProps) {
           setSaving(false);
           return;
         }
-        await onAdd('url', label, urls[0] ?? content, undefined);
+        await onAdd('url', label, urls[0], undefined);
         return; // parent closes on success
       }
       await onAdd(type, label, content, type === 'pdf' ? fileData ?? undefined : undefined);
@@ -291,13 +363,21 @@ function AddSourceForm({ onAdd, onAddMany, onCancel }: AddFormProps) {
         />
       )}
       {type === 'url' && (
-        <Textarea
-          label="URL(s) *"
-          value={content}
-          onChange={e => setContent(e.target.value)}
-          placeholder="https://… — paste one URL per line to add several at once"
-          rows={3}
-        />
+        <>
+          <Textarea
+            label="URL(s) *"
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            placeholder="https://… — paste one URL per line to add several at once"
+            rows={3}
+          />
+          {content.split('\n').some(l => isSocialUrl(l)) && (
+            <div className="flex items-start gap-2 text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <Icon name="info" size="sm" className="shrink-0 mt-0.5" />
+              <span>Social platforms often block automatic extraction. If extraction fails, paste the post text manually.</span>
+            </div>
+          )}
+        </>
       )}
       {type === 'pdf' && (
         <div className="space-y-3">
@@ -365,7 +445,8 @@ function SourceRow({ source, onDelete, onSaveEdit, onManualText }: SourceRowProp
   const [manualError, setManualError] = useState<string | null>(null);
 
   const canAddManualText =
-    (source.type === 'url' || source.type === 'pdf') && source.extractionStatus === 'failed';
+    (source.type === 'url' || source.type === 'pdf') &&
+    (source.extractionStatus === 'failed' || source.extractionStatus === 'partial');
 
   async function handleSaveManualText() {
     if (!manualText.trim() || manualSaving) return;
@@ -526,7 +607,7 @@ function SourceRow({ source, onDelete, onSaveEdit, onManualText }: SourceRowProp
                 <p className="text-[11px] text-outline mt-2 italic">Analysis not available</p>
               )}
 
-              {/* Manual text fallback (Phase 8.5) — url/pdf whose extraction failed */}
+              {/* Manual text fallback — url/pdf whose extraction failed or was partial */}
               {canAddManualText && (
                 <div className="mt-2">
                   {pasting ? (
@@ -535,7 +616,7 @@ function SourceRow({ source, onDelete, onSaveEdit, onManualText }: SourceRowProp
                         value={manualText}
                         onChange={e => setManualText(e.target.value)}
                         rows={5}
-                        placeholder="Paste the article or document text here to analyze it directly…"
+                        placeholder="Paste the post or page text here to analyze it directly…"
                         className="text-[13px]"
                       />
                       {manualError && (
@@ -560,7 +641,7 @@ function SourceRow({ source, onDelete, onSaveEdit, onManualText }: SourceRowProp
                       className="text-[11px] text-primary hover:underline flex items-center gap-1"
                     >
                       <Icon name="content_paste" size="sm" />
-                      Add article text manually
+                      {manualPasteLabel(source)}
                     </button>
                   )}
                 </div>

@@ -106,7 +106,7 @@ export interface ContentSource {
   // URL content extraction (Phase 8.5) — populated for url sources only.
   extractedTitle?: string | null;
   extractedText?: string | null;
-  extractionStatus?: ExtractionStatus | null; // 'success' | 'failed' | 'skipped' | 'pending'
+  extractionStatus?: ExtractionStatus | null; // 'success' | 'partial' | 'failed' | 'skipped' | 'pending'
   extractionError?: string | null;
   extractedAt?: string | null;
   createdAt: string;          // ISO 8601
@@ -114,9 +114,11 @@ export interface ContentSource {
 }
 
 // Outcome of URL content extraction for a source.
-// success → readable text extracted; failed → could not extract (fell back to
-// URL+label analysis); skipped → not a url source; pending → not yet run.
-export type ExtractionStatus = 'success' | 'failed' | 'skipped' | 'pending';
+// success → readable article text extracted; partial → only OG/meta preview text
+// (full body unavailable, still usable — invite a manual paste); failed → could
+// not extract (fell back to URL+label analysis); skipped → not a url source;
+// pending → not yet run.
+export type ExtractionStatus = 'success' | 'partial' | 'failed' | 'skipped' | 'pending';
 
 // Minimal source shape sent from the wizard (server infers all lifecycle fields).
 export interface SourceInput {

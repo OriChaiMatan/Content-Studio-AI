@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { whatsappConfig } from '../lib/whatsapp';
 import { reply } from '../lib/whatsappSend';
 import { sourceService } from './sourceService';
+import { isAuthwalledHost } from './urlExtractionService';
 
 // Minimal inbound shape this service needs. Defined locally (structurally compatible
 // with whatsappService's InboundMessage) so ingestion does NOT import whatsappService —
@@ -62,11 +63,39 @@ async function upsertPending(
   data: { sourceType: 'text' | 'url'; label: string; content: string; caseOptions: CaseOption[] },
 ): Promise<void> {
   const expiresAt = new Date(Date.now() + PENDING_TTL_MS);
+  // mode/caseId/sourceId set explicitly so this overwrites any prior manual_text row cleanly.
   const payload = {
+    mode:        'select_case',
     sourceType:  data.sourceType,
     label:       data.label,
     content:     data.content,
     caseOptions: data.caseOptions as unknown as Prisma.InputJsonValue,
+    caseId:      null,
+    sourceId:    null,
+    expiresAt,
+  };
+  await prisma.whatsAppPendingSource.upsert({
+    where:  { phoneE164: identity.phoneE164 },
+    create: { userId: identity.userId, phoneE164: identity.phoneE164, ...payload },
+    update: { userId: identity.userId, ...payload },
+  });
+}
+
+// manual_text pending — a url source was created with failed/partial extraction;
+// the next plain-text message recovers it. caseOptions is unused (stored as []).
+async function upsertManualTextPending(
+  identity: WhatsAppIdentity,
+  data: { caseId: string; sourceId: string; label: string; content: string },
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + PENDING_TTL_MS);
+  const payload = {
+    mode:        'manual_text',
+    sourceType:  'url',
+    label:       data.label,
+    content:     data.content,
+    caseOptions: [] as unknown as Prisma.InputJsonValue,
+    caseId:      data.caseId,
+    sourceId:    data.sourceId,
     expiresAt,
   };
   await prisma.whatsAppPendingSource.upsert({
@@ -118,6 +147,21 @@ function confirmation(title: string, caseId: string): string {
   return `Added to "${title}".\n\nView the case:\n${caseLink(caseId)}`;
 }
 
+// URL extraction succeeded — read the link directly.
+function urlSuccessMessage(title: string, caseId: string): string {
+  return `I read the link and added it to "${title}".\n\nView the case:\n${caseLink(caseId)}`;
+}
+
+// URL extraction failed/partial — invite the manual-text recovery (req. 4/5).
+function recoveryMessage(content: string, status: string): string {
+  if (status === 'partial') {
+    return 'I could only read part of this page. Send me the full post text in your next message.';
+  }
+  return isAuthwalledHost(content)
+    ? "I couldn't read this social post automatically. Facebook/LinkedIn/X sometimes block automated reading. Send me the post text in your next message."
+    : "I couldn't read this link automatically. Send me the page text in your next message.";
+}
+
 export interface IngestResult {
   ingested: boolean;
   reason:
@@ -128,7 +172,10 @@ export interface IngestResult {
     | 'selection_invalid'
     | 'selection_expired'
     | 'unsupported'
-    | 'case_unavailable';
+    | 'case_unavailable'
+    | 'manual_text_pending'      // url source saved with failed/partial extraction; awaiting pasted text
+    | 'manual_text_attached'     // pasted text recovered the source
+    | 'manual_text_unavailable'; // remembered source/case gone before the paste arrived
 }
 
 // ── Entry point — called by processInbound for a VERIFIED identity ─────────────
@@ -141,9 +188,22 @@ export async function ingestFromWhatsapp(identity: WhatsAppIdentity, msg: Ingest
   }
 
   const body = msg.body.trim();
-  const pending = await findPending(identity.phoneE164);
+  let pending = await findPending(identity.phoneE164);
 
-  // ── Numeric reply → selection (only when a pending exists) ───────────────────
+  // ── manual_text recovery mode ────────────────────────────────────────────────
+  // A url source was created with failed/partial extraction; we're waiting for the
+  // user to paste the post/page text. This branch runs BEFORE numeric-selection so a
+  // pasted number is treated as text, not a case pick.
+  if (pending && pending.mode === 'manual_text') {
+    if (pending.expiresAt.getTime() > Date.now()) {
+      return handleManualText(identity, pending, body);
+    }
+    // Expired → drop it and treat this message as fresh content.
+    await deletePending(identity.phoneE164);
+    pending = null;
+  }
+
+  // ── Numeric reply → selection (only when a select_case pending exists) ────────
   if (SELECTION_RE.test(body) && pending) {
     if (pending.expiresAt.getTime() > Date.now()) {
       return resolveSelection(identity, pending, parseInt(body, 10));
@@ -213,8 +273,80 @@ async function ingestContent(
     return { ingested: false, reason: 'case_unavailable' };
   }
 
-  await reply(identity.phoneE164, confirmation(target.title, target.id), 'confirmation');
+  return finishAddedSource(identity, target.title, target.id, source, classified.content);
+}
+
+// ── Post-addSource handling: confirm, or open a manual_text recovery ──────────
+// For a url source whose extraction failed/partial, save a manual_text pending and
+// invite the user to paste the real text. Otherwise confirm normally. Never throws.
+type AddedSource = NonNullable<Awaited<ReturnType<typeof sourceService.addSource>>>;
+
+async function finishAddedSource(
+  identity: WhatsAppIdentity,
+  title: string,
+  caseId: string,
+  source: AddedSource,
+  content: string,
+): Promise<IngestResult> {
+  const isUrl = source.type === 'url';
+  const status = source.extractionStatus;
+
+  if (isUrl && (status === 'failed' || status === 'partial')) {
+    // Do NOT confirm as if it were good — hold a recovery and ask for the text.
+    await upsertManualTextPending(identity, {
+      caseId, sourceId: source.id, label: source.label, content,
+    });
+    await reply(identity.phoneE164, recoveryMessage(content, status), 'notice');
+    return { ingested: true, reason: 'manual_text_pending' };
+  }
+
+  // success (url) or skipped (text) → normal confirmation.
+  const msg = isUrl ? urlSuccessMessage(title, caseId) : confirmation(title, caseId);
+  await reply(identity.phoneE164, msg, 'confirmation');
   return { ingested: true, reason: 'added' };
+}
+
+// ── manual_text recovery: attach the next message to the remembered source ─────
+async function handleManualText(
+  identity: WhatsAppIdentity,
+  pending: WhatsAppPendingSource,
+  body: string,
+): Promise<IngestResult> {
+  const classified = classify(body);
+
+  // Empty/whitespace → keep the pending and re-prompt.
+  if (!classified) {
+    await reply(identity.phoneE164, 'Send me the post or page text to finish adding the link, or send a new link.', 'notice');
+    return { ingested: false, reason: 'manual_text_pending' };
+  }
+
+  // A new URL → cancel this fallback and process the new link as fresh content.
+  if (classified.type === 'url') {
+    await deletePending(identity.phoneE164);
+    await reply(identity.phoneE164, "Okay, I'll skip the manual text for the previous link and use this new one instead.", 'notice');
+    return ingestContent(identity, classified);
+  }
+
+  // Plain text → attach as manualText to the remembered source (preserves the URL,
+  // stores the text, flips extraction to success, re-analyzes — via updateSource).
+  if (!pending.caseId || !pending.sourceId) {
+    // Defensive: malformed pending — drop it and treat the text as new content.
+    await deletePending(identity.phoneE164);
+    return ingestContent(identity, classified);
+  }
+
+  const updated = await sourceService.updateSource(pending.caseId, pending.sourceId, {
+    manualText: classified.content,
+  });
+  await deletePending(identity.phoneE164);
+
+  if (!updated) {
+    await reply(identity.phoneE164, 'That source is no longer available.', 'notice');
+    return { ingested: false, reason: 'manual_text_unavailable' };
+  }
+
+  await reply(identity.phoneE164, 'Great, I added the pasted text to the source and it is ready for analysis.', 'confirmation');
+  return { ingested: true, reason: 'manual_text_attached' };
 }
 
 // ── Selection resolution ──────────────────────────────────────────────────────
@@ -257,7 +389,8 @@ async function resolveSelection(
     return { ingested: false, reason: 'case_unavailable' };
   }
 
+  // Clear the select_case pending FIRST; finishAddedSource may open a fresh
+  // manual_text pending (for a url whose extraction failed/partial).
   await deletePending(identity.phoneE164);
-  await reply(identity.phoneE164, confirmation(liveCase.title, liveCase.id), 'confirmation');
-  return { ingested: true, reason: 'selection_resolved' };
+  return finishAddedSource(identity, liveCase.title, liveCase.id, source, pending.content);
 }

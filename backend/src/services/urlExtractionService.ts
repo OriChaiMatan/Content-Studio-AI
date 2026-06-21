@@ -20,7 +20,9 @@ import net from 'node:net';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ExtractionResult {
-  status: 'success' | 'failed';
+  // 'partial' = OG/meta preview text only (full article body unavailable) — still
+  // usable by the pipeline, but the UI should invite a manual-text paste.
+  status: 'success' | 'partial' | 'failed';
   title?: string;
   text?: string;
   error?: string; // safe, user-friendly — never a raw stack/technical detail
@@ -32,7 +34,25 @@ const MAX_REDIRECTS = 3;
 // Below this many characters of readable text, treat extraction as failed and
 // fall back to URL+label analysis (per Phase 8.5 addition #1).
 const MIN_READABLE_CHARS = 300;
+// Minimum combined length of OG/meta title+description to accept as a metadata-only
+// (partial) extraction when the full article body could not be read (Phase B).
+const MIN_METADATA_CHARS = parseInt(process.env.URL_FETCH_MIN_METADATA_CHARS ?? '60', 10);
 const USER_AGENT = 'ContentStudioAI/1.0 (+source-analysis; no-js)';
+
+// Hosts that gate content behind login/JS and routinely block server-side
+// extraction. Used ONLY to (a) skip the metadata-partial path — their OG tags are
+// usually a generic login wall — and (b) tailor the failure message toward the
+// manual-paste fallback. Never used to skip the fetch itself.
+const AUTHWALLED_HOST_RE = /(^|\.)(linkedin\.com|facebook\.com|fb\.com|instagram\.com|x\.com|twitter\.com)$/i;
+const SOCIAL_FAILURE_MSG =
+  "We couldn't extract this social post automatically. Paste the post text manually.";
+
+// Exported so other ingestion paths (e.g. WhatsApp recovery copy) classify social
+// hosts the same way — never duplicate the host regex.
+export function isAuthwalledHost(rawUrl: string): boolean {
+  try { return AUTHWALLED_HOST_RE.test(new URL(rawUrl).hostname); }
+  catch { return false; }
+}
 
 // ── Private / reserved address detection ─────────────────────────────────────
 
@@ -195,7 +215,14 @@ function cleanText(raw: string): string {
   return raw.replace(/\s+/g, ' ').trim();
 }
 
-function extractReadable(html: string, url: string): { title: string; text: string } {
+interface ParsedHtml {
+  title: string;
+  text: string;
+  metaTitle: string;
+  metaDescription: string;
+}
+
+function parseHtml(html: string, url: string): ParsedHtml {
   // runScripts is left at its safe default (undefined) — jsdom executes no JS.
   const dom = new JSDOM(html, { url });
   const doc = dom.window.document;
@@ -219,8 +246,21 @@ function extractReadable(html: string, url: string): { title: string; text: stri
     if (bodyText.length > text.length) text = bodyText;
   }
 
+  // OpenGraph / meta — the partial fallback when full article text is unavailable
+  // (social posts, JS-rendered pages that still ship share metadata).
+  const meta = (keys: string[]): string => {
+    for (const key of keys) {
+      const el = doc.querySelector(`meta[property="${key}"]`) ?? doc.querySelector(`meta[name="${key}"]`);
+      const content = el?.getAttribute('content')?.trim();
+      if (content) return content;
+    }
+    return '';
+  };
+  const metaTitle = meta(['og:title', 'twitter:title']);
+  const metaDescription = meta(['og:description', 'twitter:description', 'description']);
+
   dom.window.close();
-  return { title, text };
+  return { title, text, metaTitle, metaDescription };
 }
 
 /**
@@ -230,24 +270,36 @@ function extractReadable(html: string, url: string): { title: string; text: stri
 export async function extract(rawUrl: string): Promise<ExtractionResult> {
   try {
     const { html, finalUrl } = await safeFetch(rawUrl);
-    const { title, text } = extractReadable(html, finalUrl);
+    const { title, text, metaTitle, metaDescription } = parseHtml(html, finalUrl);
 
-    if (text.length < MIN_READABLE_CHARS) {
-      return {
-        status: 'failed',
-        error: 'We could not extract enough readable content from this page.',
-      };
+    if (text.length >= MIN_READABLE_CHARS) {
+      return { status: 'success', title: title || undefined, text };
     }
 
-    return { status: 'success', title: title || undefined, text };
+    // Phase B — metadata-only (partial) fallback: accept OG/meta preview text when
+    // the full article body couldn't be read. Skipped for authwalled social hosts,
+    // whose OG tags are typically a generic login wall, not the post itself.
+    const metaText = cleanText([metaTitle, metaDescription].filter(Boolean).join('. '));
+    if (metaText.length >= MIN_METADATA_CHARS && !isAuthwalledHost(rawUrl)) {
+      return { status: 'partial', title: (metaTitle || title) || undefined, text: metaText };
+    }
+
+    return {
+      status: 'failed',
+      error: isAuthwalledHost(rawUrl)
+        ? SOCIAL_FAILURE_MSG
+        : 'We could not extract enough readable content from this page.',
+    };
   } catch (err) {
-    const error =
+    const baseError =
       err instanceof SafeError
         ? err.message
         : err instanceof Error && err.name === 'AbortError'
         ? 'The page took too long to respond.'
         : 'We could not read this page.';
-    console.warn(`[urlExtraction] extraction failed for "${rawUrl}": ${error}`);
+    // Tailor authwalled social hosts toward the manual-paste fallback.
+    const error = isAuthwalledHost(rawUrl) ? SOCIAL_FAILURE_MSG : baseError;
+    console.warn(`[urlExtraction] extraction failed for "${rawUrl}": ${baseError}`);
     return { status: 'failed', error };
   }
 }

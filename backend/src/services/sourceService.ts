@@ -60,15 +60,16 @@ async function extractAndAnalyze(
   if (type === 'url') {
     const result = await extractUrl(content);
 
-    if (result.status === 'success' && result.text) {
-      // Analyze the real article text rather than the bare URL string.
+    // 'success' = full article text; 'partial' = OG/meta preview only. Both are
+    // real extracted text worth analyzing (vs. the bare URL string).
+    if ((result.status === 'success' || result.status === 'partial') && result.text) {
       const intelligence = await analyze({ type: 'url', label, content: result.text });
       return {
         intelligence,
         fields: {
           extractedTitle:   result.title ?? null,
           extractedText:    result.text,
-          extractionStatus: 'success',
+          extractionStatus: result.status,
           extractionError:  null,
           extractedAt:      new Date(),
         },

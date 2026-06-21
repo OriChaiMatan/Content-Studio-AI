@@ -226,7 +226,8 @@ model ContentSource {
   sourceIntelligence Json?
 
   // URL content extraction (Phase 8.5). Populated for url sources only.
-  // extractionStatus values: "pending" | "success" | "failed" | "skipped".
+  // extractionStatus values: "pending" | "success" | "partial" | "failed" | "skipped".
+  // "partial" = OG/meta preview text only (Phase B) — full body unavailable.
   // content always remains the original URL; extracted body lives here.
   extractedTitle    String?
   extractedText     String?  @db.Text
@@ -433,10 +434,18 @@ model WhatsAppPendingSource {
   id          String   @id @default(cuid())
   userId      String   @unique           // one pending per user (1 number per user)
   phoneE164   String   @unique           // upsert key; matches the verified identity
+  // mode discriminates the pending intent:
+  //   'select_case'  → waiting for a numbered case selection (source not yet created)
+  //   'manual_text'  → a url source was created with failed/partial extraction; waiting
+  //                    for the next plain-text message to attach as manualText.
+  mode        String   @default("select_case")
   sourceType  String                     // 'text' | 'url' (String — not SourceType; no pdf)
   label       String
   content     String   @db.Text
-  caseOptions Json                        // ordered [{ index, caseId, title }]
+  caseOptions Json                        // select_case: ordered [{ index, caseId, title }]; manual_text: []
+  // manual_text only — the already-created source to recover.
+  caseId      String?
+  sourceId    String?
   expiresAt   DateTime                    // now + 30 min
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
