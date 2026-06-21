@@ -109,14 +109,14 @@ function SectionValue({ title, value }: { title: string; value: unknown }) {
         {value.map((v, i) => (
           <li key={i} className="flex gap-2 text-[14px] text-on-surface leading-relaxed" dir="auto">
             <Icon name="arrow_right" size="sm" className="text-primary shrink-0 mt-0.5" />
-            <span className="whitespace-pre-wrap text-start">{typeof v === 'string' ? v : JSON.stringify(v)}</span>
+            <span style={{ unicodeBidi: 'plaintext' }} className="whitespace-pre-wrap text-start">{typeof v === 'string' ? v : JSON.stringify(v)}</span>
           </li>
         ))}
       </ul>
     );
   }
   return (
-    <p className="text-[14px] text-on-surface leading-relaxed whitespace-pre-wrap text-start" dir="auto">
+    <p className="text-[14px] text-on-surface leading-relaxed whitespace-pre-wrap text-start" dir="auto" style={{ unicodeBidi: 'plaintext' }}>
       {String(value)}
     </p>
   );
@@ -392,7 +392,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
           ) : (
             <article className="border-t border-outline-variant/30 pt-5">
               {output.body.split(/\n{2,}/).map((para, i) => (
-                <p key={i} dir="auto" className="text-[15.5px] leading-[1.8] text-on-surface mb-4 whitespace-pre-wrap text-start">
+                <p key={i} dir="auto" style={{ unicodeBidi: 'plaintext' }} className="text-[15.5px] leading-[1.8] text-on-surface mb-4 whitespace-pre-wrap text-start">
                   {para}
                 </p>
               ))}

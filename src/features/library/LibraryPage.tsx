@@ -35,7 +35,7 @@ function OutputItem({ item }: { item: LibraryItem }) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-medium text-on-surface truncate text-start" dir="auto">{item.title}</p>
-          <p dir="auto" className={`text-[12px] text-on-surface-variant mt-0.5 text-start whitespace-pre-wrap ${!expanded && isLong ? 'line-clamp-2' : ''}`}>
+          <p dir="auto" style={{ unicodeBidi: 'plaintext' }} className={`text-[12px] text-on-surface-variant mt-0.5 text-start whitespace-pre-wrap ${!expanded && isLong ? 'line-clamp-2' : ''}`}>
             {item.body}
           </p>
           {isLong && (
@@ -118,7 +118,7 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
 
             {/* Content preview snippet (first approved output) */}
             {primary && (
-              <p dir="auto" className="text-[12.5px] leading-relaxed text-on-surface-variant mt-2.5 line-clamp-2 text-start whitespace-pre-wrap">
+              <p dir="auto" style={{ unicodeBidi: 'plaintext' }} className="text-[12.5px] leading-relaxed text-on-surface-variant mt-2.5 line-clamp-2 text-start whitespace-pre-wrap">
                 {primary.body}
               </p>
             )}

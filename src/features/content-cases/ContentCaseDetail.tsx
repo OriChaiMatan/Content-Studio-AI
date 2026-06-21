@@ -426,7 +426,7 @@ export function ContentCaseDetail() {
                     <OutputStatusBadge status={output.status} />
                   </div>
                   <p className="text-[14px] font-medium text-on-surface truncate" dir="auto">{output.title}</p>
-                  <p className="text-[12px] text-on-surface-variant mt-1 line-clamp-2 whitespace-pre-wrap text-start" dir="auto">{output.body}</p>
+                  <p className="text-[12px] text-on-surface-variant mt-1 line-clamp-2 whitespace-pre-wrap text-start" dir="auto" style={{ unicodeBidi: 'plaintext' }}>{output.body}</p>
                   <div className="flex items-center gap-3 mt-3 pt-2 border-t border-outline-variant/20 text-[11px] text-on-surface-variant">
                     {output.contentScore != null && (
                       <span className="flex items-center gap-1">
