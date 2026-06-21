@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import path from 'node:path';
+import fs from 'node:fs';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -94,6 +96,34 @@ app.get('/api/health', async (_req: Request, res: Response) => {
     environment: process.env.NODE_ENV ?? 'development',
   });
 });
+
+// ── Static frontend (single-origin) — PRODUCTION ONLY ─────────────────────────
+// Serve the built SPA from the SAME origin as the API so the frontend's relative
+// /api calls and the sameSite=lax auth cookie work without CORS. Skipped in dev:
+// Vite serves the frontend and proxies /api, so nothing here affects local dev.
+// Registered AFTER all /api routes (so the API always wins) and BEFORE the 404.
+if (process.env.NODE_ENV === 'production') {
+  // Candidate locations for the `vite build` output (dist/):
+  //   ../public  → Docker image copies the built SPA into backend/public
+  //   ../../dist → monorepo: root-level `npm run build` output
+  const candidates = [
+    path.resolve(__dirname, '../public'),
+    path.resolve(__dirname, '../../dist'),
+  ];
+  const frontendDir = candidates.find(dir => fs.existsSync(path.join(dir, 'index.html')));
+
+  if (frontendDir) {
+    app.use(express.static(frontendDir));
+    // SPA fallback: any non-/api GET that didn't match a static file → index.html.
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
+      res.sendFile(path.join(frontendDir, 'index.html'));
+    });
+    console.log(`[static] serving frontend from ${frontendDir}`);
+  } else {
+    console.warn('[static] NODE_ENV=production but no frontend build found — running API-only');
+  }
+}
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Env / secrets — never commit real values; *.example templates stay tracked
+.env
+.env.*
+!.env.example
+!.env.production.example
+
 # Claude Code local settings
 .claude/settings.local.json
 
