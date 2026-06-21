@@ -4,11 +4,10 @@ import { whatsappConfig, canSend } from './whatsapp';
 // ─────────────────────────────────────────────────────────────────────────────
 // WhatsApp outbound send (Phase 13C extraction)
 //
-// Leaf module: depends only on prisma + whatsapp config. It is imported by both
-// whatsappService (echo / verification replies) and whatsappIngestionService
-// (confirmations / notices) so neither imports the other — breaking the prior
-// whatsappService ⇄ whatsappIngestionService cycle. This module must NOT import
-// either of those services.
+// Leaf module: depends only on prisma + whatsapp config. It is the WhatsApp
+// transport behind channelSend (used by the shared ingestionService) and is also
+// called directly by whatsappService for echo / verification replies. It must NOT
+// import either of those services (keeps the dependency graph acyclic).
 //
 // Behavior is unchanged from the previous in-service implementation.
 // ─────────────────────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma';
 import { canEcho } from '../lib/whatsapp';
 import { sendText } from '../lib/whatsappSend';
 import { phoneDigits, normalizeCodeInput, MAX_VERIFY_ATTEMPTS } from '../lib/whatsappVerification';
-import { ingestFromWhatsapp } from './whatsappIngestionService';
+import { ingest } from './ingestionService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WhatsApp service (Phase 13A — plumbing only)
@@ -185,8 +185,13 @@ export async function processInbound(payload: MetaWebhookPayload): Promise<{ rec
         continue;
       }
 
-      // ── Verified identity → 13C source ingestion ──────────────────────────────
-      const result = await ingestFromWhatsapp(identity, msg);
+      // ── Verified identity → source ingestion (shared, channel-agnostic) ───────
+      // Map the WhatsApp identity onto the channel-agnostic actor; behaviour and
+      // replies are identical to the prior whatsappIngestionService path.
+      const result = await ingest(
+        { userId: identity.userId, channel: 'whatsapp', externalId: identity.phoneE164 },
+        { type: msg.type, body: msg.body },
+      );
       if (result.ingested) ingested++;
     } catch (err) {
       console.error('[whatsapp] processInbound error for', msg.waMessageId, err instanceof Error ? err.message : err);

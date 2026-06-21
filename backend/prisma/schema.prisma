@@ -145,8 +145,9 @@ model User {
   // Phase 13B — optional 1:1 WhatsApp channel identity. Nullable so legacy/seed
   // users (and any future passwordless flows) remain valid without a number.
   whatsappIdentity        WhatsAppIdentity?
-  // Phase 13D — optional short-lived pending source awaiting a case selection.
-  whatsappPendingSource   WhatsAppPendingSource?
+  // Phase 13D — short-lived pending sources awaiting a case selection / manual text.
+  // Now one-to-many: a user may hold one pending per channel (whatsapp/telegram).
+  whatsappPendingSource   WhatsAppPendingSource[]
 
   @@map("users")
 }
@@ -430,10 +431,15 @@ model WhatsAppIdentity {
 // (ordered [{ index, caseId, title }]); selection resolves against it, then the
 // chosen case is re-checked live (owned + exists + not completed) before ingest.
 // Lazy expiry only (no sweeper): expiresAt is checked on read.
+// Channel-agnostic since Phase 1 of multi-channel ingestion: addressing is
+// (channel, externalId) rather than phoneE164, so the same pending/recovery flow
+// serves WhatsApp and (later) Telegram. Table/model name kept for a minimal,
+// non-breaking migration. One pending per (channel, externalId).
 model WhatsAppPendingSource {
   id          String   @id @default(cuid())
-  userId      String   @unique           // one pending per user (1 number per user)
-  phoneE164   String   @unique           // upsert key; matches the verified identity
+  userId      String                     // FK; NOT unique — a user may have one pending per channel
+  channel     String   @default("whatsapp")  // 'whatsapp' | 'telegram'
+  externalId  String                     // phoneE164 (whatsapp) / chat id (telegram); upsert key
   // mode discriminates the pending intent:
   //   'select_case'  → waiting for a numbered case selection (source not yet created)
   //   'manual_text'  → a url source was created with failed/partial extraction; waiting
@@ -452,5 +458,7 @@ model WhatsAppPendingSource {
 
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([channel, externalId])
+  @@index([userId])
   @@map("whatsapp_pending_sources")
 }
