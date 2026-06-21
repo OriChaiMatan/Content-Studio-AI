@@ -9,7 +9,7 @@ import { SourcesPanel } from './SourcesPanel';
 import { useLiveCase } from './useLiveCase';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { api } from '../../lib/api';
-import type { ContentGoal, ContentStyle, ContentTarget, Language, ContentCase, ContentOutput, PipelineStep, Schedule, ScheduleFrequency, CaseStatus } from '../../types';
+import type { ContentGoal, ContentStyle, ContentTarget, Language, ContentCase, ContentOutput, PipelineStep, Platform, RunSummary, Schedule, ScheduleFrequency, CaseStatus } from '../../types';
 
 // ── Human-readable labels for new enum fields ─────────────
 
@@ -342,7 +342,58 @@ export function ContentCaseDetail() {
           />
         </div>
 
-        {/* ── C. Outputs (rich) ───────────────────────────────────────── */}
+        {/* ── C. Configuration (compact, secondary, collapsible) ───────── */}
+        <section>
+          <button
+            type="button"
+            onClick={() => setConfigOpen(o => !o)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container transition-colors"
+          >
+            <Icon name="tune" size="sm" className="text-outline" />
+            <span className="text-[13px] font-medium text-on-surface">Case configuration</span>
+            <span className="text-[12px] text-on-surface-variant truncate hidden sm:block">
+              {GOAL_LABELS[c.contentGoal]} · {STYLE_LABELS[c.contentStyle]} · {c.language === 'en' ? 'English' : 'Hebrew'} · {humanizeSchedule(c.schedule)}
+            </span>
+            <Icon name={configOpen ? 'expand_less' : 'expand_more'} size="sm" className="text-outline ml-auto" />
+          </button>
+
+          {configOpen && (
+            <div className="mt-3 space-y-4">
+              <CaseSettingsCard
+                c={c}
+                editing={editingSettings}
+                saving={savingSettings}
+                onEdit={() => setEditingSettings(true)}
+                onCancel={() => setEditingSettings(false)}
+                onSave={async (updates) => {
+                  setSavingSettings(true);
+                  try {
+                    await api.patch<ContentCase>(`/cases/${c.id}`, updates);
+                    await refreshCase(c.id);
+                    setEditingSettings(false);
+                  } catch { /* silently fail */ }
+                  finally { setSavingSettings(false); }
+                }}
+              />
+
+              {(c.writingStyle || c.goals || c.aiInstructions) && (
+                <Card accent className="p-5">
+                  <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Icon name="edit_note" className="text-outline" size="sm" />
+                    Writing Style & Goals
+                  </h4>
+                  <div className="space-y-3">
+                    {c.writingStyle && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Style</p><p className="text-[14px] text-on-surface mt-1">{c.writingStyle}</p></div>}
+                    {c.goals && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Goals</p><p className="text-[14px] text-on-surface mt-1">{c.goals}</p></div>}
+                    {c.aiInstructions && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">AI Instructions</p><p className="text-[14px] text-on-surface mt-1 bg-surface-container-low rounded-lg p-3 italic">{c.aiInstructions}</p></div>}
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ── D. Outputs (rich) ───────────────────────────────────────── */}
         <section>
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
@@ -436,61 +487,13 @@ export function ContentCaseDetail() {
           </Card>
         </section>
 
-        {/* ── D. Sources workspace (primary, above configuration) ──────── */}
+        {/* ── E. Sources workspace (internally scrollable list) ──────────── */}
         <section ref={sourcesRef}>
           <SourcesPanel caseId={c.id} />
         </section>
 
-        {/* ── E. Configuration (compact, secondary, collapsible) ───────── */}
-        <section>
-          <button
-            type="button"
-            onClick={() => setConfigOpen(o => !o)}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container transition-colors"
-          >
-            <Icon name="tune" size="sm" className="text-outline" />
-            <span className="text-[13px] font-medium text-on-surface">Case configuration</span>
-            <span className="text-[12px] text-on-surface-variant truncate hidden sm:block">
-              {GOAL_LABELS[c.contentGoal]} · {STYLE_LABELS[c.contentStyle]} · {c.language === 'en' ? 'English' : 'Hebrew'} · {humanizeSchedule(c.schedule)}
-            </span>
-            <Icon name={configOpen ? 'expand_less' : 'expand_more'} size="sm" className="text-outline ml-auto" />
-          </button>
-
-          {configOpen && (
-            <div className="mt-3 space-y-4">
-              <CaseSettingsCard
-                c={c}
-                editing={editingSettings}
-                saving={savingSettings}
-                onEdit={() => setEditingSettings(true)}
-                onCancel={() => setEditingSettings(false)}
-                onSave={async (updates) => {
-                  setSavingSettings(true);
-                  try {
-                    await api.patch<ContentCase>(`/cases/${c.id}`, updates);
-                    await refreshCase(c.id);
-                    setEditingSettings(false);
-                  } catch { /* silently fail */ }
-                  finally { setSavingSettings(false); }
-                }}
-              />
-
-              {(c.writingStyle || c.goals || c.aiInstructions) && (
-                <Card accent className="p-5">
-                  <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Icon name="edit_note" className="text-outline" size="sm" />
-                    Writing Style & Goals
-                  </h4>
-                  <div className="space-y-3">
-                    {c.writingStyle && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Style</p><p className="text-[14px] text-on-surface mt-1">{c.writingStyle}</p></div>}
-                    {c.goals && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">Goals</p><p className="text-[14px] text-on-surface mt-1">{c.goals}</p></div>}
-                    {c.aiInstructions && <div><p className="text-[11px] text-outline uppercase font-bold tracking-wider">AI Instructions</p><p className="text-[14px] text-on-surface mt-1 bg-surface-container-low rounded-lg p-3 italic">{c.aiInstructions}</p></div>}
-                  </div>
-                </Card>
-              )}
-            </div>
-          )}
-        </section>
+        {/* ── F. Run History (internally scrollable; below Sources) ─────── */}
+        <RunHistorySection caseId={c.id} runs={c.runHistory ?? []} outputs={c.outputs} onNavigate={navigate} />
 
       </main>
     </>
@@ -508,6 +511,130 @@ function StatTile({ icon, label, value, tone }: { icon: string; label: string; v
       </p>
       <p className={`text-[15px] font-medium ${valueColor}`}>{value}</p>
     </div>
+  );
+}
+
+// ── Run History (compact cards; internally scrollable) ────────────────────────
+
+const RUN_STATUS_STYLE: Record<string, { label: string; cls: string }> = {
+  completed: { label: 'Completed', cls: 'bg-green-100 text-green-700' },
+  running:   { label: 'Running',   cls: 'bg-secondary-container text-on-secondary-container' },
+  failed:    { label: 'Failed',    cls: 'bg-red-100 text-red-700' },
+  pending:   { label: 'Pending',   cls: 'bg-surface-container text-on-surface-variant' },
+};
+
+function runIntegrityChip(r: RunSummary): { label: string; cls: string } | null {
+  if (!r.research) return null;
+  switch (r.research.status) {
+    case 'success':  return { label: 'Research: High',   cls: 'text-green-700' };
+    case 'mock':     return { label: 'Research: Medium', cls: 'text-amber-600' };
+    case 'degraded': return { label: 'Research: Low',    cls: 'text-error' };
+    default:         return null;
+  }
+}
+
+function RunHistoryCard({ run, outputs, caseId, onNavigate }: {
+  run: RunSummary; outputs: ContentOutput[]; caseId: string; onNavigate: (to: string) => void;
+}) {
+  const approved = outputs.filter(o => o.status === 'approved').length;
+  const pending  = outputs.filter(o => o.status === 'draft').length;
+  const rejected = outputs.filter(o => o.status === 'rejected').length;
+  const platforms = [...new Set(outputs.map(o => o.platform))] as Platform[];
+  const st = RUN_STATUS_STYLE[run.status] ?? RUN_STATUS_STYLE.pending;
+  const integ = runIntegrityChip(run);
+  const when = new Date(run.startedAt);
+  const showPipeline = run.status === 'running' || run.status === 'pending' || run.status === 'failed';
+
+  return (
+    <div className="rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-3.5">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Icon name="schedule" size="sm" className="text-outline shrink-0" />
+          <span className="text-[13px] font-medium text-on-surface truncate">
+            {when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, {when.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+          {run.triggeredBy === 'schedule' && (
+            <span className="text-[10px] uppercase tracking-wide text-outline shrink-0">scheduled</span>
+          )}
+        </div>
+        <span className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-on-surface-variant mb-2">
+        <span className="flex items-center gap-1"><Icon name="article" size="sm" className="text-outline" />{run.sourceCount} source{run.sourceCount !== 1 ? 's' : ''}</span>
+        <span className="flex items-center gap-1"><Icon name="auto_awesome" size="sm" className="text-outline" />{outputs.length} output{outputs.length !== 1 ? 's' : ''}</span>
+        {approved > 0 && <span className="text-green-700 font-medium">{approved} approved</span>}
+        {pending > 0 && <span className="text-amber-600 font-medium">{pending} pending</span>}
+        {rejected > 0 && <span className="text-error font-medium">{rejected} rejected</span>}
+        {integ && <span className={`font-medium ${integ.cls}`}>{integ.label}</span>}
+      </div>
+
+      {platforms.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {platforms.map(p => <PlatformBadge key={p} platform={p} />)}
+        </div>
+      )}
+
+      {run.status === 'failed' && run.errorMessage && (
+        <p className="text-[11px] text-error mb-2 line-clamp-2">{run.errorMessage}</p>
+      )}
+
+      <div className="flex items-center gap-2">
+        {outputs.length > 0 && (
+          <Button size="sm" variant="secondary" onClick={() => onNavigate(`/cases/${caseId}/review?runId=${run.id}`)}>
+            <Icon name="rate_review" size="sm" />
+            View Review
+          </Button>
+        )}
+        {showPipeline && (
+          <Button size="sm" variant="ghost" onClick={() => onNavigate(`/cases/${caseId}/pipeline`)}>
+            <Icon name="schema" size="sm" />
+            View Pipeline
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RunHistorySection({ caseId, runs, outputs, onNavigate }: {
+  caseId: string; runs: RunSummary[]; outputs: ContentOutput[]; onNavigate: (to: string) => void;
+}) {
+  // Group the case's already-fetched outputs by run (no extra fetch, no bodies rendered).
+  const byRun = new Map<string, ContentOutput[]>();
+  for (const o of outputs) {
+    if (!o.pipelineRunId) continue;
+    const arr = byRun.get(o.pipelineRunId) ?? [];
+    arr.push(o);
+    byRun.set(o.pipelineRunId, arr);
+  }
+
+  return (
+    <section>
+      <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
+        <Icon name="history" className="text-outline" size="sm" />
+        Run History
+        {runs.length > 0 && (
+          <span className="text-[12px] font-normal text-outline normal-case tracking-normal">· {runs.length} run{runs.length !== 1 ? 's' : ''}</span>
+        )}
+      </h4>
+
+      {runs.length === 0 ? (
+        <Card className="p-6">
+          <div className="flex flex-col items-center text-center gap-1.5 py-2">
+            <Icon name="history" size="xl" className="text-outline" />
+            <p className="text-[13px] text-on-surface-variant">No previous runs yet.</p>
+            <p className="text-[12px] text-outline">Generations will appear here once the pipeline runs.</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="max-h-[440px] overflow-y-auto space-y-2 rounded-xl border border-outline-variant/30 bg-surface-container-low/30 p-3">
+          {runs.map(run => (
+            <RunHistoryCard key={run.id} run={run} outputs={byRun.get(run.id) ?? []} caseId={caseId} onNavigate={onNavigate} />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

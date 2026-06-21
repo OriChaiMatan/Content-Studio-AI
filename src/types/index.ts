@@ -150,6 +150,21 @@ export interface PipelineRunSummary {
   thesis?: string | null;                // the winning narrative spine (primaryAngle.thesis)
 }
 
+// ── RunSummary ─────────────────────────────────────────────
+// Compact historical pipeline run for the Case Detail "Run History" section.
+// Metadata only — no generated bodies. Output aggregates are derived client-side
+// from ContentCase.outputs (grouped by pipelineRunId).
+export interface RunSummary {
+  id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  triggeredBy: string;
+  sourceCount: number;
+  startedAt: string;             // ISO 8601
+  completedAt: string | null;
+  errorMessage: string | null;
+  research?: ResearchIntegrity | null;
+}
+
 // ── PipelineStep ───────────────────────────────────────────
 // Embedded in ContentCase — represents one pipeline stage
 export interface PipelineStep {
@@ -253,6 +268,7 @@ export interface ContentCase {
   outputs: ContentOutput[];
   pipeline: PipelineStep[];
   currentRun: PipelineRunSummary | null; // active or most recent pipeline run
+  runHistory?: RunSummary[];             // all runs (newest first) for the Run History section (API-provided)
 
   // Timestamps
   createdAt: string;

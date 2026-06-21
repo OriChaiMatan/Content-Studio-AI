@@ -124,7 +124,35 @@ function serializeRun(r: PipelineRun) {
   };
 }
 
-export function serializeCase(c: FullCase) {
+// Compact run summary for the Case Detail "Run History" section. Carries only
+// lightweight run metadata + derived research integrity — NEVER the heavy
+// contentPackage / generated bodies (those are queried with a light select).
+type RunSummaryRow = {
+  id: string;
+  status: string;
+  triggeredBy: string;
+  sourceCount: number;
+  startedAt: Date;
+  completedAt: Date | null;
+  errorMessage: string | null;
+  researchContext: unknown;
+};
+export function serializeRunSummary(r: RunSummaryRow) {
+  return {
+    id:          r.id,
+    status:      r.status,
+    triggeredBy: r.triggeredBy,
+    sourceCount: r.sourceCount,
+    startedAt:   r.startedAt.toISOString(),
+    completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+    errorMessage: r.errorMessage ?? null,
+    research:    researchIntegrity(r.researchContext),
+  };
+}
+
+// runHistory is optional — only the detail fetch (getCaseById) populates it via a
+// light query; list/other callers default to [] so they stay cheap and unchanged.
+export function serializeCase(c: FullCase, runHistory: ReturnType<typeof serializeRunSummary>[] = []) {
   const sortedSteps = [...c.pipelineSteps].sort(
     (a, b) =>
       PIPELINE_STEP_ORDER.indexOf(a.name as StepName) -
@@ -163,6 +191,7 @@ export function serializeCase(c: FullCase) {
     // render SUCCESS / DEGRADED and the competition-ran status at step level.
     pipeline:   sortedSteps.map(s => serializePipelineStep(s, s.name === 'research' && latestRun ? researchIntegrity(latestRun.researchContext) : null)),
     currentRun: latestRun ? serializeRun(latestRun) : null,
+    runHistory,   // compact historical runs (populated by getCaseById only)
     createdAt:  c.createdAt.toISOString(),
     updatedAt:  c.updatedAt.toISOString(),
   };
@@ -179,7 +208,7 @@ export const caseService = {
       include: caseInclude,
       orderBy: { updatedAt: 'desc' },
     });
-    return cases.map(serializeCase);
+    return cases.map(c => serializeCase(c));
   },
 
   // Ownership of :id routes is enforced upstream by requireCaseOwnership; we also
@@ -189,7 +218,19 @@ export const caseService = {
       where: { id, userId },
       include: caseInclude,
     });
-    return c ? serializeCase(c) : null;
+    if (!c) return null;
+    // Run History (Case Detail) — light query for ALL runs of this case, newest
+    // first. Selects metadata + researchContext (for integrity) only; never the
+    // heavy contentPackage / factCheckReport. currentRun is unchanged (from include).
+    const runs = await prisma.pipelineRun.findMany({
+      where:   { contentCaseId: id },
+      orderBy: { startedAt: 'desc' },
+      select: {
+        id: true, status: true, triggeredBy: true, sourceCount: true,
+        startedAt: true, completedAt: true, errorMessage: true, researchContext: true,
+      },
+    });
+    return serializeCase(c, runs.map(serializeRunSummary));
   },
 
   async createCase(data: CreateCaseInput, userId: string) {
