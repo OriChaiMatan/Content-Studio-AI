@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
 import { SectionCard } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
@@ -79,8 +80,10 @@ function DetailRow({ label, value, accent }: { label: string; value: string; acc
 
 function WhatsAppCard() {
   const authUser = useAuthStore(s => s.user);
+  const navigate = useNavigate();
   const wa = authUser?.whatsapp;
-  const connected = !!wa?.linked;
+  const verified = !!wa?.verified;
+  const linked = !!wa?.linked;
   const notificationsOn = !!wa && !wa.optOut && !!authUser?.notifications.generationComplete;
 
   return (
@@ -94,27 +97,31 @@ function WhatsAppCard() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h4 className="text-[16px] font-semibold text-on-surface">WhatsApp</h4>
-            <StatusPill connected={connected} />
+            <StatusPill connected={verified} />
           </div>
           <p className="text-[13px] text-on-surface-variant mt-1 max-w-md">
             Send articles and sources directly to your AI workspace.
           </p>
 
-          {connected ? (
+          {verified ? (
             <div className="mt-4 space-y-2 rounded-xl bg-surface-container-lowest/70 border border-outline-variant/30 p-4">
               <DetailRow label="Phone" value={wa?.phoneE164 ?? '—'} />
-              <DetailRow
-                label="Verification"
-                value={wa?.verified ? 'Verified' : 'Pending'}
-                accent={wa?.verified}
-              />
+              <DetailRow label="Verification" value="Verified" accent />
               <DetailRow label="Notifications" value={notificationsOn ? 'On' : 'Off'} />
             </div>
           ) : (
             <div className="mt-4 rounded-xl bg-surface-container-lowest/70 border border-outline-variant/30 p-4">
-              <p className="text-[13px] text-on-surface-variant">
-                Connect WhatsApp during sign-up to forward content into your workspace from your phone.
+              <p className="text-[13px] text-on-surface-variant mb-3">
+                {linked ? (
+                  <>Your number{wa?.phoneE164 ? <> <span className="font-medium text-on-surface">{wa.phoneE164}</span></> : ''} is added but not verified yet. Verify it to enable WhatsApp.</>
+                ) : (
+                  'Connect WhatsApp to forward articles and notes to your workspace from your phone.'
+                )}
               </p>
+              <Button size="sm" onClick={() => navigate('/verify-whatsapp')}>
+                <Icon name="link" size="sm" />
+                Connect WhatsApp
+              </Button>
             </div>
           )}
         </div>

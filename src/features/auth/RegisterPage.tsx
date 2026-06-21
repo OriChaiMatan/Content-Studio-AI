@@ -32,8 +32,9 @@ export function RegisterPage() {
     setBusy(true);
     try {
       await register(name.trim(), email.trim(), password, whatsappPhone.trim());
-      // Authenticated now; verification is the next step (not a hard gate).
-      navigate('/verify-whatsapp', { replace: true });
+      // Authenticated now; enter the app. WhatsApp verification is opt-in from
+      // Settings ("Connect WhatsApp") — no forced verification step.
+      navigate('/', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
       setBusy(false);
