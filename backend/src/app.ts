@@ -119,12 +119,34 @@ if (process.env.NODE_ENV === 'production') {
   const frontendDir = candidates.find(dir => fs.existsSync(path.join(dir, 'index.html')));
 
   if (frontendDir) {
-    app.use(express.static(frontendDir));
-    // SPA fallback: any non-/api GET that didn't match a static file → index.html.
-    app.use((req: Request, res: Response, next: NextFunction) => {
-      if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
-      res.sendFile(path.join(frontendDir, 'index.html'));
+    const indexHtml = path.join(frontendDir, 'index.html');
+
+    // 1. Hashed, immutable build assets (/assets/*). Served as files with the
+    //    correct MIME type. A miss is a GENUINE 404 — never the SPA shell (serving
+    //    index.html here would make the browser refuse the CSS/JS on MIME grounds)
+    //    and never the JSON error path. Scoped to /assets so navigation is unaffected.
+    app.use('/assets', express.static(path.join(frontendDir, 'assets'), {
+      index: false,
+      immutable: true,
+      maxAge: '1y',
+    }));
+    app.use('/assets', (_req: Request, res: Response) => {
+      res.status(404).json({ error: 'Asset not found' });
     });
+
+    // 2. Other root static files (favicon.ico, favicon.svg, icons.svg, …).
+    app.use(express.static(frontendDir, { index: false }));
+
+    // 3. SPA fallback — index.html for NAVIGATION GETs only (never /api, never
+    //    /assets, never non-GET). The sendFile error callback prevents a missing
+    //    shell from throwing into the 500 error handler.
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.method !== 'GET' || req.path.startsWith('/api/') || req.path.startsWith('/assets/')) {
+        return next();
+      }
+      res.sendFile(indexHtml, err => { if (err) next(err); });
+    });
+
     console.log(`[static] serving frontend from ${frontendDir}`);
   } else {
     console.warn('[static] NODE_ENV=production but no frontend build found — running API-only');
