@@ -7,6 +7,8 @@ import { Icon } from '../../components/ui/Icon';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { useLibraryStore } from '../../stores/libraryStore';
 import { useLiveCase } from '../content-cases/useLiveCase';
+import { useT } from '../../i18n/useT';
+import type { StringKey } from '../../i18n/strings';
 import type { Platform, ContentOutput } from '../../types';
 
 const PLATFORM_ORDER: Platform[] = ['linkedin', 'facebook', 'newsletter', 'podcast'];
@@ -23,27 +25,28 @@ function platformName(p: Platform): string {
 }
 
 // ── Editorial quality label (action-oriented; numeric score secondary) ────────
-function qualityLabel(score: number): { label: string; tone: string } {
-  if (score >= 85) return { label: 'Publish Ready',  tone: 'bg-green-100 text-green-700' };
-  if (score >= 70) return { label: 'Strong Draft',   tone: 'bg-primary-fixed/60 text-primary' };
-  if (score >= 55) return { label: 'Needs Revision', tone: 'bg-amber-100 text-amber-800' };
-  return { label: 'Weak Draft', tone: 'bg-red-100 text-red-800' };
+function qualityLabel(score: number): { labelKey: StringKey; tone: string } {
+  if (score >= 85) return { labelKey: 'review.quality.publishReady',  tone: 'bg-green-100 text-green-700' };
+  if (score >= 70) return { labelKey: 'review.quality.strongDraft',   tone: 'bg-primary-fixed/60 text-primary' };
+  if (score >= 55) return { labelKey: 'review.quality.needsRevision', tone: 'bg-amber-100 text-amber-800' };
+  return { labelKey: 'review.quality.weakDraft', tone: 'bg-red-100 text-red-800' };
 }
 
 function QualityChip({ output, size = 'md' }: { output: ContentOutput; size?: 'sm' | 'md' }) {
+  const { t } = useT();
   const score = output.contentScore;
   if (score == null) return null;
   const q = qualityLabel(score);
   const tp = output.metadata?.thesisPreservation;
   const title = tp
-    ? `Thesis Preservation ${tp.score}/100 — presence ${tp.thesisPresence} · spine ${tp.spinePosition} · cross-source ${tp.crossSource} · sharpness ${tp.editorialSharpness} · register ${tp.registerFidelity} · non-flattening ${tp.nonFlattening}`
-    : `Quality score ${score}/100`;
+    ? t('review.thesisPreservationTitle', { score: tp.score, presence: tp.thesisPresence, spine: tp.spinePosition, crossSource: tp.crossSource, sharpness: tp.editorialSharpness, register: tp.registerFidelity, nonFlattening: tp.nonFlattening })
+    : t('review.qualityScoreTitle', { score });
   return (
     <span
       title={title}
       className={`inline-flex items-center gap-1.5 rounded-full font-bold ${q.tone} ${size === 'md' ? 'px-3 py-1 text-[12px]' : 'px-2 py-0.5 text-[10px]'}`}
     >
-      {q.label}
+      {t(q.labelKey)}
       <span className="opacity-60 font-semibold">{score}</span>
     </span>
   );
@@ -59,40 +62,42 @@ function isResearchDegraded(output: ContentOutput): boolean {
   return output.metadata?.researchDegraded === true;
 }
 function DegradedBadge() {
+  const { t } = useT();
   return (
     <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 flex items-center gap-1"
-      title="This output was produced by the fallback generator, not the live generator.">
-      <Icon name="warning" size="sm" /> Generated with fallback
+      title={t('review.degradedBadgeTitle')}>
+      <Icon name="warning" size="sm" /> {t('review.degradedBadge')}
     </span>
   );
 }
 function ResearchDegradedBadge() {
+  const { t } = useT();
   return (
     <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-800 flex items-center gap-1"
-      title="The research stage fell back to a mock thesis. This content was written from degraded research.">
-      <Icon name="warning" size="sm" /> Built on degraded research
+      title={t('review.researchDegradedBadgeTitle')}>
+      <Icon name="warning" size="sm" /> {t('review.researchDegradedBadge')}
     </span>
   );
 }
 
 // ── Editorial Breakdown — structured, prominent (Phase 9 v2) ──────────────────
 // Maps the platform-specific breakdown keys into labeled editorial sections.
-const BREAKDOWN_SECTIONS: { keys: string[]; title: string; icon: string }[] = [
-  { keys: ['hook', 'openingHook'],                              title: 'Hook',               icon: 'bolt' },
-  { keys: ['subject'],                                          title: 'Subject',            icon: 'subject' },
-  { keys: ['previewText'],                                      title: 'Preview',            icon: 'short_text' },
-  { keys: ['context', 'background', 'opening', 'story'],        title: 'Context',            icon: 'menu_book' },
-  { keys: ['insight', 'mainAnalysis', 'personalInterpretation'], title: 'Core Insight',      icon: 'lightbulb' },
-  { keys: ['takeaways', 'practicalTakeaways'],                  title: 'Takeaways',          icon: 'checklist' },
-  { keys: ['communityQuestion'],                                title: 'Community Question', icon: 'forum' },
-  { keys: ['closingInsight', 'closingThoughts'],               title: 'Closing',            icon: 'flag' },
-  { keys: ['cta'],                                              title: 'Call to Action',     icon: 'campaign' },
-  { keys: ['hashtags'],                                         title: 'Hashtags',           icon: 'tag' },
+const BREAKDOWN_SECTIONS: { keys: string[]; titleKey: StringKey; icon: string }[] = [
+  { keys: ['hook', 'openingHook'],                              titleKey: 'review.section.hook',             icon: 'bolt' },
+  { keys: ['subject'],                                          titleKey: 'review.section.subject',          icon: 'subject' },
+  { keys: ['previewText'],                                      titleKey: 'review.section.preview',          icon: 'short_text' },
+  { keys: ['context', 'background', 'opening', 'story'],        titleKey: 'review.section.context',          icon: 'menu_book' },
+  { keys: ['insight', 'mainAnalysis', 'personalInterpretation'], titleKey: 'review.section.coreInsight',     icon: 'lightbulb' },
+  { keys: ['takeaways', 'practicalTakeaways'],                  titleKey: 'review.section.takeaways',        icon: 'checklist' },
+  { keys: ['communityQuestion'],                                titleKey: 'review.section.communityQuestion', icon: 'forum' },
+  { keys: ['closingInsight', 'closingThoughts'],               titleKey: 'review.section.closing',          icon: 'flag' },
+  { keys: ['cta'],                                              titleKey: 'review.section.cta',              icon: 'campaign' },
+  { keys: ['hashtags'],                                         titleKey: 'review.section.hashtags',         icon: 'tag' },
 ];
 
-function SectionValue({ title, value }: { title: string; value: unknown }) {
+function SectionValue({ titleKey, value }: { titleKey: StringKey; value: unknown }) {
   if (value == null || value === '') return null;
-  if (title === 'Hashtags' && Array.isArray(value)) {
+  if (titleKey === 'review.section.hashtags' && Array.isArray(value)) {
     return (
       <div className="flex flex-wrap gap-1.5">
         {value.map((t, i) => (
@@ -123,13 +128,14 @@ function SectionValue({ title, value }: { title: string; value: unknown }) {
 }
 
 function EditorialBreakdown({ breakdown }: { breakdown: Record<string, unknown> }) {
+  const { t } = useT();
   const used = new Set<string>();
   const sections = BREAKDOWN_SECTIONS.map(sec => {
     const key = sec.keys.find(k => k in breakdown && breakdown[k] != null && breakdown[k] !== '');
     if (!key) return null;
     used.add(key);
     return { ...sec, value: breakdown[key] };
-  }).filter(Boolean) as { title: string; icon: string; value: unknown }[];
+  }).filter(Boolean) as { titleKey: StringKey; icon: string; value: unknown }[];
 
   // Anything not mapped above (e.g. fullScript on legacy podcast) — quietly skipped
   // from the structured view to keep the editorial breakdown focused.
@@ -139,17 +145,17 @@ function EditorialBreakdown({ breakdown }: { breakdown: Record<string, unknown> 
     <div className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest overflow-hidden">
       <div className="px-5 py-3 border-b border-outline-variant/30 bg-surface-container-low/60 flex items-center gap-2">
         <Icon name="architecture" size="sm" className="text-primary" />
-        <h4 className="text-[13px] font-bold uppercase tracking-wider text-on-surface">Editorial Breakdown</h4>
-        <span className="text-[11px] text-on-surface-variant">· how this draft is built</span>
+        <h4 className="text-[13px] font-bold uppercase tracking-wider text-on-surface">{t('review.editorialBreakdown')}</h4>
+        <span className="text-[11px] text-on-surface-variant">{t('review.breakdownSubtitle')}</span>
       </div>
       <div className="divide-y divide-outline-variant/20">
         {sections.map((sec, i) => (
           <div key={i} className="px-5 py-3.5 grid grid-cols-[140px_1fr] gap-4">
             <div className="flex items-start gap-2 text-on-surface-variant">
               <Icon name={sec.icon} size="sm" className="text-primary mt-0.5" />
-              <span className="text-[12px] font-bold uppercase tracking-wider">{sec.title}</span>
+              <span className="text-[12px] font-bold uppercase tracking-wider">{t(sec.titleKey)}</span>
             </div>
-            <div><SectionValue title={sec.title} value={sec.value} /></div>
+            <div><SectionValue titleKey={sec.titleKey} value={sec.value} /></div>
           </div>
         ))}
       </div>
@@ -159,6 +165,7 @@ function EditorialBreakdown({ breakdown }: { breakdown: Record<string, unknown> 
 
 // ── Draft pane — the active output (reading + decision surface) ───────────────
 function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }) {
+  const { t } = useT();
   const [editing, setEditing]   = useState(false);
   const [body, setBody]         = useState(output.body);
   const [approving, setApproving]       = useState(false);
@@ -198,7 +205,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
       void fetchLibrary();
     } catch (err) {
       setOutputStatusLocal(caseId, output.id, prev);
-      setActionError(err instanceof Error ? err.message : 'Unable to approve. Please try again.');
+      setActionError(err instanceof Error ? err.message : t('review.errApprove'));
     } finally { setApproving(false); }
   }
 
@@ -211,7 +218,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
       await updateOutputStatus(caseId, output.id, 'rejected');
     } catch (err) {
       setOutputStatusLocal(caseId, output.id, prev);
-      setActionError(err instanceof Error ? err.message : 'Unable to reject. Please try again.');
+      setActionError(err instanceof Error ? err.message : t('review.errReject'));
     } finally { setRejecting(false); }
   }
 
@@ -222,7 +229,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
       await updateOutputBody(caseId, output.id, body);
       setEditing(false);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Unable to save. Please try again.');
+      setActionError(err instanceof Error ? err.message : t('review.errSave'));
     } finally { setSaving(false); }
   }
 
@@ -232,7 +239,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
     try {
       await regenerateOutput(caseId, output.id);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Unable to regenerate. Please try again.');
+      setActionError(err instanceof Error ? err.message : t('review.errRegenerate'));
     } finally { setRegenerating(false); }
   }
 
@@ -281,34 +288,34 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
           <>
             <Button onClick={handleSaveEdit} loading={saving} disabled={busy}>
               <Icon name="save" size="sm" />
-              {saving ? 'Saving…' : 'Save Edit'}
+              {saving ? t('common.saving') : t('review.saveEdit')}
             </Button>
             <Button variant="ghost" onClick={() => { setEditing(false); setBody(output.body); }} disabled={busy}>
-              Cancel
+              {t('common.cancel')}
             </Button>
           </>
         ) : (
           <>
             {/* Copy + Share — clearly accessible (icon-only below sm to avoid 3-row wrap) */}
-            <Button size="sm" variant="outline" onClick={handleCopy} disabled={busy} title="Copy">
+            <Button size="sm" variant="outline" onClick={handleCopy} disabled={busy} title={t('review.copy')}>
               <Icon name={copyState === 'copied' ? 'check' : copyState === 'error' ? 'error' : 'content_copy'} size="sm" />
-              <span className="hidden sm:inline">{copyState === 'copied' ? 'Copied' : copyState === 'error' ? 'Copy failed' : 'Copy'}</span>
+              <span className="hidden sm:inline">{copyState === 'copied' ? t('review.copied') : copyState === 'error' ? t('review.copyFailed') : t('review.copy')}</span>
             </Button>
-            <Button size="sm" variant="outline" onClick={handleShare} disabled={busy} title="Share">
+            <Button size="sm" variant="outline" onClick={handleShare} disabled={busy} title={t('review.share')}>
               <Icon name={shareState === 'shared' ? 'check' : shareState === 'copied' ? 'content_copy' : shareState === 'error' ? 'error' : 'share'} size="sm" />
-              <span className="hidden sm:inline">{shareState === 'shared' ? 'Shared' : shareState === 'copied' ? 'Copied for sharing' : shareState === 'error' ? 'Share failed' : 'Share'}</span>
+              <span className="hidden sm:inline">{shareState === 'shared' ? t('review.shared') : shareState === 'copied' ? t('review.copiedForSharing') : shareState === 'error' ? t('review.shareFailed') : t('review.share')}</span>
             </Button>
 
             <span className="hidden sm:block w-px h-6 bg-outline-variant/60 mx-1" />
 
             {/* Edit + Regenerate — utility actions (icon-only below sm) */}
-            <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={status === 'approved' || busy} title="Edit">
+            <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={status === 'approved' || busy} title={t('review.edit')}>
               <Icon name="edit" size="sm" />
-              <span className="hidden sm:inline">Edit</span>
+              <span className="hidden sm:inline">{t('review.edit')}</span>
             </Button>
-            <Button size="sm" variant="ghost" onClick={handleRegenerate} loading={regenerating} disabled={busy} title="Regenerate">
+            <Button size="sm" variant="ghost" onClick={handleRegenerate} loading={regenerating} disabled={busy} title={t('review.regenerate')}>
               <Icon name="refresh" size="sm" />
-              <span className="hidden sm:inline">{regenerating ? 'Regenerating…' : 'Regenerate'}</span>
+              <span className="hidden sm:inline">{regenerating ? t('review.regenerating') : t('review.regenerate')}</span>
             </Button>
 
             <div className="flex-1" />
@@ -316,12 +323,12 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
             {/* Reviewed-state indicator */}
             {status === 'approved' && (
               <span className="flex items-center gap-1.5 text-[13px] font-medium text-green-700">
-                <Icon name="check_circle" size="sm" /> Approved
+                <Icon name="check_circle" size="sm" /> {t('review.approved')}
               </span>
             )}
             {status === 'rejected' && (
               <span className="flex items-center gap-1.5 text-[13px] font-medium text-error">
-                <Icon name="cancel" size="sm" /> Rejected
+                <Icon name="cancel" size="sm" /> {t('review.rejected')}
               </span>
             )}
 
@@ -329,7 +336,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
             {status !== 'rejected' && (
               <Button size="sm" variant="danger" onClick={handleReject} loading={rejecting} disabled={busy}>
                 <Icon name="cancel" size="sm" />
-                {rejecting ? 'Rejecting…' : 'Reject'}
+                {rejecting ? t('review.rejecting') : t('review.reject')}
               </Button>
             )}
 
@@ -337,7 +344,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
             {status !== 'approved' && (
               <Button onClick={handleApprove} loading={approving} disabled={busy} className="px-6">
                 <Icon name="check_circle" size="sm" />
-                {approving ? 'Approving…' : 'Approve'}
+                {approving ? t('review.approving') : t('review.approve')}
               </Button>
             )}
           </>
@@ -373,8 +380,8 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
             <h1 className="text-[26px] font-serif text-on-surface leading-tight" dir="auto">{output.title}</h1>
             {(output.researchConfidence != null || output.factCheckAccuracy != null) && (
               <p className="text-[12px] text-on-surface-variant mt-2 flex items-center gap-3">
-                {output.researchConfidence != null && <span>Research {output.researchConfidence}%</span>}
-                {output.factCheckAccuracy != null && <span>· Fact-check {output.factCheckAccuracy}%</span>}
+                {output.researchConfidence != null && <span>{t('review.researchPct', { pct: output.researchConfidence })}</span>}
+                {output.factCheckAccuracy != null && <span>{t('review.factCheckPct', { pct: output.factCheckAccuracy })}</span>}
               </p>
             )}
           </div>
@@ -412,6 +419,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
 export function ContentCaseReview() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t, plural, formatDateTime } = useT();
   const [searchParams] = useSearchParams();
   const runIdParam = searchParams.get('runId');
 
@@ -423,14 +431,14 @@ export function ContentCaseReview() {
   if (!caseItem) {
     return (
       <>
-        <TopBar title="Review" />
+        <TopBar title={t('review.title')} />
         <main className="flex-1 flex items-center justify-center p-4 md:p-8">
           {loading
-            ? <div className="flex items-center gap-3 text-on-surface-variant"><span className="material-symbols-outlined animate-spin">refresh</span><span className="text-[14px]">Loading…</span></div>
+            ? <div className="flex items-center gap-3 text-on-surface-variant"><span className="material-symbols-outlined animate-spin">refresh</span><span className="text-[14px]">{t('common.loading')}</span></div>
             : <div className="flex flex-col items-center text-center gap-4">
                 <Icon name="search_off" size="xl" className="text-outline" />
-                <p className="text-[15px] text-on-surface-variant">Case not found.</p>
-                <Button variant="secondary" size="sm" onClick={() => navigate('/cases')}><Icon name="arrow_back" size="sm" />Back to Cases</Button>
+                <p className="text-[15px] text-on-surface-variant">{t('review.caseNotFound')}</p>
+                <Button variant="secondary" size="sm" onClick={() => navigate('/cases')}><Icon name="arrow_back" size="sm" />{t('review.backToCases')}</Button>
               </div>}
         </main>
       </>
@@ -468,10 +476,10 @@ export function ContentCaseReview() {
 
   const integrityChip = integrity && (
     integrity.status === 'success'
-      ? { label: 'Real research', tone: 'text-green-700', icon: 'verified' }
+      ? { label: t('review.integrity.real'), tone: 'text-green-700', icon: 'verified' }
       : integrity.status === 'degraded'
-        ? { label: 'Degraded research', tone: 'text-red-700', icon: 'warning' }
-        : { label: 'Mock research', tone: 'text-amber-700', icon: 'science' }
+        ? { label: t('review.integrity.degraded'), tone: 'text-red-700', icon: 'warning' }
+        : { label: t('review.integrity.mock'), tone: 'text-amber-700', icon: 'science' }
   );
 
   return (
@@ -483,7 +491,7 @@ export function ContentCaseReview() {
             <CaseStatusBadge status={c.status} />
             <Button variant="ghost" size="sm" onClick={() => navigate(`/cases/${c.id}`)}>
               <Icon name="arrow_back" size="sm" />
-              Case
+              {t('review.backToCase')}
             </Button>
           </div>
         }
@@ -494,8 +502,8 @@ export function ContentCaseReview() {
         {isHistorical && (
           <div className="px-4 md:px-8 py-2.5 bg-secondary-container/40 border-b border-outline-variant flex items-center gap-3 text-[13px] text-on-secondary-container">
             <Icon name="history" size="sm" />
-            <span>Viewing outputs from a previous run.{' '}
-              <button onClick={() => navigate(`/cases/${c.id}/review`)} className="font-bold underline hover:no-underline">Switch to current run</button>
+            <span>{t('review.historicalBanner')}
+              <button onClick={() => navigate(`/cases/${c.id}/review`)} className="font-bold underline hover:no-underline">{t('review.switchToCurrent')}</button>
             </span>
           </div>
         )}
@@ -505,17 +513,17 @@ export function ContentCaseReview() {
           <div className="flex items-center gap-3 flex-wrap text-[12px] text-on-surface-variant mb-2">
             <span className="inline-flex items-center gap-1.5 font-medium text-on-surface">
               <Icon name={isHistorical ? 'history' : 'bolt'} size="sm" className="text-primary" />
-              {isHistorical ? 'Historical run' : 'Current run'}
+              {isHistorical ? t('review.historicalRun') : t('review.currentRun')}
             </span>
             {generatedAt && (
               <span className="inline-flex items-center gap-1">
                 <Icon name="schedule" size="sm" className="text-outline" />
-                Generated {new Date(generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, {new Date(generatedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                {t('review.generatedAt', { datetime: formatDateTime(generatedAt) })}
               </span>
             )}
             <span className="inline-flex items-center gap-1">
               <Icon name="article" size="sm" className="text-outline" />
-              {sourceCount} source{sourceCount !== 1 ? 's' : ''}
+              {plural(sourceCount, 'review.sourceCountOne', 'review.sourceCountOther')}
             </span>
             {integrityChip && (
               <span className={`inline-flex items-center gap-1 font-medium ${integrityChip.tone}`}>
@@ -530,12 +538,12 @@ export function ContentCaseReview() {
             <div className="flex items-start gap-3 rounded-xl bg-surface-container-lowest border border-outline-variant/40 px-4 py-3">
               <Icon name="format_quote" className="text-primary shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-0.5">Core thesis</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-0.5">{t('review.coreThesis')}</p>
                 <p className="text-[15px] font-serif text-on-surface leading-snug" dir="auto">{thesis}</p>
               </div>
             </div>
           ) : (
-            <p className="text-[13px] text-on-surface-variant italic">No synthesized thesis available for this run.</p>
+            <p className="text-[13px] text-on-surface-variant italic">{t('review.noThesis')}</p>
           )}
         </div>
 
@@ -544,13 +552,13 @@ export function ContentCaseReview() {
           <div className="flex-1 flex flex-col items-center justify-center py-24 text-center">
             <Icon name="auto_awesome" size="xl" className="text-outline mb-4" />
             <p className="text-[16px] font-medium text-on-surface-variant">
-              {isHistorical ? 'No outputs found for this run.' : 'No outputs generated yet.'}
+              {isHistorical ? t('review.noOutputsHistorical') : t('review.noOutputsCurrent')}
             </p>
             <p className="text-[14px] text-outline mt-1">
-              {isHistorical ? 'This run may have been cleared or its outputs are unavailable.' : 'Run the pipeline first to generate content.'}
+              {isHistorical ? t('review.noOutputsHistoricalHint') : t('review.noOutputsCurrentHint')}
             </p>
             {!isHistorical && (
-              <Button className="mt-6" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>Go to Pipeline</Button>
+              <Button className="mt-6" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>{t('review.goToPipeline')}</Button>
             )}
           </div>
         ) : (
@@ -560,7 +568,7 @@ export function ContentCaseReview() {
             <aside className="hidden md:flex md:flex-col w-72 shrink-0 border-r border-outline-variant bg-surface-container-low/40 overflow-y-auto">
               <div className="p-5 border-b border-outline-variant/40">
                 <div className="flex items-center justify-between text-[12px] text-on-surface-variant mb-1.5">
-                  <span>Review progress</span>
+                  <span>{t('review.reviewProgress')}</span>
                   <span className="font-bold text-on-surface">{approvedCount}/{totalCount}</span>
                 </div>
                 <div className="h-2 bg-surface-container-high rounded-full overflow-hidden">
@@ -568,7 +576,7 @@ export function ContentCaseReview() {
                 </div>
                 {allReviewed && (
                   <div className="mt-3 flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1.5 rounded-lg text-[12px] font-bold">
-                    <Icon name="celebration" size="sm" /> All outputs reviewed
+                    <Icon name="celebration" size="sm" /> {t('review.allReviewed')}
                   </div>
                 )}
               </div>
@@ -588,10 +596,10 @@ export function ContentCaseReview() {
                         <span className="text-[13px] font-medium flex-1">{platformName(output.platform)}</span>
                         {st === 'approved' && <Icon name="check_circle" size="sm" className="text-green-600" />}
                         {st === 'rejected' && <Icon name="cancel" size="sm" className="text-error" />}
-                        {st === 'draft' && <span className="w-2 h-2 rounded-full bg-amber-400" title="Pending review" />}
+                        {st === 'draft' && <span className="w-2 h-2 rounded-full bg-amber-400" title={t('review.pendingReview')} />}
                       </div>
                       {q && (
-                        <p className="text-[11px] mt-0.5 ms-6 opacity-80">{q.label} · {output.contentScore}</p>
+                        <p className="text-[11px] mt-0.5 ms-6 opacity-80">{t(q.labelKey)} · {output.contentScore}</p>
                       )}
                     </button>
                   );

@@ -4,6 +4,7 @@ import { TopBar } from '../../components/layout/TopBar';
 import { PlatformBadge } from '../../components/ui/Badge';
 import { Icon } from '../../components/ui/Icon';
 import { useLibraryStore } from '../../stores/libraryStore';
+import { useT } from '../../i18n/useT';
 import type { LibraryRunGroup, LibraryItem, Platform } from '../../types';
 
 // Human label for the platform filter chips (badge component isn't a toggle).
@@ -17,6 +18,7 @@ const PLATFORM_LABEL: Record<Platform, string> = {
 // ── Individual output item (inside an expanded run card) ──
 
 function OutputItem({ item }: { item: LibraryItem }) {
+  const { t } = useT();
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied]     = useState(false);
   const isLong = item.body.length > 200;
@@ -40,7 +42,7 @@ function OutputItem({ item }: { item: LibraryItem }) {
           </p>
           {isLong && (
             <button onClick={() => setExpanded(e => !e)} className="text-[11px] text-primary mt-1 hover:underline">
-              {expanded ? 'Show less' : 'Show more'}
+              {expanded ? t('library.showLess') : t('library.showMore')}
             </button>
           )}
         </div>
@@ -48,7 +50,7 @@ function OutputItem({ item }: { item: LibraryItem }) {
           <button
             onClick={copy}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors"
-            title="Copy to clipboard"
+            title={t('library.copyToClipboard')}
           >
             <Icon name={copied ? 'check' : 'content_copy'} size="sm" className={copied ? 'text-green-600' : ''} />
           </button>
@@ -64,11 +66,12 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
   const [open, setOpen]     = useState(false);
   const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
+  const { t, plural, locale } = useT();
 
-  const runDate = new Date(group.runDate).toLocaleDateString('en-US', {
+  const runDate = new Date(group.runDate).toLocaleDateString(locale, {
     month: 'short', day: 'numeric', year: 'numeric',
   });
-  const runTime = new Date(group.runDate).toLocaleTimeString('en-US', {
+  const runTime = new Date(group.runDate).toLocaleTimeString(locale, {
     hour: '2-digit', minute: '2-digit',
   });
 
@@ -127,12 +130,12 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
             <div className="flex items-center gap-4 mt-2.5 text-[11px] text-on-surface-variant">
               <span className="flex items-center gap-1">
                 <Icon name="check_circle" size="sm" className="text-green-600" />
-                <span><span className="font-bold text-on-surface">{group.approvedCount}</span> approved</span>
+                <span><span className="font-bold text-on-surface">{group.approvedCount}</span> {t('library.approved')}</span>
               </span>
               {group.sourceCount > 0 && (
                 <span className="flex items-center gap-1">
                   <Icon name="article" size="sm" className="text-outline" />
-                  <span><span className="font-bold text-on-surface">{group.sourceCount}</span> source{group.sourceCount !== 1 ? 's' : ''}</span>
+                  <span><span className="font-bold text-on-surface">{group.sourceCount}</span> {plural(group.sourceCount, 'library.sourceOne', 'library.sourceOther')}</span>
                 </span>
               )}
             </div>
@@ -151,10 +154,10 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
               className={`flex flex-1 md:flex-none items-center justify-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
                 copied ? 'bg-green-100 text-green-700' : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'
               }`}
-              title="Copy the approved content"
+              title={t('library.copyApproved')}
             >
               <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? t('library.copied') : t('common.copy')}
             </button>
           )}
           {group.runId && (
@@ -162,10 +165,10 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
               type="button"
               onClick={() => navigate(`/cases/${group.caseId}/review?runId=${group.runId}`)}
               className="flex flex-1 md:flex-none items-center justify-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-[12px] font-medium bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80 transition-colors"
-              title="View the approved content for this run"
+              title={t('library.viewRunContent')}
             >
               <Icon name="visibility" size="sm" />
-              View Content
+              {t('library.viewContent')}
             </button>
           )}
           <Icon name={open ? 'expand_less' : 'expand_more'} className="text-outline shrink-0" />
@@ -176,7 +179,7 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
       {open && (
         <div className="border-t border-outline-variant/20 px-5 pb-4 pt-3 space-y-2">
           <p className="text-[11px] text-outline uppercase font-bold tracking-wider mb-2">
-            Approved outputs from this run
+            {t('library.approvedOutputsFromRun')}
           </p>
           {group.items.map(item => (
             <OutputItem key={item.id} item={item} />
@@ -192,6 +195,7 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
 export function LibraryPage() {
   const { runs, loading, filteredRuns, setQuery, fetchLibrary } = useLibraryStore();
   const navigate = useNavigate();
+  const { t, plural } = useT();
   const [platformFilter, setPlatformFilter] = useState<Platform | 'all'>('all');
 
   // Platforms actually present in the library (for the filter chips).
@@ -205,15 +209,15 @@ export function LibraryPage() {
   return (
     <>
       <TopBar
-        title="Library"
-        searchPlaceholder="Search approved content..."
+        title={t('nav.library')}
+        searchPlaceholder={t('library.searchPlaceholder')}
         onSearch={setQuery}
         actions={
           <button
             onClick={fetchLibrary}
             disabled={loading}
             className="text-on-surface-variant hover:text-primary transition-colors"
-            title="Refresh"
+            title={t('library.refresh')}
           >
             <span className={`material-symbols-outlined ${loading ? 'animate-spin' : ''}`}>refresh</span>
           </button>
@@ -227,12 +231,12 @@ export function LibraryPage() {
           {runs.length > 0 && (
             <div className="flex items-center gap-6 mb-5 text-[13px] text-on-surface-variant">
               <span>
-                <span className="font-bold text-on-surface">{runs.length}</span> saved asset{runs.length !== 1 ? 's' : ''}
+                <span className="font-bold text-on-surface">{runs.length}</span> {plural(runs.length, 'library.savedAssetOne', 'library.savedAssetOther')}
               </span>
               <span>
                 <span className="font-bold text-on-surface">
                   {runs.reduce((n, r) => n + r.approvedCount, 0)}
-                </span> approved outputs
+                </span> {t('library.approvedOutputs')}
               </span>
             </div>
           )}
@@ -246,7 +250,7 @@ export function LibraryPage() {
                   platformFilter === 'all' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
                 }`}
               >
-                All
+                {t('library.all')}
               </button>
               {availablePlatforms.map(p => (
                 <button
@@ -266,7 +270,7 @@ export function LibraryPage() {
           {loading && runs.length === 0 ? (
             <div className="flex items-center justify-center py-24 gap-3 text-on-surface-variant">
               <span className="material-symbols-outlined animate-spin">refresh</span>
-              <span className="text-[14px]">Loading library…</span>
+              <span className="text-[14px]">{t('library.loading')}</span>
             </div>
 
           ) : displayRuns.length === 0 ? (
@@ -276,8 +280,8 @@ export function LibraryPage() {
                 <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
                   <Icon name="search_off" size="xl" className="text-outline" />
                 </div>
-                <p className="text-[16px] font-medium text-on-surface-variant">No matching content</p>
-                <p className="text-[14px] text-outline mt-1">Try a different search term or platform filter.</p>
+                <p className="text-[16px] font-medium text-on-surface-variant">{t('library.noMatching')}</p>
+                <p className="text-[14px] text-outline mt-1">{t('library.noMatchingHint')}</p>
               </div>
             ) : (
               // Truly empty library.
@@ -285,16 +289,16 @@ export function LibraryPage() {
                 <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
                   <Icon name="auto_stories" size="xl" className="text-outline" />
                 </div>
-                <p className="text-[16px] font-semibold text-on-surface">No approved content yet</p>
+                <p className="text-[16px] font-semibold text-on-surface">{t('library.empty')}</p>
                 <p className="text-[14px] text-on-surface-variant mt-1 max-w-sm">
-                  Approved drafts will appear here as reusable content assets.
+                  {t('library.emptyHint')}
                 </p>
                 <button
                   onClick={() => navigate('/cases/new')}
                   className="mt-6 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-on-primary text-[13px] font-medium hover:bg-primary/90 transition-colors"
                 >
                   <Icon name="add" size="sm" />
-                  Create Content Case
+                  {t('library.createCase')}
                 </button>
               </div>
             )
@@ -314,8 +318,10 @@ export function LibraryPage() {
         {/* Footer */}
         <footer className="h-14 px-4 md:px-8 bg-surface-container-low flex items-center border-t border-outline-variant">
           <p className="text-[11px] text-on-surface-variant">
-            {displayRuns.reduce((n, r) => n + r.approvedCount, 0)} approved outputs across{' '}
-            {displayRuns.length} run{displayRuns.length !== 1 ? 's' : ''}
+            {plural(displayRuns.length, 'library.footerOne', 'library.footerOther', {
+              outputs: displayRuns.reduce((n, r) => n + r.approvedCount, 0),
+              runs: displayRuns.length,
+            })}
           </p>
         </footer>
       </div>

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useAppDirection } from './i18n/useT';
 import { AppLayout } from './components/layout/AppLayout';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { ContentCasesPage } from './features/content-cases/ContentCasesPage';
@@ -48,6 +49,9 @@ function AuthedApp() {
 export default function App() {
   const status = useAuthStore(s => s.status);
   const loadMe = useAuthStore(s => s.loadMe);
+
+  // App Language → <html dir/lang> (RTL for Hebrew, LTR for English), app-wide.
+  useAppDirection();
 
   // Phase 12 — hydrate auth from the httpOnly cookie on boot.
   useEffect(() => { void loadMe(); }, [loadMe]);

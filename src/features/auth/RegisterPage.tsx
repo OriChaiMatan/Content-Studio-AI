@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { useAuthStore } from '../../stores/authStore';
+import { useT } from '../../i18n/useT';
 import { AuthLayout, AuthField } from './AuthLayout';
 
 // Strict E.164 mirror of the server validator (backend authSchemas) for instant feedback.
@@ -13,6 +14,7 @@ const E164_RE = /^\+[1-9]\d{7,14}$/;
 export function RegisterPage() {
   const register = useAuthStore(s => s.register);
   const navigate = useNavigate();
+  const { t } = useT();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,43 +46,43 @@ export function RegisterPage() {
   return (
     <AuthLayout>
       <header className="space-y-1">
-        <h2 className="font-serif text-[32px] leading-10 text-on-surface">Create your account</h2>
-        <p className="text-[14px] text-on-surface-variant">Begin your editorial workspace.</p>
+        <h2 className="font-serif text-[32px] leading-10 text-on-surface">{t('auth.createAccount')}</h2>
+        <p className="text-[14px] text-on-surface-variant">{t('auth.createSubtitle')}</p>
       </header>
 
       <form onSubmit={handleSubmit} className="space-y-lg">
         <AuthField
-          id="name" label="Full name" type="text" autoComplete="name" required
+          id="name" label={t('auth.fullName')} type="text" autoComplete="name" required
           value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Dr. Julian Vance"
         />
         <AuthField
-          id="email" label="Email address" type="email" autoComplete="email" required
+          id="email" label={t('auth.email')} type="email" autoComplete="email" required
           value={email} onChange={e => setEmail(e.target.value)} placeholder="name@organization.com"
         />
         <AuthField
-          id="whatsappPhone" label="WhatsApp number" type="tel" autoComplete="tel" inputMode="tel" required
+          id="whatsappPhone" label={t('auth.whatsapp')} type="tel" autoComplete="tel" inputMode="tel" required
           value={whatsappPhone} onChange={e => setWhatsappPhone(e.target.value)} placeholder="+972501234567"
         />
         <AuthField
-          id="password" label="Password" type={show ? 'text' : 'password'} autoComplete="new-password" required
-          value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 8 characters"
+          id="password" label={t('auth.password')} type={show ? 'text' : 'password'} autoComplete="new-password" required
+          value={password} onChange={e => setPassword(e.target.value)} placeholder={t('auth.passwordMin')}
           rightSlot={
             <button type="button" onClick={() => setShow(s => !s)}
               className="p-1 text-on-surface-variant transition-colors hover:text-primary"
-              aria-label={show ? 'Hide password' : 'Show password'}>
+              aria-label={show ? t('auth.hidePassword') : t('auth.showPassword')}>
               <Icon name={show ? 'visibility_off' : 'visibility'} size="sm" />
             </button>
           }
         />
         {error && <p className="text-[13px] text-error" role="alert">{error}</p>}
         <Button type="submit" fullWidth loading={busy} className="rounded-lg py-3">
-          Create account <Icon name="arrow_forward" size="sm" />
+          {t('auth.createCta')} <Icon name="arrow_forward" size="sm" />
         </Button>
       </form>
 
       <p className="text-[14px] text-on-surface-variant">
-        Already a member?{' '}
-        <Link to="/login" className="font-bold text-primary hover:underline underline-offset-4">Sign in</Link>
+        {t('auth.haveAccount')}{' '}
+        <Link to="/login" className="font-bold text-primary hover:underline underline-offset-4">{t('auth.signIn')}</Link>
       </p>
     </AuthLayout>
   );

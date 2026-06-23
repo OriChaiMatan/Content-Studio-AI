@@ -3,13 +3,15 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useUiStore } from '../../stores/uiStore';
+import { useT } from '../../i18n/useT';
+import type { StringKey } from '../../i18n/strings';
 import { Icon } from '../ui/Icon';
 
-const navItems = [
-  { to: '/',              icon: 'dashboard',    label: 'Dashboard' },
-  { to: '/cases',         icon: 'folder_open',  label: 'Content Cases' },
-  { to: '/library',       icon: 'auto_stories', label: 'Library' },
-  { to: '/settings',      icon: 'settings',     label: 'Settings' },
+const navItems: { to: string; icon: string; labelKey: StringKey }[] = [
+  { to: '/',              icon: 'dashboard',    labelKey: 'nav.dashboard' },
+  { to: '/cases',         icon: 'folder_open',  labelKey: 'nav.cases' },
+  { to: '/library',       icon: 'auto_stories', labelKey: 'nav.library' },
+  { to: '/settings',      icon: 'settings',     labelKey: 'nav.settings' },
 ];
 
 export function Sidebar() {
@@ -19,6 +21,10 @@ export function Sidebar() {
   const location = useLocation();
   const mobileNavOpen = useUiStore(s => s.mobileNavOpen);
   const closeMobileNav = useUiStore(s => s.closeMobileNav);
+  const { t, dir } = useT();
+  // Off-canvas (closed) slides out toward the inline-start edge — left in LTR,
+  // right in RTL — so the drawer animation is correct in both directions.
+  const closedTransform = dir === 'rtl' ? 'translate-x-full' : '-translate-x-full';
 
   // Auto-close the mobile drawer on any route change (covers nav clicks, the CTA,
   // footer actions, and browser back/forward). No-op on md+ where it's static.
@@ -27,10 +33,10 @@ export function Sidebar() {
   return (
     <aside
       className={[
-        'h-screen w-72 flex flex-col fixed left-0 top-0 bg-surface-container shadow-sm z-50 p-4 gap-6',
+        'h-screen w-72 flex flex-col fixed start-0 top-0 bg-surface-container shadow-sm z-50 p-4 gap-6',
         // Off-canvas on mobile (slide in when open); always visible from md up.
         'transition-transform duration-200 ease-out md:translate-x-0',
-        mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
+        mobileNavOpen ? 'translate-x-0' : closedTransform,
       ].join(' ')}
     >
       {/* Logo + mobile close */}
@@ -40,11 +46,11 @@ export function Sidebar() {
         </div>
         <div className="min-w-0">
           <h1 className="text-[22px] font-serif font-bold text-primary leading-7 truncate">Content Studio AI</h1>
-          <p className="text-[11px] font-sans text-on-surface-variant tracking-wide">Editorial Content System</p>
+          <p className="text-[11px] font-sans text-on-surface-variant tracking-wide">{t('brand.subtitle')}</p>
         </div>
         <button
           onClick={closeMobileNav}
-          className="md:hidden ml-auto w-10 h-10 -mr-1 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-variant/50 transition-colors"
+          className="md:hidden ms-auto w-10 h-10 -me-1 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-variant/50 transition-colors"
           aria-label="Close menu"
         >
           <Icon name="close" />
@@ -57,7 +63,7 @@ export function Sidebar() {
         className="flex items-center justify-center gap-2 bg-primary text-on-primary rounded-xl px-6 py-3 font-bold text-sm transition-transform active:scale-95 hover:bg-primary/90"
       >
         <Icon name="add" size="sm" />
-        <span>New Content Case</span>
+        <span>{t('nav.newCase')}</span>
       </button>
 
       {/* Nav */}
@@ -75,7 +81,7 @@ export function Sidebar() {
             ].join(' ')}
           >
             <Icon name={item.icon} size="md" />
-            <span>{item.label}</span>
+            <span>{t(item.labelKey)}</span>
           </NavLink>
         ))}
       </nav>
@@ -92,14 +98,14 @@ export function Sidebar() {
         <button
           onClick={() => navigate('/settings')}
           className="text-on-surface-variant hover:text-primary transition-colors"
-          title="Settings"
+          title={t('nav.settings')}
         >
           <Icon name="settings" size="sm" />
         </button>
         <button
           onClick={() => { void logout(); }}
           className="text-on-surface-variant hover:text-error transition-colors"
-          title="Sign out"
+          title={t('nav.signOut')}
         >
           <Icon name="logout" size="sm" />
         </button>

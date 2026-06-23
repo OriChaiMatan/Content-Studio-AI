@@ -1,4 +1,6 @@
 import type { Platform, CaseStatus, OutputStatus } from '../../types';
+import { useT } from '../../i18n/useT';
+import type { StringKey } from '../../i18n/strings';
 
 // ── Platform badge ─────────────────────────────────────────
 
@@ -28,42 +30,44 @@ export function PlatformBadge({ platform }: PlatformBadgeProps) {
 
 // ── Status badge ───────────────────────────────────────────
 
-const outputStatusConfig: Record<OutputStatus, { label: string; color: string; icon: string }> = {
-  draft:    { label: 'Draft',    color: 'text-outline',  icon: 'edit_note' },
-  approved: { label: 'Approved', color: 'text-primary',  icon: 'check_circle' },
-  rejected: { label: 'Rejected', color: 'text-error',    icon: 'cancel' },
+const outputStatusConfig: Record<OutputStatus, { labelKey: StringKey; color: string; icon: string }> = {
+  draft:    { labelKey: 'status.output.draft',    color: 'text-outline',  icon: 'edit_note' },
+  approved: { labelKey: 'status.output.approved', color: 'text-primary',  icon: 'check_circle' },
+  rejected: { labelKey: 'status.output.rejected', color: 'text-error',    icon: 'cancel' },
 };
 
 interface OutputStatusBadgeProps { status: OutputStatus; }
 
 export function OutputStatusBadge({ status }: OutputStatusBadgeProps) {
+  const { t } = useT();
   const cfg = outputStatusConfig[status];
   return (
     <div className={`flex items-center gap-1 font-bold text-xs ${cfg.color}`}>
       <span className="material-symbols-outlined text-base">{cfg.icon}</span>
-      <span>{cfg.label}</span>
+      <span>{t(cfg.labelKey)}</span>
     </div>
   );
 }
 
 // ── Case status badge ──────────────────────────────────────
 
-const caseStatusConfig: Record<CaseStatus, { label: string; bg: string; text: string }> = {
-  draft:         { label: 'Draft',          bg: 'bg-surface-variant',         text: 'text-on-surface-variant' },
-  research:      { label: 'Researching',    bg: 'bg-primary-fixed/60',         text: 'text-on-primary-fixed' },
-  fact_check:    { label: 'Fact Checking',  bg: 'bg-secondary-container/60',   text: 'text-on-secondary-container' },
-  generating:    { label: 'Generating',     bg: 'bg-tertiary-fixed/60',        text: 'text-on-tertiary-fixed' },
-  in_review:     { label: 'In Review',      bg: 'bg-secondary-container',      text: 'text-on-secondary-container' },
-  completed:     { label: 'Completed',      bg: 'bg-primary-fixed/60',         text: 'text-primary' },
+const caseStatusConfig: Record<CaseStatus, { labelKey: StringKey; bg: string; text: string }> = {
+  draft:         { labelKey: 'status.case.draft',      bg: 'bg-surface-variant',         text: 'text-on-surface-variant' },
+  research:      { labelKey: 'status.case.research',   bg: 'bg-primary-fixed/60',         text: 'text-on-primary-fixed' },
+  fact_check:    { labelKey: 'status.case.fact_check', bg: 'bg-secondary-container/60',   text: 'text-on-secondary-container' },
+  generating:    { labelKey: 'status.case.generating', bg: 'bg-tertiary-fixed/60',        text: 'text-on-tertiary-fixed' },
+  in_review:     { labelKey: 'status.case.in_review',  bg: 'bg-secondary-container',      text: 'text-on-secondary-container' },
+  completed:     { labelKey: 'status.case.completed',  bg: 'bg-primary-fixed/60',         text: 'text-primary' },
 };
 
 interface CaseStatusBadgeProps { status: CaseStatus; }
 
 export function CaseStatusBadge({ status }: CaseStatusBadgeProps) {
+  const { t } = useT();
   const cfg = caseStatusConfig[status];
   return (
     <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${cfg.bg} ${cfg.text}`}>
-      {cfg.label}
+      {t(cfg.labelKey)}
     </span>
   );
 }

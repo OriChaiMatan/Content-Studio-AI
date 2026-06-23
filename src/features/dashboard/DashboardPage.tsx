@@ -6,7 +6,11 @@ import { Icon } from '../../components/ui/Icon';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { useLibraryStore } from '../../stores/libraryStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useT } from '../../i18n/useT';
+import type { StringKey } from '../../i18n/strings';
 import type { CaseStatus, ContentCase, Platform, Schedule } from '../../types';
+
+type I18n = ReturnType<typeof useT>;
 
 // ── Derived helpers (frontend-only — no backend fields invented) ──────────────
 
@@ -36,47 +40,39 @@ function runTimestamp(c: ContentCase): string | null {
   return c.currentRun?.completedAt ?? c.currentRun?.startedAt ?? null;
 }
 
-const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-function humanizeSchedule(s: Schedule): string {
+// Compose a localized schedule label from i18n parts (freq + day + time).
+function humanizeSchedule(s: Schedule, i18n: I18n): string {
   switch (s.frequency) {
-    case 'manual':  return 'Manual';
-    case 'daily':   return s.time ? `Daily · ${s.time}` : 'Daily';
-    case 'weekly':  return `Weekly · ${DOW[s.dayOfWeek ?? 1]}${s.time ? ` ${s.time}` : ''}`;
-    case 'monthly': return `Monthly · Day ${s.dayOfMonth ?? 1}${s.time ? ` ${s.time}` : ''}`;
-    default:        return 'Manual';
+    case 'manual':  return i18n.t('freq.manual');
+    case 'daily':   return i18n.t('freq.daily') + (s.time ? ` · ${s.time}` : '');
+    case 'weekly':  return `${i18n.t('freq.weekly')} · ${i18n.t(`dow.${s.dayOfWeek ?? 1}` as StringKey)}${s.time ? ` ${s.time}` : ''}`;
+    case 'monthly': return `${i18n.t('freq.monthly')} · ${i18n.t('sched.dayOfMonth', { count: s.dayOfMonth ?? 1 })}${s.time ? ` ${s.time}` : ''}`;
+    default:        return i18n.t('freq.manual');
   }
 }
 
-function relativeDate(iso: string): string {
-  const d = new Date(iso);
-  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7)  return `${days}d ago`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function relativeDate(iso: string, i18n: I18n): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return i18n.t('date.today');
+  if (days === 1) return i18n.t('date.yesterday');
+  if (days < 7)  return i18n.t('date.daysAgo', { count: days });
+  return i18n.formatDate(iso);
 }
 
-function formatRunTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-}
-
-function greeting(): string {
+function greetingKey(): StringKey {
   const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (h < 12) return 'dash.greetMorning';
+  if (h < 18) return 'dash.greetAfternoon';
+  return 'dash.greetEvening';
 }
 
-const pipelineStatusLabel: Record<CaseStatus, string> = {
-  draft:       'Not started',
-  research:    'Researching…',
-  fact_check:  'Fact checking…',
-  generating:  'Generating…',
-  in_review:   'Ready for review',
-  completed:   'Completed',
+const pipelineStatusLabel: Record<CaseStatus, StringKey> = {
+  draft:       'dash.psl.draft',
+  research:    'dash.psl.research',
+  fact_check:  'dash.psl.fact_check',
+  generating:  'dash.psl.generating',
+  in_review:   'dash.psl.in_review',
+  completed:   'dash.psl.completed',
 };
 
 const pipelineStatusIcon: Record<CaseStatus, string> = {
@@ -102,6 +98,7 @@ interface StatCardProps {
 }
 
 function StatCard({ icon, label, value, sub, accent = 'bg-primary', urgent, live, onClick }: StatCardProps) {
+  const { t } = useT();
   return (
     <button
       type="button"
@@ -123,7 +120,7 @@ function StatCard({ icon, label, value, sub, accent = 'bg-primary', urgent, live
           {live && (
             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-tertiary">
               <span className="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse" />
-              Live
+              {t('dash.live')}
             </span>
           )}
         </div>
@@ -137,6 +134,8 @@ function StatCard({ icon, label, value, sub, accent = 'bg-primary', urgent, live
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const i18n = useT();
+  const { t, plural, formatDateTime } = i18n;
   const cases       = useContentCasesStore(s => s.cases);
   const loading     = useContentCasesStore(s => s.loading);
   const libraryRuns = useLibraryStore(s => s.runs);
@@ -168,27 +167,27 @@ export function DashboardPage() {
   if (inReview > 0) {
     const n = pendingDraftsTotal || inReview;
     priorityText = pendingDraftsTotal
-      ? `You have ${n} draft${n !== 1 ? 's' : ''} ready for approval.`
-      : `You have ${n} case${n !== 1 ? 's' : ''} ready for review.`;
+      ? plural(n, 'dash.priDrafts.one', 'dash.priDrafts.other')
+      : plural(n, 'dash.priReview.one', 'dash.priReview.other');
     priorityAction = () => navigate(`/cases/${reviewCases[0].id}/review`);
-    priorityActionLabel = 'Review now';
+    priorityActionLabel = t('dash.reviewNow');
   } else if (needsSources > 0) {
-    priorityText = `${needsSources} case${needsSources !== 1 ? 's are' : ' is'} waiting for new sources.`;
+    priorityText = plural(needsSources, 'dash.priSources.one', 'dash.priSources.other');
   } else if (inProgress > 0) {
-    priorityText = `${inProgress} case${inProgress !== 1 ? 's are' : ' is'} generating right now.`;
+    priorityText = plural(inProgress, 'dash.priGen.one', 'dash.priGen.other');
   } else {
-    priorityText = 'Your content pipeline is clear.';
+    priorityText = t('dash.priClear');
   }
 
   // ── Loading ──
   if (loading && cases.length === 0) {
     return (
       <>
-        <TopBar title="Dashboard" />
+        <TopBar title={t('nav.dashboard')} />
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <div className="flex items-center gap-3 text-on-surface-variant">
             <span className="material-symbols-outlined animate-spin">refresh</span>
-            <span className="text-[14px]">Loading dashboard…</span>
+            <span className="text-[14px]">{t('dash.loading')}</span>
           </div>
         </main>
       </>
@@ -199,19 +198,19 @@ export function DashboardPage() {
   if (cases.length === 0) {
     return (
       <>
-        <TopBar title="Dashboard" />
+        <TopBar title={t('nav.dashboard')} />
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <div className="flex flex-col items-center justify-center py-20 text-center max-w-md mx-auto">
             <div className="w-20 h-20 rounded-full bg-surface-container flex items-center justify-center mb-6">
               <Icon name="auto_stories" size="xl" className="text-outline" />
             </div>
-            <h3 className="text-[22px] font-serif text-on-surface mb-3">Welcome to Content Studio AI</h3>
+            <h3 className="text-[22px] font-serif text-on-surface mb-3">{t('dash.welcomeTitle')}</h3>
             <p className="text-[14px] text-on-surface-variant mb-8 leading-relaxed">
-              Create your first Content Case to start collecting sources, running your AI pipeline, and generating structured content across all your channels.
+              {t('dash.welcomeBody')}
             </p>
             <Button onClick={() => navigate('/cases/new')} size="lg">
               <Icon name="add" size="sm" />
-              Create Your First Content Case
+              {t('dash.createFirst')}
             </Button>
           </div>
         </main>
@@ -222,7 +221,7 @@ export function DashboardPage() {
   // ── Populated dashboard ──
   return (
     <>
-      <TopBar title="Dashboard" />
+      <TopBar title={t('nav.dashboard')} />
 
       <main className="flex-1 p-4 md:p-8 space-y-8 overflow-y-auto">
 
@@ -230,7 +229,7 @@ export function DashboardPage() {
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <div className="min-w-0">
             <h3 className="text-[22px] font-serif text-on-surface">
-              {greeting()}, {firstName}
+              {t(greetingKey())}, {firstName}
             </h3>
             <div className="flex items-center gap-2 mt-1.5">
               <Icon
@@ -255,7 +254,7 @@ export function DashboardPage() {
             onClick={() => navigate('/cases/new')}
           >
             <Icon name="add" size="sm" />
-            New Content Case
+            {t('common.newCase')}
           </Button>
         </div>
 
@@ -263,34 +262,34 @@ export function DashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             icon="rate_review"
-            label="Ready for Review"
+            label={t('dash.kpiReview')}
             value={inReview}
-            sub={inReview > 0 ? `${inReview} case${inReview !== 1 ? 's' : ''} awaiting decision` : 'All caught up'}
+            sub={inReview > 0 ? plural(inReview, 'dash.kpiReviewSub.one', 'dash.kpiReviewSub.other') : t('dash.allCaughtUp')}
             accent="bg-secondary"
             urgent={inReview > 0}
             onClick={inReview > 0 ? () => navigate(`/cases/${reviewCases[0].id}/review`) : undefined}
           />
           <StatCard
             icon="folder_open"
-            label="Active Cases"
+            label={t('dash.kpiActive')}
             value={activeCases}
-            sub="Open in your workspace"
+            sub={t('dash.kpiActiveSub')}
             onClick={() => navigate('/cases')}
           />
           <StatCard
             icon="auto_awesome"
-            label="In Progress"
+            label={t('dash.kpiInProgress')}
             value={inProgress}
-            sub={inProgress > 0 ? 'Pipeline running' : 'Nothing running'}
+            sub={inProgress > 0 ? t('dash.pipelineRunning') : t('dash.nothingRunning')}
             accent="bg-tertiary"
             live={inProgress > 0}
             onClick={() => navigate('/cases')}
           />
           <StatCard
             icon="auto_stories"
-            label="Approved Assets"
+            label={t('dash.kpiApproved')}
             value={approved}
-            sub="Saved to Library"
+            sub={t('dash.kpiApprovedSub')}
             accent="bg-primary-container"
             onClick={() => navigate('/library')}
           />
@@ -299,7 +298,7 @@ export function DashboardPage() {
         {/* C. Needs Your Review */}
         <section>
           <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3">
-            Needs Your Review
+            {t('dash.needsReview')}
           </h4>
 
           {reviewCases.length === 0 ? (
@@ -307,9 +306,9 @@ export function DashboardPage() {
               <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-3">
                 <Icon name="check_circle" className="text-green-600" />
               </div>
-              <p className="text-[15px] font-medium text-on-surface">Nothing waiting for review</p>
+              <p className="text-[15px] font-medium text-on-surface">{t('dash.nothingWaiting')}</p>
               <p className="text-[13px] text-on-surface-variant mt-1">
-                You're all caught up. New drafts will appear here when they're ready.
+                {t('dash.nothingWaitingSub')}
               </p>
             </div>
           ) : (
@@ -341,16 +340,16 @@ export function DashboardPage() {
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-on-surface-variant mb-4">
                       <span className="flex items-center gap-1">
                         <Icon name="edit_note" size="sm" />
-                        <span className="font-medium text-on-surface">{pending}</span> draft{pending !== 1 ? 's' : ''} pending
+                        {plural(pending, 'dash.draftsPending.one', 'dash.draftsPending.other')}
                       </span>
                       <span className="flex items-center gap-1">
                         <Icon name="article" size="sm" />
-                        <span className="font-medium text-on-surface">{sources}</span> source{sources !== 1 ? 's' : ''}
+                        {plural(sources, 'count.sources.one', 'count.sources.other')}
                       </span>
                       {ranAt && (
                         <span className="flex items-center gap-1">
                           <Icon name="schedule" size="sm" />
-                          {formatRunTime(ranAt)}
+                          {formatDateTime(ranAt)}
                         </span>
                       )}
                     </div>
@@ -358,7 +357,7 @@ export function DashboardPage() {
                     <div className="flex justify-end">
                       <Button size="sm" onClick={(e) => { e.stopPropagation(); navigate(`/cases/${c.id}/review`); }}>
                         <Icon name="rate_review" size="sm" />
-                        Review Content
+                        {t('common.reviewContent')}
                       </Button>
                     </div>
                   </div>
@@ -371,7 +370,7 @@ export function DashboardPage() {
         {/* D. Active Pipeline */}
         {inProgress > 0 && (
           <section>
-            <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3">Active Pipeline</h4>
+            <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider mb-3">{t('dash.activePipeline')}</h4>
             <div className="space-y-2">
               {progressCases.map(c => (
                 <div
@@ -384,7 +383,7 @@ export function DashboardPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[14px] font-medium text-on-surface truncate">{c.title}</p>
-                    <p className="text-[12px] text-on-surface-variant">{pipelineStatusLabel[c.status]}</p>
+                    <p className="text-[12px] text-on-surface-variant">{t(pipelineStatusLabel[c.status])}</p>
                   </div>
                   <div className="shrink-0">
                     <CaseStatusBadge status={c.status} />
@@ -399,23 +398,23 @@ export function DashboardPage() {
         {/* E. Recent Cases */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider">Recent Cases</h4>
+            <h4 className="text-[14px] font-bold text-on-surface-variant uppercase tracking-wider">{t('dash.recentCases')}</h4>
             <button
               onClick={() => navigate('/cases')}
               className="text-[14px] font-medium text-primary hover:text-primary/80 transition-colors"
             >
-              View all →
+              {t('common.viewAll')} →
             </button>
           </div>
           <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-outline-variant bg-surface-container-low">
-                  <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-outline">Case</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-outline">Status</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-outline hidden md:table-cell">Language</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-outline hidden md:table-cell">Schedule</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-outline hidden lg:table-cell">Updated</th>
+                  <th className="text-start px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-outline">{t('dash.thCase')}</th>
+                  <th className="text-start px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-outline">{t('dash.thStatus')}</th>
+                  <th className="text-start px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-outline hidden md:table-cell">{t('dash.thLanguage')}</th>
+                  <th className="text-start px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-outline hidden md:table-cell">{t('dash.thSchedule')}</th>
+                  <th className="text-start px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-outline hidden lg:table-cell">{t('dash.thUpdated')}</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -433,7 +432,7 @@ export function DashboardPage() {
                         <p className="text-[12px] text-on-surface-variant truncate">
                           {platforms.length > 0
                             ? platforms.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' · ')
-                            : 'No outputs yet'}
+                            : t('dash.noOutputs')}
                         </p>
                       </td>
                       <td className="px-4 py-3">
@@ -443,10 +442,10 @@ export function DashboardPage() {
                         <span className="text-[13px] text-on-surface-variant uppercase">{c.language}</span>
                       </td>
                       <td className="px-4 py-3 hidden md:table-cell">
-                        <span className="text-[13px] text-on-surface-variant">{humanizeSchedule(c.schedule)}</span>
+                        <span className="text-[13px] text-on-surface-variant">{humanizeSchedule(c.schedule, i18n)}</span>
                       </td>
                       <td className="px-4 py-3 hidden lg:table-cell">
-                        <span className="text-[13px] text-on-surface-variant">{relativeDate(c.updatedAt)}</span>
+                        <span className="text-[13px] text-on-surface-variant">{relativeDate(c.updatedAt, i18n)}</span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Icon name="chevron_right" className="text-outline group-hover:text-primary transition-colors" />

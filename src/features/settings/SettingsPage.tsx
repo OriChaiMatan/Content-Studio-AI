@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
-import { SectionCard } from '../../components/ui/Card';
+import { Card, SectionCard } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
-import { Toggle } from '../../components/ui/Toggle';
 import { Icon } from '../../components/ui/Icon';
 import { Button } from '../../components/ui/Button';
 import { api, ApiError } from '../../lib/api';
+import { useT } from '../../i18n/useT';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
 import type { Language } from '../../types';
@@ -220,9 +220,33 @@ function TelegramCard() {
   );
 }
 
+// ── Notifications (Coming Soon) — static, non-interactive row ─────────────────
+// Mirrors the real Toggle row layout but is purely presentational: no onChange,
+// no state, no API. Off + muted so users don't think notifications already work.
+function ComingSoonToggle({ label, description }: { label: string; description: string }) {
+  return (
+    <div className="flex items-center justify-between p-4 bg-surface-container-low/60 rounded-lg">
+      <div className="flex flex-col">
+        <span className="text-[16px] font-medium text-on-surface/70 leading-6">{label}</span>
+        <span className="text-[14px] text-on-surface-variant/70 leading-5">{description}</span>
+      </div>
+      <span
+        role="switch"
+        aria-checked={false}
+        aria-disabled="true"
+        title="Coming soon"
+        className="relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent bg-outline-variant/60 cursor-not-allowed"
+      >
+        <span className="pointer-events-none inline-block h-5 w-5 translate-x-0 rounded-full bg-white/80 shadow ring-0" />
+      </span>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export function SettingsPage() {
-  const { user, updateUser, updateNotification } = useSettingsStore();
+  const { user, updateUser } = useSettingsStore();
+  const { t } = useT();
   const outputLanguage = user.defaultOutputLanguage ?? 'he';
 
   const initials = user.name
@@ -235,7 +259,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <TopBar title="Settings" />
+      <TopBar title={t('nav.settings')} />
 
       <main className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="max-w-3xl mx-auto w-full">
@@ -254,7 +278,7 @@ export function SettingsPage() {
           <div className="space-y-6">
 
             {/* ── 1. Profile ──────────────────────────────────── */}
-            <SectionCard title="Profile" icon="account_circle">
+            <SectionCard title={t('settings.profile')} icon="account_circle">
               <div className="flex flex-col sm:flex-row items-start gap-6">
                 {/* Avatar */}
                 <div className="flex flex-col items-center gap-2 shrink-0">
@@ -299,7 +323,7 @@ export function SettingsPage() {
             </SectionCard>
 
             {/* ── 2. Integrations (WhatsApp prominent) ─────────── */}
-            <SectionCard title="Integrations" icon="hub">
+            <SectionCard title={t('settings.integrations')} icon="hub">
               <WhatsAppCard />
               <TelegramCard />
 
@@ -327,16 +351,16 @@ export function SettingsPage() {
             </SectionCard>
 
             {/* ── 3. Preferences ──────────────────────────────── */}
-            <SectionCard title="Preferences" icon="tune">
+            <SectionCard title={t('settings.preferences')} icon="tune">
               <div className="space-y-7">
                 {/* App language */}
                 <div>
-                  <p className="text-[15px] font-medium text-on-surface">App language</p>
+                  <p className="text-[15px] font-medium text-on-surface">{t('settings.appLanguage')}</p>
                   <p className="text-[13px] text-on-surface-variant mb-3">
-                    Language for the interface, menus, and navigation.
+                    {t('settings.appLanguageDesc')}
                   </p>
                   <LanguageSegmented
-                    ariaLabel="App language"
+                    ariaLabel={t('settings.appLanguage')}
                     value={user.language}
                     onChange={v => updateUser({ language: v })}
                   />
@@ -344,12 +368,12 @@ export function SettingsPage() {
 
                 {/* Content output language — separate persistent setting */}
                 <div>
-                  <p className="text-[15px] font-medium text-on-surface">Content output language</p>
+                  <p className="text-[15px] font-medium text-on-surface">{t('settings.outputLanguage')}</p>
                   <p className="text-[13px] text-on-surface-variant mb-3">
-                    Default language for new content cases. You can still change it per case.
+                    {t('settings.outputLanguageDesc')}
                   </p>
                   <LanguageSegmented
-                    ariaLabel="Content output language"
+                    ariaLabel={t('settings.outputLanguage')}
                     value={outputLanguage}
                     onChange={v => updateUser({ defaultOutputLanguage: v })}
                   />
@@ -371,32 +395,35 @@ export function SettingsPage() {
               </div>
             </SectionCard>
 
-            {/* ── 4. Notifications ────────────────────────────── */}
-            <SectionCard title="Notifications" icon="notifications_active">
+            {/* ── 4. Notifications (Coming Soon — UI only, not yet functional) ── */}
+            <Card accent className="p-8">
+              <div className="mb-2 flex items-center gap-2 flex-wrap">
+                <h3 className="text-[22px] font-serif font-medium text-primary flex items-center gap-2">
+                  <span className="material-symbols-outlined">notifications_active</span>
+                  {t('settings.notifications')}
+                </h3>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[11px] font-semibold uppercase tracking-wide">
+                  {t('settings.comingSoon')}
+                </span>
+              </div>
+              <p className="text-[14px] text-on-surface-variant mb-6">
+                {t('settings.notifHelper')}
+              </p>
               <div className="space-y-4">
-                <Toggle
-                  id="notif-generation"
-                  label="Generation Complete"
-                  description="Notify when an AI content draft is ready"
-                  checked={user.notifications.generationComplete}
-                  onChange={v => updateNotification('generationComplete', v)}
+                <ComingSoonToggle
+                  label={t('settings.notifGeneration')}
+                  description={t('settings.notifGenerationDesc')}
                 />
-                <Toggle
-                  id="notif-draft"
-                  label="Draft Ready for Review"
-                  description="Daily summary of items pending editorial approval"
-                  checked={user.notifications.draftReady}
-                  onChange={v => updateNotification('draftReady', v)}
+                <ComingSoonToggle
+                  label={t('settings.notifDraft')}
+                  description={t('settings.notifDraftDesc')}
                 />
-                <Toggle
-                  id="notif-factcheck"
-                  label="Fact Check Conflict"
-                  description="Alert if automated cross-reference finds discrepancies"
-                  checked={user.notifications.factCheckConflict}
-                  onChange={v => updateNotification('factCheckConflict', v)}
+                <ComingSoonToggle
+                  label={t('settings.notifFactCheck')}
+                  description={t('settings.notifFactCheckDesc')}
                 />
               </div>
-            </SectionCard>
+            </Card>
 
           </div>
         </div>

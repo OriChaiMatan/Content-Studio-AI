@@ -2,26 +2,25 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
 import { CaseStatusBadge, PlatformBadge } from '../../components/ui/Badge';
+import { useT } from '../../i18n/useT';
+import type { StringKey } from '../../i18n/strings';
 import { Button } from '../../components/ui/Button';
+// (I18n type for passing the translator into module-level helpers)
 import { Icon } from '../../components/ui/Icon';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import type { CaseStatus, ContentCase, ContentGoal, Platform, Schedule } from '../../types';
 
-const GOAL_LABELS: Record<ContentGoal, string> = {
-  build_authority: 'Build Authority', generate_leads: 'Generate Leads',
-  increase_sales: 'Increase Sales', educate_audience: 'Educate Audience',
-  grow_community: 'Grow Community', personal_branding: 'Personal Branding',
-  other: 'Other',
-};
+type I18n = ReturnType<typeof useT>;
+const goalKey = (g: ContentGoal): StringKey => `goal.${g}` as StringKey;
 
-const STATUS_FILTERS: { value: CaseStatus | 'all'; label: string }[] = [
-  { value: 'all',       label: 'All' },
-  { value: 'draft',     label: 'Draft' },
-  { value: 'research',  label: 'Researching' },
-  { value: 'fact_check',label: 'Fact Checking' },
-  { value: 'generating',label: 'Generating' },
-  { value: 'in_review', label: 'In Review' },
-  { value: 'completed', label: 'Completed' },
+const STATUS_FILTERS: { value: CaseStatus | 'all'; labelKey: StringKey }[] = [
+  { value: 'all',       labelKey: 'cases.all' },
+  { value: 'draft',     labelKey: 'status.case.draft' },
+  { value: 'research',  labelKey: 'status.case.research' },
+  { value: 'fact_check',labelKey: 'status.case.fact_check' },
+  { value: 'generating',labelKey: 'status.case.generating' },
+  { value: 'in_review', labelKey: 'status.case.in_review' },
+  { value: 'completed', labelKey: 'status.case.completed' },
 ];
 
 const IN_PROGRESS_STATUSES: CaseStatus[] = ['research', 'fact_check', 'generating'];
@@ -54,45 +53,46 @@ function plannedPlatforms(c: ContentCase): Platform[] {
   return c.contentTargets.filter((t): t is Platform => t !== 'images');
 }
 
-function goalLabel(c: ContentCase): string {
+// goalCustom is USER content — never translated; enum goals use i18n keys.
+function goalLabel(c: ContentCase, i18n: I18n): string {
   if (c.contentGoal === 'other' && c.goalCustom) return c.goalCustom;
-  return GOAL_LABELS[c.contentGoal];
+  return i18n.t(goalKey(c.contentGoal));
 }
 
-const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-function humanizeSchedule(s: Schedule): string {
+function humanizeSchedule(s: Schedule, i18n: I18n): string {
   switch (s.frequency) {
-    case 'manual':  return 'Manual';
-    case 'daily':   return s.time ? `Daily · ${s.time}` : 'Daily';
-    case 'weekly':  return `Weekly · ${DOW[s.dayOfWeek ?? 1]}${s.time ? ` ${s.time}` : ''}`;
-    case 'monthly': return `Monthly · Day ${s.dayOfMonth ?? 1}${s.time ? ` ${s.time}` : ''}`;
-    default:        return 'Manual';
+    case 'manual':  return i18n.t('freq.manual');
+    case 'daily':   return i18n.t('freq.daily') + (s.time ? ` · ${s.time}` : '');
+    case 'weekly':  return `${i18n.t('freq.weekly')} · ${i18n.t(`dow.${s.dayOfWeek ?? 1}` as StringKey)}${s.time ? ` ${s.time}` : ''}`;
+    case 'monthly': return `${i18n.t('freq.monthly')} · ${i18n.t('sched.dayOfMonth', { count: s.dayOfMonth ?? 1 })}${s.time ? ` ${s.time}` : ''}`;
+    default:        return i18n.t('freq.manual');
   }
 }
 
-function relativeDate(iso: string): string {
+function relativeDate(iso: string, i18n: I18n): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 7)  return `${days}d ago`;
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (days <= 0) return i18n.t('date.today');
+  if (days === 1) return i18n.t('date.yesterday');
+  if (days < 7)  return i18n.t('date.daysAgo', { count: days });
+  return i18n.formatDate(iso);
 }
 
 // State-aware primary CTA — chosen from real state, in priority order.
-interface CaseCta { label: string; icon: string; to: string; variant: 'primary' | 'secondary'; }
+interface CaseCta { labelKey: StringKey; icon: string; to: string; variant: 'primary' | 'secondary'; }
 function caseCta(c: ContentCase): CaseCta {
   if (pendingDrafts(c) > 0)
-    return { label: 'Review Content', icon: 'rate_review', to: `/cases/${c.id}/review`, variant: 'primary' };
+    return { labelKey: 'common.reviewContent', icon: 'rate_review', to: `/cases/${c.id}/review`, variant: 'primary' };
   if (IN_PROGRESS_STATUSES.includes(c.status))
-    return { label: 'View Pipeline', icon: 'visibility', to: `/cases/${c.id}/pipeline`, variant: 'secondary' };
+    return { labelKey: 'cases.viewPipeline', icon: 'visibility', to: `/cases/${c.id}/pipeline`, variant: 'secondary' };
   if (c.sources.length === 0)
-    return { label: 'Add Sources', icon: 'note_add', to: `/cases/${c.id}`, variant: 'primary' };
-  return { label: 'Open Case', icon: 'open_in_new', to: `/cases/${c.id}`, variant: 'secondary' };
+    return { labelKey: 'cases.addSources', icon: 'note_add', to: `/cases/${c.id}`, variant: 'primary' };
+  return { labelKey: 'cases.openCase', icon: 'open_in_new', to: `/cases/${c.id}`, variant: 'secondary' };
 }
 
 export function ContentCasesPage() {
   const navigate = useNavigate();
+  const i18n = useT();
+  const { t, plural } = i18n;
   const cases   = useContentCasesStore(s => s.cases);
   const loading = useContentCasesStore(s => s.loading);
   const [statusFilter, setStatusFilter] = useState<CaseStatus | 'all'>('all');
@@ -123,13 +123,13 @@ export function ContentCasesPage() {
   return (
     <>
       <TopBar
-        title="Content Cases"
-        searchPlaceholder="Search cases..."
+        title={t('nav.cases')}
+        searchPlaceholder={t('cases.searchPlaceholder')}
         onSearch={setQuery}
         actions={
           <Button onClick={() => navigate('/cases/new')}>
             <Icon name="add" size="sm" />
-            New Case
+            {t('cases.newCaseShort')}
           </Button>
         }
       />
@@ -139,7 +139,7 @@ export function ContentCasesPage() {
         {loading && cases.length === 0 && (
           <div className="flex items-center justify-center py-24 gap-3 text-on-surface-variant">
             <span className="material-symbols-outlined animate-spin">refresh</span>
-            <span className="text-[14px]">Loading cases…</span>
+            <span className="text-[14px]">{t('cases.loading')}</span>
           </div>
         )}
 
@@ -156,7 +156,7 @@ export function ContentCasesPage() {
                   : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high',
               ].join(' ')}
             >
-              {f.label}
+              {t(f.labelKey)}
               {f.value !== 'all' && (
                 <span className="ml-1.5 text-[11px] opacity-70">
                   ({countFor(f.value)})
@@ -172,11 +172,11 @@ export function ContentCasesPage() {
             <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
               <Icon name="folder_open" size="xl" className="text-outline" />
             </div>
-            <p className="text-[16px] font-medium text-on-surface-variant">No cases found</p>
-            <p className="text-[14px] text-outline mt-1">Try a different filter or create a new case</p>
+            <p className="text-[16px] font-medium text-on-surface-variant">{t('cases.empty')}</p>
+            <p className="text-[14px] text-outline mt-1">{t('cases.emptyHint')}</p>
             <Button className="mt-6" onClick={() => navigate('/cases/new')}>
               <Icon name="add" size="sm" />
-              New Content Case
+              {t('common.newCase')}
             </Button>
           </div>
         ) : (
@@ -207,7 +207,7 @@ export function ContentCasesPage() {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex-1 min-w-0">
                         <h3 className="text-[16px] font-medium text-on-surface truncate">{c.title}</h3>
-                        <p className="text-[12px] text-on-surface-variant mt-0.5 truncate">{goalLabel(c)}</p>
+                        <p className="text-[12px] text-on-surface-variant mt-0.5 truncate">{goalLabel(c, i18n)}</p>
                       </div>
                       <CaseStatusBadge status={c.status} />
                     </div>
@@ -218,11 +218,11 @@ export function ContentCasesPage() {
                         <>
                           {platforms.map(p => <PlatformBadge key={p} platform={p} />)}
                           {planned.length > 0 && (
-                            <span className="text-[10px] uppercase tracking-wide text-outline">Planned</span>
+                            <span className="text-[10px] uppercase tracking-wide text-outline">{t('cases.planned')}</span>
                           )}
                         </>
                       ) : (
-                        <span className="text-[12px] text-outline">No platforms yet</span>
+                        <span className="text-[12px] text-outline">{t('cases.noPlatforms')}</span>
                       )}
                     </div>
 
@@ -230,8 +230,8 @@ export function ContentCasesPage() {
                     {currentOutputs.length > 0 && (
                       <div className="mb-3">
                         <div className="flex items-center justify-between text-[11px] text-on-surface-variant mb-1">
-                          <span>Approval</span>
-                          <span><span className="font-medium text-on-surface">{approvedCount}</span>/{currentOutputs.length} approved</span>
+                          <span>{t('cases.approval')}</span>
+                          <span>{t('cases.approvedCount', { approved: approvedCount, total: currentOutputs.length })}</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-surface-container-high overflow-hidden">
                           <div
@@ -246,17 +246,17 @@ export function ContentCasesPage() {
                     <div className="flex items-center gap-4 text-[12px] text-on-surface-variant border-t border-outline-variant/30 pt-3">
                       <span className="flex items-center gap-1">
                         <Icon name="article" size="sm" className="text-outline" />
-                        {c.sources.length} source{c.sources.length !== 1 ? 's' : ''}
+                        {plural(c.sources.length, 'count.sources.one', 'count.sources.other')}
                       </span>
                       <span className="flex items-center gap-1 min-w-0">
                         <Icon name="schedule" size="sm" className="text-outline" />
-                        <span className="truncate">{humanizeSchedule(c.schedule)}</span>
+                        <span className="truncate">{humanizeSchedule(c.schedule, i18n)}</span>
                       </span>
                     </div>
 
                     {/* Last updated / last run */}
                     <p className="text-[11px] text-outline mt-2">
-                      {ranAt ? `Last run ${relativeDate(ranAt)}` : `Updated ${relativeDate(c.updatedAt)}`}
+                      {ranAt ? t('cases.lastRun', { date: relativeDate(ranAt, i18n) }) : t('cases.updated', { date: relativeDate(c.updatedAt, i18n) })}
                     </p>
 
                     {/* Always-visible primary CTA */}
@@ -268,7 +268,7 @@ export function ContentCasesPage() {
                         onClick={e => { e.stopPropagation(); navigate(cta.to); }}
                       >
                         <Icon name={cta.icon} size="sm" />
-                        {cta.label}
+                        {t(cta.labelKey)}
                       </Button>
                     </div>
                   </div>
@@ -286,9 +286,9 @@ export function ContentCasesPage() {
                 <Icon name="add" size="lg" />
               </div>
               <p className="text-[14px] font-medium text-on-surface-variant group-hover:text-primary transition-colors">
-                New Content Case
+                {t('common.newCase')}
               </p>
-              <p className="text-[12px] text-outline">Start collecting sources and generating content</p>
+              <p className="text-[12px] text-outline">{t('cases.newTileSub')}</p>
             </button>
           </div>
         )}

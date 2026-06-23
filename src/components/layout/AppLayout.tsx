@@ -23,7 +23,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         />
       )}
 
-      <div className="ml-0 md:ml-72 min-h-screen flex flex-col">
+      <div className="ms-0 md:ms-72 min-h-screen flex flex-col">
         {children}
       </div>
     </div>
