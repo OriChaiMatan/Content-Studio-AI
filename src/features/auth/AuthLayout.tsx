@@ -1,5 +1,5 @@
 import { type ReactNode, type InputHTMLAttributes } from 'react';
-import { Icon } from '../../components/ui/Icon';
+import { LumaiLogoChip } from '../../components/ui/LumaiLogo';
 
 // Phase 12 · Part 2 — shared editorial auth shell. Standalone public page (rendered
 // OUTSIDE AppLayout/Sidebar). A single stable, centered container holds a two-column
@@ -30,16 +30,19 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         {/* ── Form column (right) ──────────────────────────────────────── */}
         <main className="min-w-0 flex flex-col justify-center p-8 sm:p-10 lg:p-12">
           <div className="mx-auto w-full max-w-[28rem] space-y-8">
-            <div className="flex items-center gap-2">
-              <Icon name="auto_stories" size="lg" className="text-primary" />
-              <span className="font-serif text-[22px] font-bold tracking-tight text-primary">Content Studio AI</span>
+            <div className="flex items-center gap-3">
+              <LumaiLogoChip box={44} />
+              <div className="min-w-0">
+                <span className="block font-serif text-[22px] font-bold tracking-tight text-primary leading-none">LumAI</span>
+                <span className="block text-[11px] text-on-surface-variant tracking-wide mt-1">Content Intelligence Engine</span>
+              </div>
             </div>
             {children}
           </div>
         </main>
 
       </div>
-      <p className="mt-6 text-[11px] text-on-surface-variant/70">© {new Date().getFullYear()} Content Studio AI</p>
+      <p className="mt-6 text-[11px] text-on-surface-variant/70">© {new Date().getFullYear()} LumAI</p>
     </div>
   );
 }

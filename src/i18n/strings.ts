@@ -16,7 +16,7 @@ type Entry = Record<Language, string>;
 
 export const strings = {
   // ── Brand / sidebar nav ──
-  'brand.subtitle':   { en: 'Editorial Content System', he: 'מערכת תוכן עריכותית' },
+  'brand.subtitle':   { en: 'Content Intelligence Engine', he: 'מנוע אינטליגנציית תוכן' },
   'nav.dashboard':    { en: 'Dashboard',        he: 'לוח בקרה' },
   'nav.cases':        { en: 'Content Cases',    he: 'תיקי תוכן' },
   'nav.library':      { en: 'Library',          he: 'ספרייה' },
@@ -366,7 +366,7 @@ export const strings = {
 
   // ── Dashboard ──
   'dash.loading':         { en: 'Loading dashboard…', he: 'טוען לוח בקרה…' },
-  'dash.welcomeTitle':    { en: 'Welcome to Content Studio AI', he: 'ברוכים הבאים ל-Content Studio AI' },
+  'dash.welcomeTitle':    { en: 'Welcome to LumAI', he: 'ברוכים הבאים ל-LumAI' },
   'dash.welcomeBody':     { en: 'Create your first Content Case to start collecting sources, running your AI pipeline, and generating structured content across all your channels.', he: 'צרו את תיק התוכן הראשון כדי להתחיל לאסוף מקורות, להריץ את צינור ה-AI וליצור תוכן מובנה בכל הערוצים שלכם.' },
   'dash.createFirst':     { en: 'Create Your First Content Case', he: 'צרו את תיק התוכן הראשון' },
   'dash.kpiReview':       { en: 'Ready for Review',  he: 'מוכן לבדיקה' },

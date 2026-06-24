@@ -6,6 +6,7 @@ import { useUiStore } from '../../stores/uiStore';
 import { useT } from '../../i18n/useT';
 import type { StringKey } from '../../i18n/strings';
 import { Icon } from '../ui/Icon';
+import { LumaiLogoChip } from '../ui/LumaiLogo';
 
 const navItems: { to: string; icon: string; labelKey: StringKey }[] = [
   { to: '/',              icon: 'dashboard',    labelKey: 'nav.dashboard' },
@@ -41,12 +42,9 @@ export function Sidebar() {
     >
       {/* Logo + mobile close */}
       <div className="flex items-center gap-4 px-2 py-4">
-        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary shrink-0">
-          <Icon name="auto_stories" />
-        </div>
+        <LumaiLogoChip box={40} />
         <div className="min-w-0">
-          <h1 className="text-[22px] font-serif font-bold text-primary leading-7 truncate">Content Studio AI</h1>
-          <p className="text-[11px] font-sans text-on-surface-variant tracking-wide">{t('brand.subtitle')}</p>
+          <h1 className="text-[22px] font-serif font-bold text-primary leading-7 truncate">LumAI</h1>
         </div>
         <button
           onClick={closeMobileNav}

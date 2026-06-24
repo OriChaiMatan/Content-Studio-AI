@@ -3,6 +3,7 @@ import { TopBar } from '../../components/layout/TopBar';
 import { CaseStatusBadge, PlatformBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
+import { LumaiLogoChip } from '../../components/ui/LumaiLogo';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { useLibraryStore } from '../../stores/libraryStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -201,9 +202,8 @@ export function DashboardPage() {
         <TopBar title={t('nav.dashboard')} />
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <div className="flex flex-col items-center justify-center py-20 text-center max-w-md mx-auto">
-            <div className="w-20 h-20 rounded-full bg-surface-container flex items-center justify-center mb-6">
-              <Icon name="auto_stories" size="xl" className="text-outline" />
-            </div>
+            <LumaiLogoChip box={80} className="mb-6 rounded-2xl" />
+            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-primary mb-2">{t('brand.subtitle')}</p>
             <h3 className="text-[22px] font-serif text-on-surface mb-3">{t('dash.welcomeTitle')}</h3>
             <p className="text-[14px] text-on-surface-variant mb-8 leading-relaxed">
               {t('dash.welcomeBody')}
