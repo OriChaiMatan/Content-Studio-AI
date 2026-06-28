@@ -41,7 +41,7 @@ export function engineSystem(lang: 'en' | 'he'): string {
     'Hard rules:',
     '- When a PRIMARY ANGLE is provided, it is the NARRATIVE SPINE. Build the entire piece around its thesis, and the whole piece must develop THAT story.',
     '- FIRST-PARAGRAPH RULE (critical): the opening must state the SYNTHESIZED INSIGHT — the conclusion that exists ONLY because multiple sources were combined. The first sentence must be IMPOSSIBLE to write from any single source alone. Do NOT open with an announcement, product launch, or the loudest single source as the grammatical subject — never begin with "X announced…", "The WSL…", "Microsoft…", "AI judging…", "AI is changing…", or any single-source recap. Name such a source only AFTER the insight has landed, as supporting evidence.',
-    '- Write like a SENIOR ANALYST, not a journalist or news bot: Insight → Evidence, NEVER Evidence → Insight. The reader meets the new combined idea first; the individual source facts come second to substantiate it.',
+    '- Reason like an analyst: Insight → Evidence, NEVER Evidence → Insight. The reader meets the new combined idea first; the individual source facts come second to substantiate it. This rule governs the ARGUMENT STRUCTURE only — the persona, tone, warmth, register, and phrasing are set by the VOICE & STYLE and CUSTOM AI INSTRUCTIONS blocks in the context. Do NOT default to a generic "senior analyst" corporate voice: the SAME thesis must sound different for an executive-analytical case than for a friendly personal-brand or a bold-contrarian case.',
     '- ARGUE, DO NOT SUMMARIZE (critical). The piece is an ARGUMENT for the thesis, not a recap of the sources. Every paragraph must ADVANCE the thesis: state a claim, give the reasoning (why it follows from the combined sources), then the implication. Lead with INTERPRETATION; bring in a fact only to earn a claim, then move the argument forward. Do NOT produce a balanced "on one hand / on the other hand" overview, a neutral news summary, or a bulleted fact-dump. Cite the fewest facts needed — interpretation should outweigh recap.',
     '- OPEN ON THE THESIS: the first 1–2 sentences must state the thesis itself in plain language, reusing its key terms so the reader grasps the core claim immediately — not a teaser, not background, not a source headline.',
     '- THESIS DISCIPLINE (when a THESIS DISCIPLINE block is provided): keep the thesis strong and sharp, but label its confidence honestly. (1) When the angle is inferred or speculative, you MUST weave at least one counter-argument, limitation, or alternative explanation INTO the body as part of the analysis — not as a tacked-on disclaimer. (2) Never present a speculative implication as established fact. (3) Match the allowed wording strength; use the required qualifiers for any claim that runs past the evidence; never use the forbidden phrases; and rewrite any overreach "riskyClaim" using its safer wording. (4) Do NOT collapse into generic neutral hedging or a bland summary — discipline means calibrating the strength of each claim, not deleting the opinion.',
@@ -52,6 +52,9 @@ export function engineSystem(lang: 'en' | 'he'): string {
     '- Each platform has a distinct purpose, structure, rhythm, and tone. Follow the platform instructions precisely. Do NOT make every platform sound the same; in particular, Facebook must not read like LinkedIn.',
     `- LANGUAGE: write ALL readyToPublish and breakdown text in ${language}. Proper nouns and product/company/technology names (e.g. Microsoft, Azure, AI, Security Copilot) may stay in their original language. Image-prompt fields must ALWAYS be written in ENGLISH (they feed an image model).`,
     '- readyToPublish must be the final, copy-paste-ready text for the platform. The breakdown must contain the same content decomposed into its named parts (they must be consistent).',
+    '- VOICE & STYLE: a VOICE & STYLE block is provided in the context with the target audience, tone/writing style, and goal. Match it precisely — assume the audience\'s context and vocabulary (do not over-explain to experts or under-explain to newcomers), and let the tone/style govern how the piece SOUNDS.',
+    '- CUSTOM AI INSTRUCTIONS: when a CUSTOM AI INSTRUCTIONS block is present, it is the user\'s own direction and takes PRECEDENCE on tone, phrasing, and style. It must NEVER override fact discipline, the primary angle/thesis, platform requirements, or the output language — if a custom instruction conflicts with those, follow the fact/thesis/platform/language rule and apply the instruction everywhere else.',
+    '- AVOID AI-TELLS: do not use hollow buzzphrases or robotic corporate throat-clearing. Banned outright: "In today\'s rapidly evolving landscape", "in the ever-changing world of", "game changer" / "game-changer", "unlock potential" / "unlock the potential", "the world of X is changing". Use "leverage" only when no plain verb (use / apply / draw on) fits. Never open with a generic scene-setting generality — open on the thesis with concrete specifics.',
     '- Return ONLY the structured result via the provided tool. No preamble, no markdown fences, no extra fields.',
   ].join('\n');
 }
@@ -107,8 +110,16 @@ export function renderContext(input: GeneratorInput): string {
     ...spine,
     '## CASE BRIEF',
     `Title: ${b.caseTitle}`,
-    `Goal: ${b.contentGoal}${b.goalCustom ? ` (${b.goalCustom})` : ''}`,
-    `Style: ${b.contentStyle}${b.styleCustom ? ` (${b.styleCustom})` : ''}`,
+    `Goal: ${b.contentGoal}${b.goalCustom ? ` (${b.goalCustom})` : ''}${b.goals ? ` — ${b.goals}` : ''}`,
+    '',
+    '## VOICE & STYLE (match this — it governs HOW the piece sounds, not WHAT it argues)',
+    `Tone / writing style: ${b.contentStyle}${b.styleCustom ? ` (${b.styleCustom})` : ''}`,
+    b.writingStyle ? `Writing-style notes: ${b.writingStyle}` : '',
+    b.targetAudience ? `Target audience: ${b.targetAudience} — write directly for them; assume their context and vocabulary.` : '',
+    `Output language: ${b.language ?? input.contract.outputLanguage}`,
+    b.aiInstructions
+      ? `\n## CUSTOM AI INSTRUCTIONS (user-defined — HIGHEST priority on tone & phrasing; never override facts, the primary angle, platform rules, or language)\n${b.aiInstructions}`
+      : '',
     '',
     ...researchBlock,
     `Research confidence: ${r.confidenceScore}/100`,

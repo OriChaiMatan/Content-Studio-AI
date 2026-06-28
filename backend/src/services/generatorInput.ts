@@ -30,6 +30,13 @@ function resolveLang(run: PipelineRun, c: ContentCase): 'en' | 'he' {
   return c.language === 'he' ? 'he' : 'en';
 }
 
+// Normalize a possibly-null/blank case field to a trimmed value or undefined, so
+// empty legacy fields are omitted from the rendered prompt rather than printed blank.
+function clean(v: string | null | undefined): string | undefined {
+  const t = (v ?? '').trim();
+  return t.length > 0 ? t : undefined;
+}
+
 // Shape-tolerant source-intelligence aggregation (new + legacy shapes).
 type SI = {
   entities?: { name: string; type?: string }[];
@@ -112,9 +119,17 @@ export function buildGeneratorInput(
     brief: {
       caseTitle:    caseItem.title,
       contentGoal:  caseItem.contentGoal as unknown as string,
-      goalCustom:   caseItem.goalCustom ?? undefined,
+      goalCustom:   clean(caseItem.goalCustom),
       contentStyle: caseItem.contentStyle as unknown as string,
-      styleCustom:  caseItem.styleCustom ?? undefined,
+      styleCustom:  clean(caseItem.styleCustom),
+      // Phase 1 — plumb the remaining user-defined voice settings. These already
+      // live on the case (settable via case update) but never reached the
+      // generator. Blank legacy fields normalize to undefined and are not rendered.
+      targetAudience: clean(caseItem.targetAudience),
+      writingStyle:   clean(caseItem.writingStyle),
+      goals:          clean(caseItem.goals),
+      language:       resolveLang(run, caseItem),
+      aiInstructions: clean(caseItem.aiInstructions),
     },
     research: {
       summary:         rc.summary,

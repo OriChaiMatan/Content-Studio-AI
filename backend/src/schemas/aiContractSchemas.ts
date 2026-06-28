@@ -547,6 +547,14 @@ export const GeneratorInputSchema = z.object({
     goalCustom:   z.string().optional(),
     contentStyle: z.string().min(1),
     styleCustom:  z.string().optional(),
+    // Phase 1 (voice-aware generation) — user-defined voice settings that already
+    // exist on the case but were never plumbed to the generator. All optional:
+    // empty/blank cases simply omit them from the rendered prompt.
+    targetAudience: z.string().optional(),
+    writingStyle:   z.string().optional(),
+    goals:          z.string().optional(),
+    language:       z.string().optional(),
+    aiInstructions: z.string().optional(),
   }),
   research: z.object({
     summary:         z.string(),
