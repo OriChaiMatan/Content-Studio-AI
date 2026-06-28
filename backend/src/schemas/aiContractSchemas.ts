@@ -111,12 +111,30 @@ export const NonObviousInsightSchema = z.object({
   expertPOV:   ExpertPOVSchema.optional(),
 });
 
+// Phase 4A — coherence assessment. Does this source set genuinely support ONE
+// thesis, or is a single thesis a forced roundup? Optional for back-compat
+// (absent on mock/degraded/legacy runs). score is BACKEND-computed from the
+// theme structure (not blindly trusted from Claude); Claude's forcedSynthesisRisk
+// can only LOWER the score (one-way safety cap).
+export const CoherenceLabelSchema = z.enum(['coherent', 'partial', 'low', 'multi-topic']);
+export const ForcedSynthesisRiskSchema = z.enum(['low', 'medium', 'high']);
+export const SourceCoherenceSchema = z.object({
+  score:               z.number().int().min(0).max(100),
+  label:               CoherenceLabelSchema,
+  rationale:           z.string(),
+  dominantThemes:      z.array(z.object({ theme: z.string(), sourceRefs: z.array(z.string()) })).min(0),
+  outlierSourceRefs:   z.array(z.string()).min(0),
+  forcedSynthesisRisk: ForcedSynthesisRiskSchema,
+});
+export type SourceCoherence = z.infer<typeof SourceCoherenceSchema>;
+
 export const ResearchMetaSchema = z.object({
   sourceCount:         z.number().int().min(0),
   primarySourceCount:  z.number().int().min(0),
   contextSourceCount:  z.number().int().min(0),
   synthesisConfidence: z.number().int().min(0).max(100),
   singleSource:        z.boolean(),
+  coherence:           SourceCoherenceSchema.optional(),   // Phase 4A
   generatorVersion:    z.string().min(1),   // "research-1" | "mock-research" | "mock-fallback"
   degraded:            z.boolean(),
   sourceRefMap:        z.array(z.object({
@@ -189,6 +207,11 @@ export const EditorialScoresSchema = z.object({
 });
 export type EditorialScores = z.infer<typeof EditorialScoresSchema>;
 
+// Phase 4A — how a candidate connects its sources. Distinguishes genuine insight
+// from a fake roundup so low-coherence scoring can penalize the latter only.
+export const ConnectionKindSchema = z.enum(['single_mechanism', 'productive_tension', 'grouping_roundup', 'forced_synthesis', 'single_cluster']);
+export type ConnectionKind = z.infer<typeof ConnectionKindSchema>;
+
 export const CandidateAngleSchema = z.object({
   thesis:     z.string().min(1),
   reframe:    z.string().min(1),
@@ -197,6 +220,7 @@ export const CandidateAngleSchema = z.object({
   rationale:  z.string().min(1),    // why it explains the evidence
   // ≥1 required of a winner: explains-unrelated | hidden-driver | reframes-topic.
   qualifyingProperties: z.array(z.enum(['explains-unrelated', 'hidden-driver', 'reframes-topic'])).min(0),
+  connectionKind: ConnectionKindSchema.optional(),   // Phase 4A (optional: back-compat)
   scores:       ThesisScoresSchema,
   overallValue: z.number().min(0).max(10),   // computed analytical weighted total
   // Phase 10D.1 — editorial axis (optional: absent on pre-10D.1 / degraded runs).

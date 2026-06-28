@@ -13,6 +13,8 @@ import {
   type ThesisCompetition,
   type ThesisScores,
   type EditorialScores,
+  type SourceCoherence,
+  type ConnectionKind,
 } from '../schemas/aiContractSchemas';
 
 type SynthesisLayer = ResearchContextV2['synthesis'];
@@ -77,6 +79,9 @@ export function researchSystem(lang: 'en' | 'he'): string {
     '- Label grounding honestly: "supported" (stated by sources), "inferred" (reasoned), "speculative" (a leap). Speculative leaps are valuable but MUST be labeled.',
     '- Optionally add expertPOV to a non-obvious insight: the conclusion a domain expert would draw (strategic/operational/prediction/practitioner). expertPOV is NEVER a fact — its grounding must be "inferred" or "speculative".',
     '- For contradictions, present BOTH sides and do not pick a winner; the disagreement itself is the story.',
+    '- COHERENCE FIRST (coherenceAssessment): BEFORE competing theses, judge whether the sources genuinely share ONE thread. Group them into dominantThemes (each theme + the [S#] it covers); name outlierSourceRefs that fit no thread; set forcedSynthesisRisk. A GENUINE cross-source thesis reveals a SHARED DRIVER — one underlying force, mechanism, or tension that explains multiple sources. A ROUNDUP merely sorts/lists/name-checks sources ("the industry is doing A, B, and C") — that is a FAILURE, not a creative win. Tension or contradiction about the SAME subject is HIGH coherence (the disagreement IS the thread). Sources about DIFFERENT subjects are LOW coherence even if all mention "AI". If the sources do not share a real thread, SAY SO (set forcedSynthesisRisk=high, list themes/outliers) rather than manufacturing a connection — it is better to report "these do not support one strong thesis" than to invent one.',
+    '- FORCED vs PRODUCTIVE TENSION: a PRODUCTIVE tension is a disagreement or trade-off about the SAME concrete object — the same market, actor, mechanism, product, or decision (e.g. two sources disputing whether ONE company\'s strategy will work). A FORCED tension connects otherwise-unrelated topics only through a generic abstract opposite — "speed vs regulation", "innovation vs control", "scale vs trust", "growth vs risk", "hype vs reality" — WITHOUT a concrete shared subject or mechanism. A forced tension is a roundup in disguise and is a FAILURE: do NOT use it to justify spanning unrelated sources.',
+    '- connectionKind (per candidate): single_mechanism (ONE grounded mechanism explains multiple sources — a real hidden driver), productive_tension (disagreement/trade-off about the SAME concrete subject or mechanism — NOT a generic abstract opposite), grouping_roundup (sorts/lists sources by surface theme), forced_synthesis (connects unrelated domains through an abstract opposite or vague theme — a fake tension/roundup), single_cluster (focuses on one coherent subset, ignoring unrelated sources). If a "tension" is abstract and cross-domain, it is forced_synthesis, NOT productive_tension. Mark fakes HONESTLY — do not disguise a roundup as a tension. "explains-unrelated" is a STRENGTH only with a real grounded mechanism.',
     '- thesisCompetition: generate exactly 5 genuinely DIFFERENT candidate theses (concise — thesis ≤320 chars, reframe ≤220, rationale ≤120) and score each on TWO axes. ANALYTICAL (scores): novelty, explanatoryPower, crossSourceCoverage, discussionPotential, businessValue, strategicDepth. Rules: (a) a candidate must be a THESIS that explains a SYSTEM or structural shift — "sales fell 18%" / "renovations rose" / "demand may be delayed" are observations and must score low; (b) the strongest candidates explain seemingly-unrelated sources, reveal a hidden driver, or reframe the whole topic (mark these in qualifyingProperties); (c) if a thesis can be written from a single source, its crossSourceCoverage MUST be low.',
     '- editorialScores (the STORY axis, scored independently of the analytical axis): score each candidate as a world-class EDITOR would — readerCuriosity (would a serious reader keep reading), reframeStrength (overturns the default assumption), narrativeTension (conflict / paradox / irony / tradeoff / unresolved stakes), headlinePower (could be a headline in The Economist / Bloomberg / Stratechery / HBR). Editorial power means making a SERIOUS reader stop, care, understand the stakes, and remember the thesis — it is NEVER clickbait, tabloid, or rage-bait. A thesis can be analytically deep yet editorially flat (abstract, jargon-y); say so honestly with a low editorial score. Then set recommendedWinnerIndex to the candidate you would actually put on the cover.',
     '- winnerDiscipline (inside thesisCompetition): for your recommended winner ONLY, stress-test it like a senior analyst (NOT a fact-checker), CONCISELY: supportLevel; supportingEvidence (≤3, with refs); assumptions (≤2, + risk if wrong); counterArguments (≤2; at least one strong one for any inferred/speculative thesis); alternativeExplanations (≤2, ordinary/competing reasons); overreachWarnings (≤2, claims the thesis tempts but sources do NOT support, with safer wording); wordingGuidance. One short sentence per item.',
@@ -213,6 +218,7 @@ export const RESEARCH_TOOL: Anthropic.Tool = {
           sourceRefs:{ type: 'array', items: { type: 'string' }, description: 'The [S#] this thesis genuinely requires.' },
           rationale: { type: 'string', maxLength: 120, description: 'Why this explains the evidence — ONE concise sentence, max 120 chars.' },
           qualifyingProperties: { type: 'array', items: { type: 'string', enum: ['explains-unrelated','hidden-driver','reframes-topic'] }, description: 'Strong-thesis properties this satisfies (a winner needs ≥1).' },
+          connectionKind: { type: 'string', enum: ['single_mechanism','productive_tension','grouping_roundup','forced_synthesis','single_cluster'], description: 'single_mechanism = one grounded mechanism explains multiple sources (real hidden driver); productive_tension = disagreement/trade-off about the SAME concrete subject or mechanism (NOT a generic abstract opposite); grouping_roundup = surface grouping / name-checking; forced_synthesis = connects unrelated domains via an abstract opposite ("speed vs regulation", "scale vs trust") or vague theme — a fake tension/roundup; single_cluster = focuses on one coherent subset. Abstract cross-domain "tension" is forced_synthesis, NOT productive_tension. Mark fakes HONESTLY.' },
           scores: { type: 'object', description: 'ANALYTICAL axis — score each dimension 1–10, honestly.', properties: {
             novelty:             { type: 'integer', minimum: 1, maximum: 10, description: 'Would an intelligent reader learn something unexpected?' },
             explanatoryPower:    { type: 'integer', minimum: 1, maximum: 10, description: 'How much of the evidence does it explain?' },
@@ -227,12 +233,19 @@ export const RESEARCH_TOOL: Anthropic.Tool = {
             narrativeTension: { type: 'integer', minimum: 1, maximum: 10, description: 'Conflict, paradox, irony, tradeoff, pressure, contradiction, or unresolved stakes?' },
             headlinePower:    { type: 'integer', minimum: 1, maximum: 10, description: 'Could this plausibly be a headline in The Economist / Bloomberg / Stratechery / HBR? (serious, not sensational)' },
           }, required: ['readerCuriosity','reframeStrength','narrativeTension','headlinePower'] },
-        }, required: ['thesis','reframe','basisKind','grounding','sourceRefs','rationale','qualifyingProperties','scores','editorialScores'] } },
+        }, required: ['thesis','reframe','basisKind','grounding','sourceRefs','rationale','qualifyingProperties','connectionKind','scores','editorialScores'] } },
         recommendedWinnerIndex: { type: 'integer', minimum: 0, description: 'Index into candidateAngles of the strongest thesis.' },
         winnerDiscipline: disciplineProp,
       }, required: ['candidateAngles','recommendedWinnerIndex','winnerDiscipline'] },
+      // Phase 4A — coherence assessment (judged BEFORE the thesis is forced).
+      coherenceAssessment: { type: 'object', description: 'Do these sources genuinely share ONE thread, or would a single thesis be a forced roundup? Reporting low coherence is BETTER than manufacturing a connection.', properties: {
+        dominantThemes:   { type: 'array', items: { type: 'object', properties: { theme: { type: 'string', maxLength: 120 }, sourceRefs: { type: 'array', items: { type: 'string' } } }, required: ['theme','sourceRefs'] }, description: 'Group the sources into themes; each theme lists the [S#] it covers. One dominant theme covering most sources = coherent; several themes splitting the sources = incoherent.' },
+        outlierSourceRefs:{ type: 'array', items: { type: 'string' }, description: '[S#] that fit no shared thread.' },
+        forcedSynthesisRisk: { type: 'string', enum: ['low','medium','high'], description: 'high = a single thesis would have to manufacture or strain a connection across unrelated sources.' },
+        rationale:        { type: 'string', maxLength: 240, description: 'One sentence: is there a genuine shared thread, or are these separate stories?' },
+      }, required: ['dominantThemes','outlierSourceRefs','forcedSynthesisRisk','rationale'] },
     },
-    required: ['singleSource','synthesisConfidence','mainStory','sourceConnections','nonObviousInsights','openQuestions','thesisCompetition'],
+    required: ['singleSource','synthesisConfidence','mainStory','sourceConnections','nonObviousInsights','openQuestions','thesisCompetition','coherenceAssessment'],
   },
 };
 
@@ -513,8 +526,93 @@ function editorialFallback(scores: ThesisScores, props: CandidateAngle['qualifyi
 type RawCandidate = {
   thesis: string; reframe: string; basisKind: string; grounding: PrimaryAngle['grounding'];
   sourceRefs: string[]; rationale: string; qualifyingProperties: CandidateAngle['qualifyingProperties'];
-  scores: ThesisScores; editorialScores: EditorialScores;
+  scores: ThesisScores; editorialScores: EditorialScores; connectionKind: ConnectionKind;
 };
+
+// Phase 4A — classify how a candidate connects its sources when Claude omits it.
+// single_mechanism = one grounded mechanism explains multiple sources (a real
+// hidden driver); productive_tension = same-subject disagreement; grouping_roundup
+// = surface grouping / name-checking (a fake roundup); single_cluster = one subset.
+const CONNECTION_KINDS = ['single_mechanism', 'productive_tension', 'grouping_roundup', 'forced_synthesis', 'single_cluster'];
+// Phase 4A.1 — fake-connection kinds: a roundup, or a forced/abstract tension that
+// connects unrelated domains only through a generic opposite.
+const FAKE_KINDS = new Set<ConnectionKind>(['grouping_roundup', 'forced_synthesis']);
+function deriveConnectionKind(basisKind: string, grounding: PrimaryAngle['grounding'], props: string[], refsLen: number): ConnectionKind {
+  if (basisKind === 'tension' || basisKind === 'contradiction') return 'productive_tension';
+  if (refsLen < 2) return 'single_cluster';
+  if (props.includes('explains-unrelated')) return grounding === 'speculative' ? 'grouping_roundup' : 'single_mechanism';
+  return 'single_mechanism';
+}
+
+// Phase 4A — DETERMINISTIC coherence from the theme structure (hard to game) +
+// connection grounding + roundup fraction. Claude's forcedSynthesisRisk is a
+// one-way SAFETY CAP: it can only LOWER coherence, never inflate it. Single-source
+// runs are trivially coherent (exempt).
+export function computeCoherence(
+  raw: Record<string, unknown>,
+  synthesis: SynthesisLayer,
+  meta: Meta,
+  cands: RawCandidate[],
+): SourceCoherence {
+  const validRefs = new Set(meta.sourceRefMap.map(r => r.ref));
+  const keep = (refs: unknown): string[] => (Array.isArray(refs) ? refs.map(String).filter(r => validRefs.has(r)) : []);
+  const sourceCount = Math.max(1, meta.sourceCount);
+
+  if (meta.singleSource) {
+    return { score: 100, label: 'coherent', rationale: 'Single source — coherence not applicable.', dominantThemes: [], outlierSourceRefs: [], forcedSynthesisRisk: 'low' };
+  }
+
+  const ca = (raw.coherenceAssessment ?? {}) as Record<string, any>;
+  const themes = (Array.isArray(ca.dominantThemes) ? ca.dominantThemes : [])
+    .map((t: any) => ({ theme: String(t?.theme ?? ''), sourceRefs: keep(t?.sourceRefs) }))
+    .filter((t: { theme: string }) => t.theme.length > 0);
+  const outliers = keep(ca.outlierSourceRefs);
+  const claudeRisk: SourceCoherence['forcedSynthesisRisk'] = ['low', 'medium', 'high'].includes(String(ca.forcedSynthesisRisk)) ? ca.forcedSynthesisRisk : 'low';
+
+  const themeCount = themes.length || 1;
+  const topThemeCoverage = themes.length ? Math.max(...themes.map((t: { sourceRefs: string[] }) => t.sourceRefs.length)) / sourceCount : 1;
+  const outlierFrac = outliers.length / sourceCount;
+  const conns = synthesis.sourceConnections ?? [];
+  const gq = conns.length ? conns.reduce((a, c) => a + (c.grounding === 'supported' ? 1 : c.grounding === 'inferred' ? 0.5 : 0), 0) / conns.length : 0.5;
+  // Phase 4A.1 — fake-connection fraction now includes forced_synthesis (abstract
+  // cross-domain "tension"), not just grouping_roundup.
+  const roundupFrac = cands.length ? cands.filter(c => FAKE_KINDS.has(c.connectionKind)).length / cands.length : 0;
+
+  let score = 100 * (
+      0.40 * Math.min(1, topThemeCoverage)
+    + 0.25 * (1 - Math.min(1, (themeCount - 1) / 3))
+    + 0.10 * (1 - Math.min(1, outlierFrac))
+    + 0.10 * gq
+    + 0.15 * (1 - roundupFrac)               // Phase 4A.1 — weight fakes more
+  );
+  // Phase 4A.1 — MULTI-DOMAIN penalty: sources spread across ≥2 themes with NO
+  // dominant theme and NO honest outliers = a genuinely multi-topic set a single
+  // thesis can only connect by force. Deterministic (independent of Claude's
+  // optimism / mislabeling). Safe for the good cases: a genuine hidden driver
+  // yields ONE dominant theme, so this never fires on them.
+  if (themeCount >= 2 && topThemeCoverage < 0.6 && outliers.length === 0) score -= 22;
+  // One-way safety caps from Claude's risk self-report (tightened in 4A.1).
+  if (claudeRisk === 'high') score = Math.min(score, 40);
+  else if (claudeRisk === 'medium') score = Math.min(score, 58);
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  const label: SourceCoherence['label'] =
+    themeCount >= 3 ? 'multi-topic'
+    : score >= 75 ? 'coherent'
+    : score >= 55 ? 'partial'
+    : score >= 35 ? 'low'
+    : 'multi-topic';
+
+  const derivedRisk: SourceCoherence['forcedSynthesisRisk'] = label === 'coherent' ? 'low' : label === 'partial' ? 'medium' : 'high';
+  const RISK_ORD = { low: 0, medium: 1, high: 2 } as const;
+  const forcedSynthesisRisk = RISK_ORD[claudeRisk] >= RISK_ORD[derivedRisk] ? claudeRisk : derivedRisk;
+
+  return {
+    score, label,
+    rationale: String(ca.rationale ?? '').slice(0, 240) || `${themeCount} theme(s), ${outliers.length} outlier(s).`,
+    dominantThemes: themes, outlierSourceRefs: outliers, forcedSynthesisRisk,
+  };
+}
 
 // Deterministic candidates from the synthesis itself — used only if Claude omits
 // the competition (robustness). Each synthesis element is itself a candidate thesis.
@@ -524,7 +622,7 @@ function deterministicCandidates(synthesis: SynthesisLayer, meta: Meta, keep: (r
     const sourceRefs = keep(refsRaw);
     const scores = heuristicScores(sourceRefs.length, grounding);
     if (!meta.singleSource && sourceRefs.length < 2) scores.crossSourceCoverage = Math.min(scores.crossSourceCoverage, 2);
-    out.push({ thesis, reframe, basisKind, grounding, sourceRefs, rationale, qualifyingProperties: props, scores, editorialScores: editorialFallback(scores, props, basisKind) });
+    out.push({ thesis, reframe, basisKind, grounding, sourceRefs, rationale, qualifyingProperties: props, scores, editorialScores: editorialFallback(scores, props, basisKind), connectionKind: deriveConnectionKind(basisKind, grounding, props, sourceRefs.length) });
   };
   for (const n of synthesis.nonObviousInsights) add(n.insight, n.insight, n.sourceRefs, n.speculative ? 'speculative' : 'inferred', n.lens === 'contrarian' ? ['reframes-topic'] : ['hidden-driver'], n.reasoning || n.insight, 'insight');
   for (const t of synthesis.tensions) add(t.description, `${t.poles[0]} vs ${t.poles[1]}`, t.sourceRefs, 'inferred', ['explains-unrelated'], t.description, 'tension');
@@ -534,12 +632,12 @@ function deterministicCandidates(synthesis: SynthesisLayer, meta: Meta, keep: (r
   return out.slice(0, 8);
 }
 
-function buildCompetition(
+export function buildCompetition(
   raw: Record<string, unknown>,
   synthesis: SynthesisLayer,
   knowledge: KnowledgeLayer,
   meta: Meta,
-): { competition: ThesisCompetition; winnerRaw: RawCandidate; winnerDiscipline?: unknown } {
+): { competition: ThesisCompetition; winnerRaw: RawCandidate; winnerDiscipline?: unknown; coherence: SourceCoherence } {
   const validRefs = new Set(meta.sourceRefMap.map(r => r.ref));
   const keep = (refs: unknown): string[] => (Array.isArray(refs) ? refs.map(String).filter(r => validRefs.has(r)) : []);
   const QUAL = ['explains-unrelated', 'hidden-driver', 'reframes-topic'];
@@ -567,35 +665,78 @@ function buildCompetition(
         readerCuriosity: clampScore(ec.readerCuriosity), reframeStrength: clampScore(ec.reframeStrength),
         narrativeTension: clampScore(ec.narrativeTension), headlinePower: clampScore(ec.headlinePower),
       } : editorialFallback(scores, props, basisKind);
+      // Phase 4A — connection kind from Claude (validated) or derived.
+      const connectionKind: ConnectionKind = CONNECTION_KINDS.includes(String(c.connectionKind))
+        ? (c.connectionKind as ConnectionKind)
+        : deriveConnectionKind(basisKind, grounding, props, refs.length);
       // Phase 10D.2 — hard-cap the internal rationale (never user-facing). Phase 11C: 180→120.
-      return { thesis: String(c.thesis), reframe: String(c.reframe), basisKind, grounding, sourceRefs: refs, rationale: truncate(String(c.rationale ?? c.thesis), 120), qualifyingProperties: props, scores, editorialScores };
+      return { thesis: String(c.thesis), reframe: String(c.reframe), basisKind, grounding, sourceRefs: refs, rationale: truncate(String(c.rationale ?? c.thesis), 120), qualifyingProperties: props, scores, editorialScores, connectionKind };
     });
 
   if (cands.length === 0) cands = deterministicCandidates(synthesis, meta, keep);
+
+  // Phase 4A — coherence (deterministic). lowCoherence gates the scoring changes
+  // below; it is PERMISSIVE (only score < 55, i.e. label 'low'/'multi-topic') so
+  // 'coherent' and 'partial' cases keep the exact 10D behavior.
+  let coherence = computeCoherence(raw, synthesis, meta, cands);
+  const lowCoherence = !meta.singleSource && coherence.score < 55;
 
   let candidates: CandidateAngle[] = cands.map(c => ({
     thesis: c.thesis, reframe: c.reframe, grounding: c.grounding, sourceRefs: c.sourceRefs,
     rationale: c.rationale, qualifyingProperties: c.qualifyingProperties, scores: c.scores,
     overallValue: computeOverall(c.scores),
     editorialScores: c.editorialScores, editorialValue: computeEditorial(c.editorialScores),
+    connectionKind: c.connectionKind,
   }));
 
-  // Analytical floor: a finalist must explain unrelated sources, reveal a hidden
-  // driver, or reframe the topic (the 10D qualifying rule).
-  const qualifies = (c: CandidateAngle) =>
-    c.qualifyingProperties.length > 0 &&
-    (c.sourceRefs.length >= 2 || c.qualifyingProperties.includes('reframes-topic') || c.qualifyingProperties.includes('hidden-driver'));
-  // Cross-source GATE (Phase 10D.1 safeguard): in a multi-source case a finalist
-  // must genuinely require ≥2 sources. Single-source theses can never be finalists here.
-  const crossSourceOK = (c: CandidateAngle) => meta.singleSource || c.sourceRefs.length >= 2;
+  // Phase 4A — when coherence is LOW, penalize fake roundups and stop rewarding
+  // breadth. When coherence is OK (default), penalty is 0 and behavior is IDENTICAL
+  // to 10D. Hidden-driver (single_mechanism), tension, and single_cluster are never
+  // penalized — we kill roundups, not insight.
+  // Phase 4A.1 — a fake connection is a roundup, a forced_synthesis, OR (when
+  // coherence is low) an abstract productive_tension that spans ALL sources across
+  // ≥2 themes (a forced tension mislabeled as productive).
+  const themeCount4a1 = coherence.dominantThemes.length;
+  const isFakeConnection = (i: number): boolean => {
+    const k = cands[i].connectionKind;
+    if (FAKE_KINDS.has(k)) return true;
+    if (lowCoherence && k === 'productive_tension' && candidates[i].sourceRefs.length >= meta.sourceCount && themeCount4a1 >= 2) return true;
+    return false;
+  };
+  const coherencePenalty = (i: number): number => {
+    if (!lowCoherence) return 0;
+    if (isFakeConnection(i)) return 4;
+    if (candidates[i].qualifyingProperties.includes('explains-unrelated') && cands[i].connectionKind !== 'single_mechanism') return 2;
+    return 0;
+  };
+  const effValue = (i: number): number => candidates[i].overallValue - coherencePenalty(i);
 
-  // ── Analytical comparator (the 10D ordering) — extracted so the Phase 11C cap and
-  //    the Stage-1 ranking below use IDENTICAL scoring logic. ──
+  // Analytical floor: a finalist must explain unrelated sources, reveal a hidden
+  // driver, or reframe the topic (the 10D rule) — coherence-aware in 4A.
+  const qualifies = (i: number): boolean => {
+    const c = candidates[i];
+    let q =
+      c.qualifyingProperties.length > 0 &&
+      (c.sourceRefs.length >= 2 || c.qualifyingProperties.includes('reframes-topic') || c.qualifyingProperties.includes('hidden-driver'));
+    if (lowCoherence) {
+      if (isFakeConnection(i)) q = false;                               // roundups / forced tensions never qualify when incoherent
+      if (cands[i].connectionKind === 'single_cluster' && c.overallValue >= 6) q = true;   // a strong single-cluster thesis may win
+    }
+    return q;
+  };
+  // Cross-source GATE: a multi-source finalist must require ≥2 sources — RELAXED in
+  // 4A so a strong single-cluster thesis can win when coherence is low.
+  const crossSourceOK = (i: number): boolean =>
+    meta.singleSource || candidates[i].sourceRefs.length >= 2 || (lowCoherence && cands[i].connectionKind === 'single_cluster');
+
+  // ── Analytical comparator. When coherence is OK, identical to 10D (effValue ==
+  //    overallValue, crossSourceCoverage tiebreak retained). When low, roundups are
+  //    de-valued and breadth (crossSourceCoverage) is NOT rewarded. ──
   const byAnalytical = (a: number, b: number): number => {
-    const qa = qualifies(candidates[a]) ? 1 : 0, qb = qualifies(candidates[b]) ? 1 : 0;
+    const qa = qualifies(a) ? 1 : 0, qb = qualifies(b) ? 1 : 0;
     if (qa !== qb) return qb - qa;
-    if (candidates[b].overallValue !== candidates[a].overallValue) return candidates[b].overallValue - candidates[a].overallValue;
-    if (candidates[b].scores.crossSourceCoverage !== candidates[a].scores.crossSourceCoverage) return candidates[b].scores.crossSourceCoverage - candidates[a].scores.crossSourceCoverage;
+    if (effValue(b) !== effValue(a)) return effValue(b) - effValue(a);
+    if (!lowCoherence && candidates[b].scores.crossSourceCoverage !== candidates[a].scores.crossSourceCoverage) return candidates[b].scores.crossSourceCoverage - candidates[a].scores.crossSourceCoverage;
     return candidates[b].scores.novelty - candidates[a].scores.novelty;
   };
 
@@ -623,10 +764,10 @@ function buildCompetition(
   // ── Stage 2 — editorial funnel (Phase 10D.1) ──
   // Eligible = qualifying + cross-source gate. Finalists = MORE INCLUSIVE of
   // {top-3 by analytical} and {within Δ1.0 of the max analytical value}.
-  const eligible = analyticalOrder.filter(i => qualifies(candidates[i]) && crossSourceOK(candidates[i]));
+  const eligible = analyticalOrder.filter(i => qualifies(i) && crossSourceOK(i));
   const pool = eligible.length ? eligible : analyticalOrder;   // safety: never empty
-  const maxA = candidates[pool[0]].overallValue;
-  const within = pool.filter(i => maxA - candidates[i].overallValue <= 1.0);
+  const maxA = effValue(pool[0]);
+  const within = pool.filter(i => maxA - effValue(i) <= 1.0);
   const top3 = pool.slice(0, 3);
   const finalists = within.length >= top3.length ? within : top3;
 
@@ -690,8 +831,20 @@ function buildCompetition(
   // Use Claude's winnerDiscipline only if it nominated the SAME thesis that won;
   // otherwise 10C discipline is built deterministically for the editorial winner.
   // (`recommended` was captured + remapped to capped indices above.)
+  // Phase 4A.1 — if the editorial winner is itself a fake connection (the gate did
+  // not fire, but the best thesis is still a roundup / forced tension), downgrade
+  // the PERSISTED coherence so the signal reflects reality.
+  if (!meta.singleSource && FAKE_KINDS.has(cands[winnerIndex].connectionKind)) {
+    coherence = {
+      ...coherence,
+      score: Math.min(coherence.score, 45),
+      label: coherence.label === 'multi-topic' ? 'multi-topic' : 'low',
+      forcedSynthesisRisk: 'high',
+    };
+  }
+
   const winnerDiscipline = recommended === winnerIndex ? tc?.winnerDiscipline : undefined;
-  return { competition, winnerRaw: cands[winnerIndex], winnerDiscipline };
+  return { competition, winnerRaw: cands[winnerIndex], winnerDiscipline, coherence };
 }
 
 function angleFromCandidate(c: RawCandidate, synthesis: SynthesisLayer, knowledge: KnowledgeLayer, meta: Meta): PrimaryAngle {
@@ -724,11 +877,11 @@ export function selectThesis(
   synthesis: SynthesisLayer,
   knowledge: KnowledgeLayer,
   meta: Meta,
-): { primaryAngle: PrimaryAngle; competition: ThesisCompetition } {
-  const { competition, winnerRaw, winnerDiscipline } = buildCompetition(raw, synthesis, knowledge, meta);
+): { primaryAngle: PrimaryAngle; competition: ThesisCompetition; coherence: SourceCoherence } {
+  const { competition, winnerRaw, winnerDiscipline, coherence } = buildCompetition(raw, synthesis, knowledge, meta);
   const base = winnerRaw ? angleFromCandidate(winnerRaw, synthesis, knowledge, meta) : selectAngleBase(raw, synthesis, knowledge, meta);
   const primaryAngle: PrimaryAngle = { ...base, thesisDiscipline: buildThesisDiscipline(synthesis, meta, base, winnerDiscipline) };
-  return { primaryAngle, competition };
+  return { primaryAngle, competition, coherence };
 }
 
 /** Validate Claude's synthesis output and assemble the v1-valid v2 superset. */
@@ -807,7 +960,7 @@ export function finalizeSynthesis(raw: Record<string, unknown>, input: Synthesis
 
   // Phase 10D — run the thesis competition; the winner becomes the spine (10B)
   // and carries its discipline (10C). Diagnostics stored on the synthesis layer.
-  const { primaryAngle, competition } = selectThesis(raw, synthesis, knowledge, meta);
+  const { primaryAngle, competition, coherence } = selectThesis(raw, synthesis, knowledge, meta);
 
   const v2: ResearchContextV2 = {
     runId:    input.run.id,
@@ -823,7 +976,7 @@ export function finalizeSynthesis(raw: Record<string, unknown>, input: Synthesis
     contradictions:  v1Contradictions,
     risks:           synthesis.openQuestions,
     confidenceScore: meta.synthesisConfidence,
-    meta,
+    meta: { ...meta, coherence },   // Phase 4A — persist the coherence assessment
     knowledge,
     synthesis: { ...synthesis, primaryAngle, thesisCompetition: competition },
   };
