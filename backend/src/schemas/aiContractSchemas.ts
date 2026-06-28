@@ -637,5 +637,15 @@ export const GeneratorInputSchema = z.object({
   // invariant fact floor). Optional for backward-compat: legacy inputs without a
   // profile fall back to the default structural guidance in the system prompt.
   voiceProfile: VoiceProfileSchema.optional(),
+  // Phase 4A.2 — coherence scope. When lowCoherence, research dropped sources on
+  // purpose and the projection above is scoped to inScopeSourceRefs only; the
+  // generator must not reference out-of-scope sources. Optional (absent on legacy /
+  // mock / high-coherence runs → no scope notice, all-source behavior unchanged).
+  coherence: z.object({
+    label:              z.string(),
+    forcedSynthesisRisk: z.string(),
+    lowCoherence:       z.boolean(),
+    inScopeSourceRefs:  z.array(z.string()),
+  }).optional(),
 });
 export type GeneratorInput = z.infer<typeof GeneratorInputSchema>;

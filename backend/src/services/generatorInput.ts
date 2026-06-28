@@ -5,8 +5,70 @@ import {
   FactCheckReportSchema,
   type GeneratorInput,
   type ContentPlatform,
+  type ResearchContextV2,
 } from '../schemas/aiContractSchemas';
 import { resolveVoiceProfile } from './voice/voiceProfileResolver';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4A.2 — coherence-aware evidence scoping.
+//
+// When Research flagged the source set as low-coherence (the gate fired: the
+// winning thesis intentionally used ONE cluster and dropped the rest), the
+// generator must see ONLY the winning cluster's evidence — otherwise dropped
+// sources reappear as "supporting facts" / "verified" claims. High-coherence runs
+// keep the all-source behavior exactly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CoherenceLike = { label?: string; forcedSynthesisRisk?: string } | null | undefined;
+
+export function isLowCoherence(c: CoherenceLike): boolean {
+  if (!c) return false;
+  return c.label === 'low' || c.label === 'multi-topic' || c.forcedSynthesisRisk === 'high';
+}
+
+const dedupeStr = (a: string[]): string[] => [...new Set(a.filter(Boolean))];
+const normFact = (s: string): string => s.toLowerCase().replace(/[^a-z0-9֐-׿ ]/gi, '').replace(/\s+/g, ' ').trim();
+
+// Drop claims whose normalized text overlaps a normalized out-of-scope keyFact
+// statement (either contains the other). Length guard avoids trivial matches.
+export function dropOutOfScope<T extends { claim: string }>(items: T[], outOfScopeStatements: string[]): T[] {
+  const outNorms = dedupeStr(outOfScopeStatements.map(normFact)).filter(s => s.length >= 12);
+  if (outNorms.length === 0) return items;
+  return items.filter(it => {
+    const c = normFact(it.claim);
+    return c.length === 0 || !outNorms.some(o => c.includes(o) || o.includes(c));
+  });
+}
+
+interface CoherenceScope {
+  importantClaims: string[];
+  mainTopics: string[];
+  keyInsights: string[];
+  outOfScopeStatements: string[];
+  scopedSources: ContentSource[];
+}
+
+// Build the in-scope projection from the v2 structured layers (which carry source
+// refs) + the run sources. Returns null when there is nothing to scope to.
+function computeCoherenceScope(rcV2: ResearchContextV2, inScopeRefs: string[], runSources: ContentSource[]): CoherenceScope | null {
+  if (inScopeRefs.length === 0) return null;
+  const inSet = new Set(inScopeRefs);
+  const k = rcV2.knowledge;
+  const s = rcV2.synthesis;
+  const inFacts = k.keyFacts.filter(f => f.sourceRefs.some(r => inSet.has(r)));
+  const outFacts = k.keyFacts.filter(f => !f.sourceRefs.some(r => inSet.has(r)));
+  const inSubjects = k.coreSubjects.filter(c => c.sourceRefs.some(r => inSet.has(r)));
+  const inInsights = s.nonObviousInsights.filter(n => n.sourceRefs.some(r => inSet.has(r)));
+  const inConns = s.sourceConnections.filter(c => c.sourceRefs.some(r => inSet.has(r)));
+  const inScopeSourceIds = new Set(rcV2.meta.sourceRefMap.filter(m => inSet.has(m.ref)).map(m => m.sourceId));
+  return {
+    importantClaims: dedupeStr(inFacts.map(f => f.statement)).slice(0, 8),
+    mainTopics: dedupeStr(inSubjects.map(c => c.name)).slice(0, 10),
+    keyInsights: dedupeStr([...inInsights.map(n => n.insight), ...inConns.map(c => c.description)]).slice(0, 10),
+    outOfScopeStatements: outFacts.map(f => f.statement),
+    scopedSources: runSources.filter(src => inScopeSourceIds.has(src.id)),
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Generator Input projection (Phase 9)
@@ -107,6 +169,23 @@ export function buildGeneratorInput(
   const researchGeneratorVersion = rcV2.success ? rcV2.data.meta.generatorVersion : undefined;
   const researchDegraded = rcV2.success ? rcV2.data.meta.degraded === true : false;
 
+  // Phase 4A.2 — coherence scoping. Only when research flagged low coherence AND a
+  // v2 winner exists do we scope evidence to the winner's cluster.
+  const coherenceMeta = rcV2.success ? rcV2.data.meta.coherence : undefined;
+  const lowCoherence = isLowCoherence(coherenceMeta);
+  const inScopeRefs = lowCoherence && primaryAngle ? primaryAngle.synthesisBasis.sourceRefs : [];
+  const scope = lowCoherence && rcV2.success
+    ? computeCoherenceScope(rcV2.data, inScopeRefs, runSources)
+    : null;
+
+  // Fact-check lists, scoped to the winning cluster in low-coherence cases so dropped
+  // sources' claims are never presented as safe-to-state material.
+  const verifiedItems   = fcr.verifiedClaims.slice(0, 15).map(c => ({ claim: c.claim, confidenceScore: c.confidenceScore }));
+  const uncertainItems  = fcr.uncertainClaims.slice(0, 10).map(c => ({ claim: c.claim, note: c.notes }));
+  const conflictItems   = fcr.conflictingClaims.map(c => ({ claim: c.claim }));
+  const unsupportItems  = (fcr.unsupportedClaims ?? []).slice(0, 10).map(c => ({ claim: c.claim }));
+  const scopeFacts = <T extends { claim: string }>(items: T[]): T[] => (scope ? dropOutOfScope(items, scope.outOfScopeStatements) : items);
+
   return {
     contract: {
       platform,
@@ -134,9 +213,12 @@ export function buildGeneratorInput(
     },
     research: {
       summary:         rc.summary,
-      mainTopics:      rc.mainTopics.slice(0, 10),
-      keyInsights:     rc.keyInsights.slice(0, 10),
-      importantClaims: rc.importantClaims.slice(0, 8),
+      // Phase 4A.2 — scoped to the winning cluster when low coherence (the spine's
+      // SUPPORTING MATERIAL pulls from these; summary is not rendered when a
+      // primaryAngle exists, which is always the case for low coherence).
+      mainTopics:      scope ? scope.mainTopics      : rc.mainTopics.slice(0, 10),
+      keyInsights:     scope ? scope.keyInsights     : rc.keyInsights.slice(0, 10),
+      importantClaims: scope ? scope.importantClaims : rc.importantClaims.slice(0, 8),
       suggestedAngles: rc.suggestedAngles.slice(0, 6),
       suggestedHooks:  rc.suggestedHooks.slice(0, 5),
       contradictions:  rc.contradictions,
@@ -145,16 +227,20 @@ export function buildGeneratorInput(
       primaryAngle,
     },
     facts: {
-      verified:    fcr.verifiedClaims.slice(0, 15).map(c => ({ claim: c.claim, confidenceScore: c.confidenceScore })),
-      uncertain:   fcr.uncertainClaims.slice(0, 10).map(c => ({ claim: c.claim, note: c.notes })),
-      conflicting: fcr.conflictingClaims.map(c => c.claim),
+      verified:    scopeFacts(verifiedItems),
+      uncertain:   scopeFacts(uncertainItems),
+      conflicting: scopeFacts(conflictItems).map(c => c.claim),
       // Phase 3B — unsupported claims (never state as fact); editorial integrity
       // notes are merged into warnings so the generator sees them.
-      unsupported: (fcr.unsupportedClaims ?? []).slice(0, 10).map(c => c.claim),
+      unsupported: scopeFacts(unsupportItems).map(c => c.claim),
       warnings:    [...fcr.warnings, ...(fcr.editorialWarnings ?? [])],
       overallConfidenceScore: fcr.overallConfidenceScore,
     },
-    sources: aggregateSources(runSources),
+    // Phase 4A.2 — aggregate intelligence from the in-scope sources only when low coherence.
+    sources: aggregateSources(scope ? scope.scopedSources : runSources),
+    coherence: coherenceMeta
+      ? { label: coherenceMeta.label, forcedSynthesisRisk: coherenceMeta.forcedSynthesisRisk, lowCoherence, inScopeSourceRefs: inScopeRefs }
+      : undefined,
     // Phase 2B — deterministic structural voice resolved from the case settings.
     // ContentCase is VoiceCaseInput-compatible. Governs HOW the piece is built;
     // never relaxes the fact floor.

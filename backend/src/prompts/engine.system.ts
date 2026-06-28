@@ -190,8 +190,19 @@ export function renderContext(input: GeneratorInput): string {
     r.contradictions.length ? `Contradictions to avoid:\n${list(r.contradictions)}` : '',
   ];
 
+  // Phase 4A.2 — low-coherence scope notice. Research deliberately dropped the
+  // out-of-scope sources; the evidence below is already scoped to the winning
+  // cluster, and this tells the generator not to reach for the dropped topics.
+  const scopeNotice = input.coherence?.lowCoherence ? [
+    '## SCOPE NOTICE (low source coherence)',
+    'This source set spans unrelated topics. LumAI selected the strongest coherent content direction — the PRIMARY ANGLE above. Use ONLY the in-scope material below; do NOT reference, blend, or mention the other topics or sources in this case unless the PRIMARY ANGLE explicitly requires it.',
+    input.coherence.inScopeSourceRefs.length ? `In-scope sources: ${input.coherence.inScopeSourceRefs.join(', ')}.` : '',
+    '',
+  ] : [];
+
   return [
     ...spine,
+    ...scopeNotice,
     '## CASE BRIEF',
     `Title: ${b.caseTitle}`,
     `Goal: ${b.contentGoal}${b.goalCustom ? ` (${b.goalCustom})` : ''}${b.goals ? ` — ${b.goals}` : ''}`,
