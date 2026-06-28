@@ -1,0 +1,4 @@
+# Phase 3A eval harness — generated outputs are not source.
+artifacts/
+report/
+dist-eval/
