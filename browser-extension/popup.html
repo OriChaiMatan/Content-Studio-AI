@@ -8,75 +8,128 @@
 </head>
 <body>
   <div class="popup">
+    <!-- Header (always visible) -->
     <header class="header">
+      <svg class="brand-mark brand-mark--sm" viewBox="0 0 128 128" fill="none" aria-hidden="true">
+        <rect width="128" height="128" rx="28" fill="#FFFFFF"/>
+        <path d="M24 36V104H92" stroke="#094CB2" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <path d="M92 10L99 27L112 34L99 41L92 58L85 41L72 34L85 27Z" fill="#094CB2"/>
+      </svg>
       <span class="brand">LumAI</span>
-      <span class="subtitle">Save source</span>
+      <svg class="gear" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M19.4 12a7.4 7.4 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7.3 7.3 0 0 0-2-1.2l-.4-2.6h-4l-.4 2.6a7.3 7.3 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      </svg>
     </header>
 
-    <!-- Page being saved -->
-    <section class="page" id="page">
-      <div class="field">
-        <label>Title</label>
-        <div class="value" id="page-title">…</div>
-      </div>
-      <div class="field">
-        <label>URL</label>
-        <div class="value url" id="page-url">…</div>
-      </div>
-    </section>
-
-    <!-- States (exactly one visible at a time) -->
     <main class="body">
-      <!-- loading -->
-      <div class="state" id="state-loading">
-        <div class="spinner"></div>
-        <p class="muted" id="loading-text">Loading…</p>
+      <!-- READY / AUTHENTICATED -->
+      <div class="state hidden" id="state-ready">
+        <div class="intro">
+          <h1 class="title">Save source to LumAI</h1>
+          <p class="subtitle">Add the current page as a source to one of your cases.</p>
+        </div>
+
+        <div class="field">
+          <label>Title</label>
+          <div class="readonly" id="page-title">…</div>
+        </div>
+        <div class="field">
+          <label>URL</label>
+          <div class="readonly url" id="page-url">…</div>
+        </div>
+        <div class="field">
+          <label for="case-select">Case</label>
+          <div class="select-wrap">
+            <svg class="select-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2H19a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 19 18H4.5A1.5 1.5 0 0 1 3 16.5v-9Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            <select id="case-select"></select>
+            <svg class="select-caret" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <button class="btn primary" id="btn-save">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3Z" fill="currentColor"/><path d="M18.5 14l.8 2.2L21.5 17l-2.2.8-.8 2.2-.8-2.2L15.5 17l2.2-.8.8-2.2Z" fill="currentColor"/></svg>
+          Save source
+        </button>
+
+        <div class="status status--ok">
+          <span class="dot dot--ok"></span> You're connected to LumAI
+        </div>
       </div>
 
-      <!-- unauthenticated -->
+      <!-- UNAUTHENTICATED -->
       <div class="state hidden" id="state-unauth">
-        <p>Connect this extension to your LumAI account to start saving sources.</p>
-        <button class="btn primary" id="btn-login">Open LumAI Login</button>
-        <button class="btn ghost" id="btn-recheck">I've logged in — retry</button>
+        <svg class="brand-mark brand-mark--lg" viewBox="0 0 128 128" fill="none" aria-hidden="true">
+          <rect width="128" height="128" rx="28" fill="#FFFFFF"/>
+          <path d="M24 36V104H92" stroke="#094CB2" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M92 10L99 27L112 34L99 41L92 58L85 41L72 34L85 27Z" fill="#094CB2"/>
+        </svg>
+        <div class="hero-text">
+          <h1 class="title">Connect to LumAI</h1>
+          <p class="subtitle center">Sign in to your LumAI account to save sources and access your cases.</p>
+        </div>
+        <button class="btn primary" id="btn-login">
+          Open LumAI
+          <svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 5h5v5M19 5l-7 7M11 5H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <p class="hint center">Having trouble? <a id="btn-recheck" class="link" role="button" tabindex="0">Try again</a></p>
       </div>
 
-      <!-- no cases -->
+      <!-- LOADING -->
+      <div class="state hidden" id="state-loading">
+        <div class="spinner"></div>
+        <div class="hero-text">
+          <h1 class="title center">Loading</h1>
+          <p class="subtitle center" id="loading-text">Preparing your cases…</p>
+        </div>
+        <div class="pill"><span class="i">i</span> Please wait a moment</div>
+      </div>
+
+      <!-- NO CASES -->
       <div class="state hidden" id="state-no-cases">
-        <p>You don't have any content cases yet.</p>
+        <div class="empty-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2H19a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 19 18H4.5A1.5 1.5 0 0 1 3 16.5v-9Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="hero-text">
+          <h1 class="title center">No cases yet</h1>
+          <p class="subtitle center">Create a content case in LumAI, then come back to save sources to it.</p>
+        </div>
         <button class="btn primary" id="btn-open-app">Open LumAI</button>
       </div>
 
-      <!-- unsupported page (chrome://, blank, etc.) -->
+      <!-- UNSUPPORTED PAGE -->
       <div class="state hidden" id="state-no-tab">
-        <p class="muted">Open a normal web page to save it as a source.</p>
-      </div>
-
-      <!-- ready -->
-      <div class="state hidden" id="state-ready">
-        <div class="field">
-          <label for="case-select">Case</label>
-          <select id="case-select"></select>
+        <div class="empty-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M4 9h16" stroke="currentColor" stroke-width="1.5"/></svg>
         </div>
-        <button class="btn primary" id="btn-save">Save</button>
+        <p class="subtitle center">Open a normal web page to save it as a source.</p>
       </div>
 
-      <!-- saving -->
+      <!-- SAVING -->
       <div class="state hidden" id="state-saving">
         <div class="spinner"></div>
-        <p class="muted">Saving…</p>
+        <p class="subtitle center">Saving your source…</p>
       </div>
 
-      <!-- success -->
+      <!-- SUCCESS -->
       <div class="state hidden" id="state-success">
-        <div class="check">✓</div>
-        <p>Source added successfully.</p>
+        <div class="check" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="m5 12.5 4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="hero-text">
+          <h1 class="title center">Source added</h1>
+          <p class="subtitle center">It's now part of your LumAI case.</p>
+        </div>
         <button class="btn ghost" id="btn-done">Done</button>
       </div>
 
-      <!-- error -->
+      <!-- ERROR -->
       <div class="state hidden" id="state-error">
-        <p class="error-text" id="error-text">Something went wrong.</p>
-        <button class="btn primary" id="btn-retry">Retry</button>
+        <div class="error-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 3 2 20h20L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        </div>
+        <p class="subtitle center error-text" id="error-text">Something went wrong.</p>
+        <button class="btn primary" id="btn-retry">Try again</button>
       </div>
     </main>
   </div>

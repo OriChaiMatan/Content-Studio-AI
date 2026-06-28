@@ -1,55 +1,53 @@
-import { useId } from 'react';
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Official LumAI brand mark — Concept 02 / PRISM (final approved logo).
-// One incoming signal refracts through a prism into many outputs: the
-// source → multi-platform flow made literal. Colors, proportions, and geometry
-// are fixed per the approved asset; only the render `size` varies.
+// Official LumAI brand mark — the "L + arrow + spark" glyph in LumAI blue
+// (#094CB2) on a white rounded card. Self-contained (carries its own background),
+// so it reads cleanly on any surface — no dark chip wrapper required.
 //
-// The mark is designed for a dark backdrop (its incoming-signal stroke is near
-// white), so callers place it inside a dark chip to keep it balanced/visible on
-// the app's light surfaces — see `LumaiLogoChip`.
+// `LumAILogoMark` is the canonical component. `LumaiLogo` / `LumaiLogoChip` are
+// kept as thin aliases so existing call sites (sidebar, auth, dashboard) need no
+// changes — the chip IS the mark now.
 // ─────────────────────────────────────────────────────────────────────────────
-export function LumaiLogo({ size = 40, className = '' }: { size?: number; className?: string }) {
-  // Unique gradient id per instance so multiple logos on one page never collide.
-  const gid = useId();
+export function LumAILogoMark({ size = 32, className = '' }: { size?: number; className?: string }) {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 80 80"
+      viewBox="0 0 128 128"
       fill="none"
+      xmlns="http://www.w3.org/2000/svg"
       className={className}
       role="img"
-      aria-label="LumAI"
+      aria-label="LumAI logo"
     >
-      <defs>
-        <linearGradient id={gid} x1="28" y1="18" x2="52" y2="60" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#9FC2FF" />
-          <stop offset="1" stopColor="#A87BFF" />
-        </linearGradient>
-      </defs>
-      {/* incoming signal */}
-      <path d="M6 40 H30" stroke="#E8EBF2" strokeWidth="3" strokeLinecap="round" />
-      {/* prism */}
-      <path d="M40 16 L58 58 H22 Z" stroke={`url(#${gid})`} strokeWidth="3.5" strokeLinejoin="round" fill="rgba(120,140,255,0.06)" />
-      {/* refracted outputs */}
-      <path d="M50 40 L76 28" stroke="#5B9DFF" strokeWidth="3" strokeLinecap="round" />
-      <path d="M50 43 L76 41" stroke="#56D6E0" strokeWidth="3" strokeLinecap="round" />
-      <path d="M50 46 L76 54" stroke="#A87BFF" strokeWidth="3" strokeLinecap="round" />
+      <rect width="128" height="128" rx="28" fill="#FFFFFF" />
+
+      {/* bold rounded "L" corner-bracket */}
+      <path
+        d="M24 36V104H92"
+        stroke="#094CB2"
+        strokeWidth="20"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+
+      {/* 4-point spark */}
+      <path
+        d="M92 10L99 27L112 34L99 41L92 58L85 41L72 34L85 27Z"
+        fill="#094CB2"
+      />
     </svg>
   );
 }
 
-// The brand mark on its intended dark backdrop, as a rounded chip. `box` is the
-// chip's side length; the mark is inset for balanced padding.
+// Back-compat alias: the bare mark.
+export function LumaiLogo({ size = 40, className = '' }: { size?: number; className?: string }) {
+  return <LumAILogoMark size={size} className={className} />;
+}
+
+// Back-compat alias: previously a blue chip wrapping the old mark. The new mark
+// carries its own white rounded card, so the chip simply renders the mark at the
+// requested box size. `className` (margins/rounding from call sites) passes through.
 export function LumaiLogoChip({ box = 40, className = '' }: { box?: number; className?: string }) {
-  return (
-    <div
-      className={`flex items-center justify-center rounded-xl bg-[#094CB2] shrink-0 ${className}`}
-      style={{ width: box, height: box }}
-    >
-      <LumaiLogo size={Math.round(box * 0.66)} />
-    </div>
-  );
+  return <LumAILogoMark size={box} className={`shrink-0 ${className}`} />;
 }

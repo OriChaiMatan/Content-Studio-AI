@@ -1,15 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
-  <!-- LumAI brand mark — Concept 02 / PRISM, on its intended dark backdrop -->
-  <rect width="80" height="80" rx="18" fill="#094CB2"/>
-  <defs>
-    <linearGradient id="lumai-fav" x1="28" y1="18" x2="52" y2="60" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#9FC2FF"/>
-      <stop offset="1" stop-color="#A87BFF"/>
-    </linearGradient>
-  </defs>
-  <path d="M6 40 H30" stroke="#E8EBF2" stroke-width="3" stroke-linecap="round"/>
-  <path d="M40 16 L58 58 H22 Z" stroke="url(#lumai-fav)" stroke-width="3.5" stroke-linejoin="round" fill="rgba(120,140,255,0.06)"/>
-  <path d="M50 40 L76 28" stroke="#5B9DFF" stroke-width="3" stroke-linecap="round"/>
-  <path d="M50 43 L76 41" stroke="#56D6E0" stroke-width="3" stroke-linecap="round"/>
-  <path d="M50 46 L76 54" stroke="#A87BFF" stroke-width="3" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" aria-label="LumAI">
+  <!-- LumAI brand mark — bold rounded "L" corner-bracket + 4-point spark, LumAI blue (#094CB2). -->
+  <rect width="128" height="128" rx="28" fill="#FFFFFF"/>
+  <path d="M24 36V104H92" stroke="#094CB2" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M92 10L99 27L112 34L99 41L92 58L85 41L72 34L85 27Z" fill="#094CB2"/>
 </svg>
