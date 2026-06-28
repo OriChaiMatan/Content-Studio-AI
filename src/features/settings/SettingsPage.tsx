@@ -220,6 +220,78 @@ function TelegramCard() {
   );
 }
 
+// ── Browser Extension — local MVP card + info modal (no real install yet) ─────
+function BrowserExtensionCard() {
+  const [showInfo, setShowInfo] = useState(false);
+
+  return (
+    <>
+      <div className="mt-4 rounded-2xl border border-outline-variant/40 overflow-hidden shadow-sm">
+        <div className="flex items-start gap-4 p-5 bg-gradient-to-br from-blue-50 to-surface-container-lowest">
+          <div className="w-12 h-12 rounded-xl bg-[#094CB2] flex items-center justify-center shrink-0 shadow-sm">
+            <Icon name="extension" className="text-white" />
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="text-[16px] font-semibold text-on-surface">Browser Extension</h4>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                Local MVP
+              </span>
+            </div>
+            <p className="text-[13px] text-on-surface-variant mt-1 max-w-md">
+              Save articles, posts, and webpages directly from your browser into LumAI.
+            </p>
+
+            <div className="mt-4 rounded-xl bg-surface-container-lowest/70 border border-outline-variant/30 p-4">
+              <div className="space-y-2">
+                <DetailRow label="Browser" value="Chrome" />
+                <DetailRow label="Capture" value="Current page URL + title" />
+                <DetailRow label="Status" value="Local testing" />
+              </div>
+              <div className="mt-3">
+                <Button size="sm" onClick={() => setShowInfo(true)}>
+                  <Icon name="extension" size="sm" />
+                  Install Extension
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showInfo && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Browser Extension"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowInfo(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-surface-container-lowest border border-outline-variant/40 shadow-xl p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-[#094CB2] flex items-center justify-center shrink-0">
+                <Icon name="extension" size="sm" className="text-white" />
+              </div>
+              <h4 className="text-[16px] font-semibold text-on-surface">Browser Extension</h4>
+            </div>
+            <p className="text-[13px] text-on-surface-variant leading-relaxed">
+              The browser extension is currently available for local testing. Production installation will be available soon.
+            </p>
+            <div className="mt-5 flex justify-end">
+              <Button size="sm" onClick={() => setShowInfo(false)}>Got it</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Notifications (Coming Soon) — static, non-interactive row ─────────────────
 // Mirrors the real Toggle row layout but is purely presentational: no onChange,
 // no state, no API. Off + muted so users don't think notifications already work.
@@ -326,6 +398,7 @@ export function SettingsPage() {
             <SectionCard title={t('settings.integrations')} icon="hub">
               <WhatsAppCard />
               <TelegramCard />
+              <BrowserExtensionCard />
 
               {/* Future channels — signals extensibility */}
               <div className="mt-5 pt-5 border-t border-outline-variant/30">
