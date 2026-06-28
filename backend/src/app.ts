@@ -29,8 +29,10 @@ const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. curl, Postman)
-      if (!origin || allowedOrigins.includes(origin)) {
+      // Allow requests with no origin (e.g. curl, Postman) and the LumAI web app.
+      // Also allow the Chrome extension (chrome-extension://<id>), which calls the
+      // same APIs with an Authorization: Bearer token (it cannot send the lax cookie).
+      if (!origin || allowedOrigins.includes(origin) || origin.startsWith('chrome-extension://')) {
         callback(null, true);
       } else {
         callback(new Error(`CORS: origin ${origin} is not allowed`));

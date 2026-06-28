@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>Save to LumAI</title>
+</head>
+<body>
+  <div class="popup">
+    <header class="header">
+      <span class="brand">LumAI</span>
+      <span class="subtitle">Save source</span>
+    </header>
+
+    <!-- Page being saved -->
+    <section class="page" id="page">
+      <div class="field">
+        <label>Title</label>
+        <div class="value" id="page-title">…</div>
+      </div>
+      <div class="field">
+        <label>URL</label>
+        <div class="value url" id="page-url">…</div>
+      </div>
+    </section>
+
+    <!-- States (exactly one visible at a time) -->
+    <main class="body">
+      <!-- loading -->
+      <div class="state" id="state-loading">
+        <div class="spinner"></div>
+        <p class="muted" id="loading-text">Loading…</p>
+      </div>
+
+      <!-- unauthenticated -->
+      <div class="state hidden" id="state-unauth">
+        <p>Connect this extension to your LumAI account to start saving sources.</p>
+        <button class="btn primary" id="btn-login">Open LumAI Login</button>
+        <button class="btn ghost" id="btn-recheck">I've logged in — retry</button>
+      </div>
+
+      <!-- no cases -->
+      <div class="state hidden" id="state-no-cases">
+        <p>You don't have any content cases yet.</p>
+        <button class="btn primary" id="btn-open-app">Open LumAI</button>
+      </div>
+
+      <!-- unsupported page (chrome://, blank, etc.) -->
+      <div class="state hidden" id="state-no-tab">
+        <p class="muted">Open a normal web page to save it as a source.</p>
+      </div>
+
+      <!-- ready -->
+      <div class="state hidden" id="state-ready">
+        <div class="field">
+          <label for="case-select">Case</label>
+          <select id="case-select"></select>
+        </div>
+        <button class="btn primary" id="btn-save">Save</button>
+      </div>
+
+      <!-- saving -->
+      <div class="state hidden" id="state-saving">
+        <div class="spinner"></div>
+        <p class="muted">Saving…</p>
+      </div>
+
+      <!-- success -->
+      <div class="state hidden" id="state-success">
+        <div class="check">✓</div>
+        <p>Source added successfully.</p>
+        <button class="btn ghost" id="btn-done">Done</button>
+      </div>
+
+      <!-- error -->
+      <div class="state hidden" id="state-error">
+        <p class="error-text" id="error-text">Something went wrong.</p>
+        <button class="btn primary" id="btn-retry">Retry</button>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

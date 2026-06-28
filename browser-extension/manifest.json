@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "LumAI — Save Source",
+  "version": "0.1.0",
+  "description": "Save the current page as a source into one of your LumAI content cases.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Save to LumAI"
+  },
+  "permissions": ["activeTab", "cookies"],
+  "host_permissions": [
+    "http://localhost:3001/*",
+    "http://localhost:5173/*",
+    "https://app.mrtrk.com/*"
+  ]
+}

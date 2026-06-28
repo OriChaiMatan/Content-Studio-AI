@@ -2,10 +2,26 @@ import type { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../lib/prisma';
 import { AUTH_COOKIE, verifyToken, clearAuthCookie } from '../../lib/auth';
 
+// Browser-extension support: the SAME stateless JWT may arrive in the httpOnly
+// cookie (web app, sameSite=lax) OR as `Authorization: Bearer <jwt>`. The Chrome
+// extension can't send the lax cookie cross-origin, so it reads the existing
+// cookie via chrome.cookies and forwards it here as a Bearer token. Additional
+// transport only — no new token type, no auth-architecture change.
+export function tokenFromRequest(req: Request): string | undefined {
+  const cookieToken = req.cookies?.[AUTH_COOKIE] as string | undefined;
+  if (cookieToken) return cookieToken;
+  const header = req.headers.authorization;
+  if (header && header.startsWith('Bearer ')) {
+    const bearer = header.slice('Bearer '.length).trim();
+    if (bearer) return bearer;
+  }
+  return undefined;
+}
+
 // Phase 12 — gate: reject unauthenticated requests and attach req.userId.
-// Reads the JWT from the httpOnly cookie set at login/register.
+// Reads the JWT from the httpOnly cookie set at login/register (or a Bearer header).
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const token = (req.cookies?.[AUTH_COOKIE] as string | undefined) ?? undefined;
+  const token = tokenFromRequest(req);
   const userId = token ? verifyToken(token) : null;
   if (!userId) {
     // If a token was PRESENT but failed verification (expired, or signed with a
