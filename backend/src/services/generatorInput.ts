@@ -148,7 +148,10 @@ export function buildGeneratorInput(
       verified:    fcr.verifiedClaims.slice(0, 15).map(c => ({ claim: c.claim, confidenceScore: c.confidenceScore })),
       uncertain:   fcr.uncertainClaims.slice(0, 10).map(c => ({ claim: c.claim, note: c.notes })),
       conflicting: fcr.conflictingClaims.map(c => c.claim),
-      warnings:    fcr.warnings,
+      // Phase 3B — unsupported claims (never state as fact); editorial integrity
+      // notes are merged into warnings so the generator sees them.
+      unsupported: (fcr.unsupportedClaims ?? []).slice(0, 10).map(c => c.claim),
+      warnings:    [...fcr.warnings, ...(fcr.editorialWarnings ?? [])],
       overallConfidenceScore: fcr.overallConfidenceScore,
     },
     sources: aggregateSources(runSources),

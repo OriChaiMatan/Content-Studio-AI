@@ -26,9 +26,7 @@ import {
   type GeneratedOutput,
   type ContentPlatform,
 } from '../schemas/aiContractSchemas';
-import {
-  generateFactCheckReport,
-} from './mockAiService';
+import { factCheckService } from './factCheckService';
 import { contentGeneratorService } from './contentGeneratorService';
 import { researchSynthesisService } from './researchSynthesisService';
 import { notificationService } from './notificationService';
@@ -268,7 +266,11 @@ export const pipelineService = {
         if (!rcParsed.success) {
           throw new Error(`Research context is missing or invalid: ${rcParsed.error.message}`);
         }
-        const report = generateFactCheckReport(activeRun, rcParsed.data, primarySources, contextSources);
+        // Phase 3B — real Claude fact check behind REAL_FACT_CHECK_ENABLED (fails
+        // CLOSED to a degraded, cautious report); mock when the flag is off.
+        const report = await factCheckService.generateReport({
+          run: activeRun, researchContext: rcParsed.data, primarySources, contextSources,
+        });
         contractResult = { ok: true, factCheckReport: report };
 
       } else {

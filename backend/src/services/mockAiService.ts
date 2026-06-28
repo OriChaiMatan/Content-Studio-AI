@@ -323,6 +323,10 @@ export function generateFactCheckReport(
     verifiedClaims:  verified,
     uncertainClaims: uncertain,
     conflictingClaims: [],
+    // Phase 3B — the mock never computed these; empty keeps the flag-off path's
+    // behavior identical while satisfying the extended schema.
+    unsupportedClaims: [],
+    editorialWarnings: [],
 
     warnings: [
       ...(uncertain.length > 0 ? [`${uncertain.length} claim${uncertain.length !== 1 ? 's' : ''} could not be fully verified — recommend reviewing before publishing.`] : []),

@@ -297,6 +297,9 @@ export const FactCheckClaimSchema = z.object({
 
 export type FactCheckClaim = z.infer<typeof FactCheckClaimSchema>;
 
+export const FactCheckRiskLevelSchema = z.enum(['low', 'medium', 'high']);
+export type FactCheckRiskLevel = z.infer<typeof FactCheckRiskLevelSchema>;
+
 export const FactCheckReportSchema = z.object({
   runId:                   z.string().min(1),
   caseId:                  z.string().min(1),
@@ -304,8 +307,20 @@ export const FactCheckReportSchema = z.object({
   verifiedClaims:          z.array(FactCheckClaimSchema).min(0),
   uncertainClaims:         z.array(FactCheckClaimSchema).min(0),
   conflictingClaims:       z.array(FactCheckClaimSchema).min(0),
+  // Phase 3B — claims with NO source support (distinct from conflicting). Optional
+  // with a default so the legacy mock report (which omits it) still validates.
+  unsupportedClaims:       z.array(FactCheckClaimSchema).default([]),
   warnings:                z.array(z.string()).min(0),
+  // Phase 3B — editorial integrity flags (e.g. "statistic is vendor-reported only",
+  // "correlation presented as causation", "thesis relies on inference").
+  editorialWarnings:       z.array(z.string()).default([]),
   overallConfidenceScore:  z.number().int().min(0).max(100),
+  // Phase 3B — explicit integrity signals from the real fact check. Optional so the
+  // mock path (which does not compute them) remains schema-valid.
+  integrityScore:          z.number().int().min(0).max(100).optional(),
+  riskLevel:               FactCheckRiskLevelSchema.optional(),
+  factCheckVersion:        z.string().optional(),   // 'mock-factcheck' | 'factcheck-1' | 'degraded'
+  degraded:                z.boolean().optional(),
   sourceReferences:        z.array(z.string()).min(0),
 });
 
@@ -573,6 +588,9 @@ export const GeneratorInputSchema = z.object({
     verified:    z.array(z.object({ claim: z.string(), confidenceScore: z.number().int().optional() })).max(15),
     uncertain:   z.array(z.object({ claim: z.string(), note: z.string().optional() })).max(10),
     conflicting: z.array(z.string()),
+    // Phase 3B — claims with no source support; treated like conflicting (never
+    // state as fact). Defaulted so legacy/mock projections remain valid.
+    unsupported: z.array(z.string()).default([]),
     warnings:    z.array(z.string()),
     overallConfidenceScore: z.number().int().min(0).max(100),
   }),

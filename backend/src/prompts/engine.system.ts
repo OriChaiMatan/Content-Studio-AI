@@ -213,6 +213,7 @@ export function renderContext(input: GeneratorInput): string {
     `VERIFIED (safe to state):\n${list(f.verified.map(c => c.claim))}`,
     `UNCERTAIN (hedge or omit):\n${list(f.uncertain.map(c => c.claim))}`,
     `CONFLICTING (do NOT state as fact):\n${list(f.conflicting)}`,
+    `UNSUPPORTED (NO source support — do NOT state as fact; omit, or attribute explicitly):\n${list(f.unsupported)}`,
     f.warnings.length ? `Warnings:\n${list(f.warnings)}` : '',
     `Overall fact-check confidence: ${f.overallConfidenceScore}/100`,
     '',

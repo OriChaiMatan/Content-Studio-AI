@@ -13,6 +13,7 @@ const globalForAnthropic = globalThis as unknown as {
   anthropic?: Anthropic;        // source analysis client (SDK default retries)
   contentClient?: Anthropic;    // content generation client (no SDK retries)
   researchClient?: Anthropic;   // research synthesis client (no SDK retries)
+  factCheckClient?: Anthropic;  // fact check client (no SDK retries)
 };
 
 // Source Analysis configuration, read once from the environment.
@@ -79,6 +80,30 @@ export const researchSynthesisConfig = {
   // UI critical path; failure still falls back to the v1 mock, never hangs.
   timeoutMs: parseInt(process.env.RESEARCH_SYNTHESIS_TIMEOUT_MS ?? '240000', 10),
 } as const;
+
+// Fact Check configuration (Phase 3B). MUST default disabled — when off, the
+// pipeline keeps using the deterministic mock fact check. When on, a real Claude
+// fact check runs and FAILS CLOSED (degraded → everything uncertain) on any error.
+export const factCheckConfig = {
+  enabled:   process.env.REAL_FACT_CHECK_ENABLED === 'true',
+  model:     process.env.FACT_CHECK_MODEL ?? 'claude-sonnet-4-6',
+  // Validation is a bounded, structured task — smaller than synthesis. 120s gives
+  // ample headroom; on timeout we degrade closed rather than retry the full call.
+  timeoutMs: parseInt(process.env.FACT_CHECK_TIMEOUT_MS ?? '120000', 10),
+} as const;
+
+// Fact check client (Phase 3B). Dedicated client, maxRetries: 0 — the service does
+// its own bounded retry and must fail closed, not multiply the timeout. Null when
+// disabled / no key.
+export function getFactCheckClient(): Anthropic | null {
+  if (!factCheckConfig.enabled) return null;
+  const apiKey = process.env.ANTHROPIC_API_KEY ?? '';
+  if (!apiKey) return null;
+  if (!globalForAnthropic.factCheckClient) {
+    globalForAnthropic.factCheckClient = new Anthropic({ apiKey, maxRetries: 0 });
+  }
+  return globalForAnthropic.factCheckClient;
+}
 
 // Research synthesis client (Phase 10A). Own gate + dedicated client with
 // maxRetries: 0 (the service does bounded retries; the SDK must not multiply the
