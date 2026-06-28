@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process';
 
 import { contentGenerationConfig, researchSynthesisConfig } from '../src/lib/anthropic';
 import { researchSynthesisService } from '../src/services/researchSynthesisService';
-import { generateFactCheckReport } from '../src/services/mockAiService';
+import { factCheckService } from '../src/services/factCheckService';
 import { buildGeneratorInput } from '../src/services/generatorInput';
 import { contentGeneratorService } from '../src/services/contentGeneratorService';
 import { engineSystem, renderContext } from '../src/prompts/engine.system';
@@ -114,9 +114,11 @@ async function main(): Promise<void> {
     run.researchContext = research as unknown as typeof run.researchContext;
     writeJson(path.resolve(fixtureDir, 'research.json'), research);
 
-    // ── Mock fact check ONCE ─────────────────────────────────────────────────
-    const factCheck = generateFactCheckReport(run, research, sources, []);
+    // ── Fact check ONCE — routes through the SAME service as production, so it is
+    //    real when REAL_FACT_CHECK_ENABLED=true and the mock otherwise. ──────────
+    const factCheck = await factCheckService.generateReport({ run, researchContext: research, primarySources: sources, contextSources: [] });
     run.factCheckReport = factCheck as unknown as typeof run.factCheckReport;
+    console.log(`[eval/capture] ${fixture.id}: fact check (${factCheck.factCheckVersion ?? 'mock'}) — ${factCheck.conflictingClaims.length} conflicts, integrity ${factCheck.integrityScore ?? factCheck.overallConfidenceScore}.`);
     writeJson(path.resolve(fixtureDir, 'factcheck.json'), factCheck);
 
     // ── Generation per persona ───────────────────────────────────────────────
