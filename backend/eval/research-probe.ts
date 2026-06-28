@@ -7,6 +7,7 @@ import { makeCase, makeSource, makeRun } from './factories';
 import { coherentMultiFixture } from './fixtures/coherentMulti';
 import { genuineHiddenDriverFixture } from './fixtures/genuineHiddenDriver';
 import { trulyIncoherentMultiFixture } from './fixtures/trulyIncoherentMulti';
+import { dominantClusterWithOutlierFixture } from './fixtures/dominantClusterWithOutlier';
 import type { EvalFixture } from './types';
 import type { ContentCase } from '@prisma/client';
 
@@ -15,7 +16,7 @@ import type { ContentCase } from '@prisma/client';
 // we'd use for a coherence score. No fact check, no generation, no new Claude tool.
 // Run:  npx tsx eval/research-probe.ts
 
-const FIXTURES: EvalFixture[] = [coherentMultiFixture, genuineHiddenDriverFixture, trulyIncoherentMultiFixture];
+const FIXTURES: EvalFixture[] = [dominantClusterWithOutlierFixture, coherentMultiFixture, genuineHiddenDriverFixture, trulyIncoherentMultiFixture];
 
 interface Signals {
   fixture: string;
@@ -41,6 +42,13 @@ interface Signals {
   hiddenDriverAnyCandidate: boolean;
   candidateCrossCoverageRange: [number, number] | null;
   forcedSynthesisSigns: string[];
+  // Outlier-hijack diagnostics
+  dominantThemes: { theme: string; sourceRefs: string[] }[];
+  outlierRefs: string[];
+  topThemeRefs: string[];
+  winnerRefsOutsideTopTheme: string[];
+  winnerOutlierAnchored: boolean;
+  candidates: { thesis: string; refs: string[]; kind: string; qual: string[] }[];
 }
 
 const mean = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : 0);
@@ -75,6 +83,21 @@ function extract(fixture: string, rc: Record<string, any>): Signals {
   if (basisRefs.length > 0 && sourceCount > 0 && basisRefs.length / sourceCount < 0.5) forced.push('winner uses <50% of sources');
 
   const coh = meta.coherence ?? null;
+  const dominantThemes: { theme: string; sourceRefs: string[] }[] = coh && Array.isArray(coh.dominantThemes) ? coh.dominantThemes : [];
+  const outlierRefs: string[] = coh && Array.isArray(coh.outlierSourceRefs) ? coh.outlierSourceRefs : [];
+  const topTheme = [...dominantThemes].sort((a, b) => (b.sourceRefs?.length ?? 0) - (a.sourceRefs?.length ?? 0))[0];
+  const topThemeRefs: string[] = topTheme?.sourceRefs ?? [];
+  const topSet = new Set(topThemeRefs);
+  const winnerRefsOutsideTopTheme = basisRefs.filter(r => !topSet.has(r));
+  const outlierSet = new Set(outlierRefs);
+  const winnerOutlierAnchored = basisRefs.some(r => outlierSet.has(r)) || (topThemeRefs.length > 0 && winnerRefsOutsideTopTheme.length > 0);
+  const candidates = cands.map(c => ({
+    thesis: String(c?.thesis ?? '').slice(0, 90),
+    refs: Array.isArray(c?.sourceRefs) ? c.sourceRefs : [],
+    kind: c?.connectionKind ?? '(none)',
+    qual: Array.isArray(c?.qualifyingProperties) ? c.qualifyingProperties : [],
+  }));
+
   return {
     fixture,
     degraded: meta.degraded === true,
@@ -99,6 +122,7 @@ function extract(fixture: string, rc: Record<string, any>): Signals {
     hiddenDriverAnyCandidate: hiddenDriver,
     candidateCrossCoverageRange: covs.length ? [Math.min(...covs), Math.max(...covs)] : null,
     forcedSynthesisSigns: forced,
+    dominantThemes, outlierRefs, topThemeRefs, winnerRefsOutsideTopTheme, winnerOutlierAnchored, candidates,
   };
 }
 
@@ -113,9 +137,10 @@ async function main(): Promise<void> {
 
   const results: Signals[] = [];
   for (const fixture of FIXTURES) {
-    const caseItem = makeCase({ title: fixture.caseBase.title, contentGoal: fixture.caseBase.contentGoal as ContentCase['contentGoal'] });
+    const lang = fixture.caseBase.language;
+    const caseItem = makeCase({ title: fixture.caseBase.title, contentGoal: fixture.caseBase.contentGoal as ContentCase['contentGoal'], language: lang });
     const sources = fixture.sources.map((s, i) => makeSource(caseItem.id, s, i));
-    const run = makeRun(caseItem.id, sources.map(s => s.id), 'en');
+    const run = makeRun(caseItem.id, sources.map(s => s.id), lang);
     console.log(`[research-probe] ${fixture.id}: synthesizing ${sources.length} sources…`);
     const rc = await researchSynthesisService.synthesize({ run, caseItem, primarySources: sources, contextSources: [] });
     fs.writeFileSync(path.resolve(dir, `${fixture.id}.research.json`), JSON.stringify(rc, null, 2));
@@ -149,9 +174,21 @@ async function main(): Promise<void> {
   col('winner ref fraction', r => r.winnerRefFraction);
   col('winner qualifyingProps', r => JSON.stringify(r.winnerQualifyingProperties));
   col('forced-synthesis signs', r => r.forcedSynthesisSigns.length);
+  col('winner OUTLIER-anchored', r => r.winnerOutlierAnchored);
   console.log('\n--- theses ---');
   for (const r of results) console.log(`[${r.fixture}] ${r.thesis}`);
-  for (const r of results) if (r.forcedSynthesisSigns.length) console.log(`\n[${r.fixture}] forced-synthesis signs:\n  - ${r.forcedSynthesisSigns.join('\n  - ')}`);
+
+  console.log('\n=== OUTLIER-HIJACK DETAIL (per fixture) ===');
+  for (const r of results) {
+    console.log(`\n[${r.fixture}]`);
+    console.log(`  dominantThemes: ${r.dominantThemes.map(t => `${t.theme} {${t.sourceRefs.join(',')}}`).join(' | ') || '(none)'}`);
+    console.log(`  outlierSourceRefs: ${JSON.stringify(r.outlierRefs)}`);
+    console.log(`  topThemeRefs: ${JSON.stringify(r.topThemeRefs)}  | winner basisRefs: ${JSON.stringify(r.winnerBasisRefs)}`);
+    console.log(`  winner refs OUTSIDE top theme: ${JSON.stringify(r.winnerRefsOutsideTopTheme)}  → OUTLIER-ANCHORED: ${r.winnerOutlierAnchored}`);
+    console.log(`  winner connectionKind=${r.winnerConnectionKind} qualifyingProps=${JSON.stringify(r.winnerQualifyingProperties)}`);
+    console.log(`  candidates:`);
+    for (const c of r.candidates) console.log(`    - [${c.kind}] refs={${c.refs.join(',')}} qual=${JSON.stringify(c.qual)} :: ${c.thesis}`);
+  }
   console.log(`\n[research-probe] artifacts: ${path.relative(process.cwd(), dir)}`);
 }
 
