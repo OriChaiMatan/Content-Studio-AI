@@ -82,6 +82,37 @@ test('5. denylist instruction rejected + recorded, fact floor intact', () => {
   assert.ok(VoiceProfileSchema.safeParse(vp).success);
 });
 
+// ── Phase 2B.1 — goal modifiers must not clobber archetype discipline ─────────
+
+test('6. provocative + build_authority → contrarian discipline survives the goal', () => {
+  const vp = resolveVoiceProfile({ contentStyle: 'provocative', contentGoal: 'build_authority' });
+
+  assert.equal(vp.archetype, 'contrarian');
+  assert.equal(vp.structural.counterArgumentMode, 'optional');   // NOT weave_required
+  assert.equal(vp.structural.hedgeTolerance, 'low');             // NOT high
+  assert.equal(vp.surface.formality, 2);                         // 1 + build_authority(+1) — emphasis still applies
+  assert.ok(VoiceProfileSchema.safeParse(vp).success);
+});
+
+test('7. friendly/creator + build_authority → does not become full analyst', () => {
+  const vp = resolveVoiceProfile({ contentStyle: 'friendly', contentGoal: 'build_authority' });
+
+  assert.equal(vp.archetype, 'creator');
+  assert.equal(vp.structural.counterArgumentMode, 'acknowledge_light'); // creator default kept
+  assert.equal(vp.structural.hedgeTolerance, 'medium');                 // creator default kept
+  assert.ok(VoiceProfileSchema.safeParse(vp).success);
+});
+
+test('8. analytical + build_authority → still full analytical discipline', () => {
+  const vp = resolveVoiceProfile({ contentStyle: 'professional', contentGoal: 'build_authority' });
+
+  assert.equal(vp.archetype, 'analytical');
+  assert.equal(vp.structural.counterArgumentMode, 'weave_required');  // from archetype, not the goal
+  assert.equal(vp.structural.hedgeTolerance, 'high');                 // from archetype, not the goal
+  assert.equal(vp.surface.formality, 4);                             // 3 + build_authority(+1)
+  assert.ok(VoiceProfileSchema.safeParse(vp).success);
+});
+
 test('determinism: same input → identical output', () => {
   const input: VoiceCaseInput = { contentStyle: 'provocative', targetAudience: 'startup founders' };
   assert.deepEqual(resolveVoiceProfile(input), resolveVoiceProfile(input));

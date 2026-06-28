@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VoiceProfileSchema } from './voiceProfileSchemas';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AI Pipeline Contract Schemas
@@ -590,5 +591,9 @@ export const GeneratorInputSchema = z.object({
     noFabricatedStats:  z.literal(true),
   }),
   platformConfig: z.record(z.unknown()),
+  // Phase 2B — resolved structural voice (archetype + surface/structural dials +
+  // invariant fact floor). Optional for backward-compat: legacy inputs without a
+  // profile fall back to the default structural guidance in the system prompt.
+  voiceProfile: VoiceProfileSchema.optional(),
 });
 export type GeneratorInput = z.infer<typeof GeneratorInputSchema>;

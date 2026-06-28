@@ -6,6 +6,7 @@ import {
   type GeneratorInput,
   type ContentPlatform,
 } from '../schemas/aiContractSchemas';
+import { resolveVoiceProfile } from './voice/voiceProfileResolver';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Generator Input projection (Phase 9)
@@ -151,6 +152,10 @@ export function buildGeneratorInput(
       overallConfidenceScore: fcr.overallConfidenceScore,
     },
     sources: aggregateSources(runSources),
+    // Phase 2B — deterministic structural voice resolved from the case settings.
+    // ContentCase is VoiceCaseInput-compatible. Governs HOW the piece is built;
+    // never relaxes the fact floor.
+    voiceProfile: resolveVoiceProfile(caseItem),
     policy: {
       factDiscipline:     'only-provided-facts',
       unverifiedHandling: 'hedge-or-omit',

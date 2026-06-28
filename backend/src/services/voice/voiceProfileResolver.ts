@@ -73,12 +73,19 @@ function selectArchetype(c: VoiceCaseInput): { archetype: Archetype; source: Arc
 
 // ── Stage 2/3 modifier tables ────────────────────────────────────────────────
 
+// Goal modifiers are EMPHASIS-only (Phase 2B.1). They may touch surface dials,
+// storytelling, rhythm, and closing — but NOT core discipline (counterArgumentMode
+// / hedgeTolerance / argumentFlow / opening palette). They are applied with
+// allowDisciplineOverride:false, so any discipline write here is inert by design;
+// the data is kept clean to make that contract explicit. build_authority now adds
+// authority via formality only — it no longer forces weave_required / high hedge,
+// which let it clobber the contrarian/creator body.
 const GOAL_MODIFIERS: Record<string, VoiceAdjustment> = {
-  build_authority:   { label: 'goal:build_authority',   surface: { formality: 1 }, structural: { hedgeTolerance: 'high', counterArgumentMode: 'weave_required' } },
-  educate_audience:  { label: 'goal:educate_audience',  structural: { argumentFlow: 'explainer_sequential', storytelling: 'seasoning' } },
+  build_authority:   { label: 'goal:build_authority',   surface: { formality: 1 } },
+  educate_audience:  { label: 'goal:educate_audience',  structural: { storytelling: 'seasoning' } },
   grow_community:    { label: 'goal:grow_community',    surface: { warmth: 1 }, structural: { closingDefault: 'audience_question' } },
-  personal_branding: { label: 'goal:personal_branding', surface: { warmth: 1 }, structural: { storytelling: 'spine' }, addPreferredOpenings: ['personal_anecdote'] },
-  generate_leads:    { label: 'goal:generate_leads',    surface: { boldness: 1 }, structural: { closingDefault: 'cta', counterArgumentMode: 'acknowledge_light' } },
+  personal_branding: { label: 'goal:personal_branding', surface: { warmth: 1 }, structural: { storytelling: 'spine' } },
+  generate_leads:    { label: 'goal:generate_leads',    surface: { boldness: 1 }, structural: { closingDefault: 'cta' } },
   increase_sales:    { label: 'goal:increase_sales',    surface: { boldness: 1 }, structural: { closingDefault: 'cta' } },
 };
 
@@ -103,26 +110,39 @@ function addPreferredOpening(draft: VoiceProfile, move: VoiceProfile['structural
 
 // Apply one adjustment to the draft. Surface deltas are additive (clamped later);
 // structural set-fields are last-write-wins (so later stages win on overlap).
-function applyAdjustment(draft: VoiceProfile, adj: VoiceAdjustment, modifiers: string[]) {
+//
+// Phase 2B.1 — CORE STRUCTURAL DISCIPLINE (argumentFlow, counterArgumentMode,
+// hedgeTolerance, and the opening palette) is OWNED by the archetype. Only explicit
+// user signal — aiInstructions / style+goal custom — may override it. Goal modifiers
+// are EMPHASIS nudges and must NOT clobber it, so they are applied with
+// allowDisciplineOverride:false: surface dials, storytelling, rhythm, and closing
+// stay adjustable; the discipline fields + opening palette are left untouched.
+function applyAdjustment(
+  draft: VoiceProfile,
+  adj: VoiceAdjustment,
+  modifiers: string[],
+  opts: { allowDisciplineOverride?: boolean } = {},
+) {
+  const allowDiscipline = opts.allowDisciplineOverride ?? true;
   if (adj.surface) {
     const s = draft.surface as Record<string, number>;
     for (const [k, v] of Object.entries(adj.surface)) s[k] += v as number;
   }
   if (adj.structural) {
     const st = adj.structural;
-    if (st.argumentFlow)        draft.structural.argumentFlow = st.argumentFlow;
-    if (st.counterArgumentMode) draft.structural.counterArgumentMode = st.counterArgumentMode;
-    if (st.hedgeTolerance)      draft.structural.hedgeTolerance = st.hedgeTolerance;
-    if (st.storytelling)        draft.structural.storytelling = st.storytelling;
-    if (st.paragraphRhythm)     draft.structural.paragraphRhythm = st.paragraphRhythm;
-    if (st.closingDefault) {
+    if (allowDiscipline && st.argumentFlow)        draft.structural.argumentFlow = st.argumentFlow;
+    if (allowDiscipline && st.counterArgumentMode) draft.structural.counterArgumentMode = st.counterArgumentMode;
+    if (allowDiscipline && st.hedgeTolerance)      draft.structural.hedgeTolerance = st.hedgeTolerance;
+    if (st.storytelling)        draft.structural.storytelling = st.storytelling;     // safe emphasis
+    if (st.paragraphRhythm)     draft.structural.paragraphRhythm = st.paragraphRhythm; // safe emphasis
+    if (st.closingDefault) {                                                          // safe emphasis
       draft.structural.closingStyle.default = st.closingDefault;
       if (!draft.structural.closingStyle.preferred.includes(st.closingDefault)) {
         draft.structural.closingStyle.preferred.unshift(st.closingDefault);
       }
     }
   }
-  if (adj.addPreferredOpenings) {
+  if (adj.addPreferredOpenings && allowDiscipline) {
     for (const m of adj.addPreferredOpenings) addPreferredOpening(draft, m);
   }
   modifiers.push(adj.label);
@@ -171,8 +191,10 @@ export function resolveVoiceProfile(input: VoiceCaseInput): VoiceProfile {
   const modifiers: string[] = [];
   const dropped: string[] = [];
 
-  // Stage 2 — goal modifiers.
-  if (c.contentGoal && GOAL_MODIFIERS[c.contentGoal]) applyAdjustment(draft, GOAL_MODIFIERS[c.contentGoal], modifiers);
+  // Stage 2 — goal modifiers (EMPHASIS only — cannot override archetype discipline).
+  if (c.contentGoal && GOAL_MODIFIERS[c.contentGoal]) {
+    applyAdjustment(draft, GOAL_MODIFIERS[c.contentGoal], modifiers, { allowDisciplineOverride: false });
+  }
 
   // Stage 3 — audience modifiers.
   for (const adj of audienceModifiers(c.targetAudience)) applyAdjustment(draft, adj, modifiers);
