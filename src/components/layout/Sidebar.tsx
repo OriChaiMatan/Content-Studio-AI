@@ -84,29 +84,44 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* User footer */}
-      <div className="border-t border-outline-variant pt-4 flex items-center gap-4 px-2">
-        <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-sm shrink-0">
-          {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+      {/* Bottom group: legal links (low weight) + user footer */}
+      <div className="flex flex-col gap-3">
+        {/* Legal — minimal, low-emphasis */}
+        <div className="px-2 flex items-center gap-2 text-[11px] text-on-surface-variant/70">
+          <button
+            onClick={() => navigate('/privacy')}
+            className="hover:text-on-surface transition-colors"
+          >
+            Privacy Policy
+          </button>
+          <span className="text-outline-variant" aria-hidden="true">·</span>
+          <span className="opacity-50 cursor-default" title="Coming soon">Terms</span>
         </div>
-        <div className="flex-1 overflow-hidden">
-          <p className="text-[14px] font-medium text-on-surface truncate">{user.name}</p>
-          <p className="text-[11px] text-on-surface-variant truncate">{user.role}</p>
+
+        {/* User footer */}
+        <div className="border-t border-outline-variant pt-4 flex items-center gap-4 px-2">
+          <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-sm shrink-0">
+            {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <p className="text-[14px] font-medium text-on-surface truncate">{user.name}</p>
+            <p className="text-[11px] text-on-surface-variant truncate">{user.role}</p>
+          </div>
+          <button
+            onClick={() => navigate('/settings')}
+            className="text-on-surface-variant hover:text-primary transition-colors"
+            title={t('nav.settings')}
+          >
+            <Icon name="settings" size="sm" />
+          </button>
+          <button
+            onClick={() => { void logout(); }}
+            className="text-on-surface-variant hover:text-error transition-colors"
+            title={t('nav.signOut')}
+          >
+            <Icon name="logout" size="sm" />
+          </button>
         </div>
-        <button
-          onClick={() => navigate('/settings')}
-          className="text-on-surface-variant hover:text-primary transition-colors"
-          title={t('nav.settings')}
-        >
-          <Icon name="settings" size="sm" />
-        </button>
-        <button
-          onClick={() => { void logout(); }}
-          className="text-on-surface-variant hover:text-error transition-colors"
-          title={t('nav.signOut')}
-        >
-          <Icon name="logout" size="sm" />
-        </button>
       </div>
     </aside>
   );

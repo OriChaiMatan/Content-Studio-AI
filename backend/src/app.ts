@@ -26,13 +26,21 @@ const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
   .split(',')
   .map(o => o.trim());
 
+// Allow the browser extension origin. The extension calls the same APIs with an
+// Authorization: Bearer token (it cannot send the lax cookie). Until Chrome assigns
+// the final Web Store extension ID, any chrome-extension:// origin is permitted.
+//
+// TODO (after Chrome Web Store upload — locking to the final extension ID):
+//   1. Add `chrome-extension://<FINAL_EXTENSION_ID>` to the CORS_ORIGIN env var
+//      (comma-separated; the Chrome Dashboard shows the ID after upload).
+//   2. To RESTRICT to only that extension, delete the `allowAnyExtension` line below
+//      so the allowlist (CORS_ORIGIN) is the sole source of truth.
+const allowAnyExtension = (o: string) => o.startsWith('chrome-extension://');
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (e.g. curl, Postman) and the LumAI web app.
-      // Also allow the Chrome extension (chrome-extension://<id>), which calls the
-      // same APIs with an Authorization: Bearer token (it cannot send the lax cookie).
-      if (!origin || allowedOrigins.includes(origin) || origin.startsWith('chrome-extension://')) {
+      if (!origin || allowedOrigins.includes(origin) || allowAnyExtension(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`CORS: origin ${origin} is not allowed`));

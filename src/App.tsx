@@ -13,6 +13,7 @@ import { SettingsPage } from './features/settings/SettingsPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { RegisterPage } from './features/auth/RegisterPage';
 import { VerifyWhatsAppPage } from './features/auth/VerifyWhatsAppPage';
+import { PrivacyPolicyPage } from './features/legal/PrivacyPolicyPage';
 import { useAuthStore } from './stores/authStore';
 import { useContentCasesStore } from './stores/contentCasesStore';
 import { useLibraryStore } from './stores/libraryStore';
@@ -40,6 +41,7 @@ function AuthedApp() {
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/verify-whatsapp" element={<VerifyWhatsAppPage />} />
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppLayout>
@@ -71,6 +73,8 @@ export default function App() {
         <AuthedApp />
       ) : (
         <Routes>
+          {/* Public — reachable without auth (e.g. Chrome Web Store reviewers). */}
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
