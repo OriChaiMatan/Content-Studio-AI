@@ -18,6 +18,12 @@ import telegramRouter from './api/routes/telegram';
 
 const app = express();
 
+// ── Proxy trust ─────────────────────────────────────────────────────────────
+// Railway terminates TLS at a single proxy hop in front of the app. Trust exactly
+// ONE hop so req.ip is the real client IP (for IP-based rate limiting) and not
+// spoofable via a client-supplied X-Forwarded-For. Do NOT use `true` (permissive).
+app.set('trust proxy', 1);
+
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet());
 

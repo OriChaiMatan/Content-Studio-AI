@@ -6,6 +6,7 @@ import { authService, serializeUser } from '../../services/authService';
 import { registerSchema, loginSchema, changeWhatsappNumberSchema } from '../../schemas/authSchemas';
 import { setAuthCookie, clearAuthCookie, verifyToken, AUTH_COOKIE } from '../../lib/auth';
 import { requireAuth } from '../middleware/auth';
+import { authLoginLimiter, authRegisterLimiter } from '../middleware/rateLimit';
 import { whatsappConfig } from '../../lib/whatsapp';
 
 const router = Router();
@@ -23,7 +24,7 @@ function verificationPayload(identity: WhatsAppIdentity, code: string) {
 }
 
 // ── POST /api/auth/register ───────────────────────────────────────────────────
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', authRegisterLimiter, async (req: Request, res: Response) => {
   try {
     const input  = registerSchema.parse(req.body);
     const result = await authService.register(input);
@@ -53,7 +54,7 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 // ── POST /api/auth/login ──────────────────────────────────────────────────────
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authLoginLimiter, async (req: Request, res: Response) => {
   try {
     const input  = loginSchema.parse(req.body);
     const result = await authService.login(input);

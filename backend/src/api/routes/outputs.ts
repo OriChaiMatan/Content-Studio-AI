@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { outputService } from '../../services/outputService';
 import { updateOutputBodySchema, updateOutputStatusSchema } from '../../schemas/outputSchemas';
 import { requireCaseOwnership } from '../middleware/auth';
+import { aiHeavyLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
@@ -47,7 +48,7 @@ router.patch('/:caseId/outputs/:outputId/status', async (req: Request, res: Resp
 // ── POST /api/cases/:caseId/outputs/:outputId/regenerate ─────────────────────
 // Reset output to draft with bumped version. Sources are not affected.
 
-router.post('/:caseId/outputs/:outputId/regenerate', async (req: Request, res: Response) => {
+router.post('/:caseId/outputs/:outputId/regenerate', aiHeavyLimiter, async (req: Request, res: Response) => {
   try {
     const output = await outputService.regenerate(req.params.caseId, req.params.outputId);
     if (!output) { res.status(404).json({ error: 'Output not found' }); return; }

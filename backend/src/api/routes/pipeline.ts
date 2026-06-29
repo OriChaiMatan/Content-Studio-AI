@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { pipelineService } from '../../services/pipelineService';
 import { pipelineRunnerService } from '../../services/pipelineRunnerService';
 import { requireCaseOwnership } from '../middleware/auth';
+import { aiHeavyLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
@@ -40,7 +41,7 @@ router.get('/:id/pipeline', async (req: Request, res: Response) => {
 // the DB state (a quick second click, or a stale entry after an aborted run), while
 // adding nothing over the DB guard: a redundant second runner simply no-ops via
 // startRun's already_running. Removing it makes second+ generations reliable.
-router.post('/:id/pipeline/run', async (req: Request, res: Response) => {
+router.post('/:id/pipeline/run', aiHeavyLimiter, async (req: Request, res: Response) => {
   const caseId = req.params.id;
   const outputLanguage = typeof req.body?.outputLanguage === 'string' ? req.body.outputLanguage : undefined;
   try {
@@ -78,7 +79,7 @@ router.post('/:id/pipeline/run', async (req: Request, res: Response) => {
 // Returns 400 with code 'no_new_sources' if no new sources are available.
 // Returns 409 if a run is already in progress.
 
-router.post('/:id/pipeline/start', async (req: Request, res: Response) => {
+router.post('/:id/pipeline/start', aiHeavyLimiter, async (req: Request, res: Response) => {
   try {
     const outputLanguage = typeof req.body?.outputLanguage === 'string' ? req.body.outputLanguage : undefined;
     const result = await pipelineService.startRun(req.params.id, outputLanguage);
@@ -104,7 +105,7 @@ router.post('/:id/pipeline/start', async (req: Request, res: Response) => {
 // Completes the currently-running step and starts the next one.
 // On content_creation completion: creates mock outputs, completes run.
 
-router.post('/:id/pipeline/advance', async (req: Request, res: Response) => {
+router.post('/:id/pipeline/advance', aiHeavyLimiter, async (req: Request, res: Response) => {
   try {
     const result = await pipelineService.advanceRun(req.params.id);
 
