@@ -8,6 +8,7 @@ import { generateMockContent } from './mockContentService';
 import { engineSystem, renderContext } from '../prompts/engine.system';
 import { PLATFORM_SPECS } from '../prompts/platforms';
 import { computeThesisPreservation } from './thesisPreservation';
+import { stripEmDashes } from './outputSanitizer';
 import type { GeneratedOutput, GeneratorInput, ContentPlatform } from '../schemas/aiContractSchemas';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,7 +147,10 @@ async function callClaude(
 /** Generate one platform's output, then attach the Thesis Preservation Score
  * (10E.2). NEVER throws — always returns a v2 output. */
 export async function generateContent(input: GeneratorInput): Promise<GeneratedOutput> {
-  const out = await produce(input);
+  // Deterministic punctuation cleanup BEFORE scoring/return. Runs on EVERY path
+  // (claude-gen / mock / fallback) so no final output ships with em dashes,
+  // independent of model compliance with the system-prompt rule.
+  const out = stripEmDashes(await produce(input));
   // Phase 10E.2 — measure how much of the winning thesis survived (deterministic,
   // no extra Claude call). Computed for every path (claude-gen-1 / mock / fallback)
   // so a mock fallback visibly scores low.
