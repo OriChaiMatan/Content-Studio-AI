@@ -2,9 +2,10 @@ import type { ContentCase, ContentOutput } from '@prisma/client';
 import { removeEmDashes } from '../outputSanitizer';
 
 export interface OverlaySpec {
-  kicker: string;
   lines: string[];
-  emphasisLine: number;
+  // Sprint 4.7 — headline is WHITE by default. accentLine is the single line to render
+  // in accent blue, or null for all-white (the ~90% case). No kicker (removed in 4.6).
+  accentLine: number | null;
   dir: 'ltr' | 'rtl';
 }
 export interface VisualBrief {
@@ -15,16 +16,7 @@ export interface VisualBrief {
   fields: { thesis?: string; reframe?: string; hook?: string; keyInsight?: string; title?: string; lang: string };
 }
 
-const KICKER: Record<string, { en: string; he: string }> = {
-  ai_infrastructure: { en: 'AI INFRASTRUCTURE', he: 'תשתיות AI' },
-  cybersecurity:     { en: 'CYBERSECURITY',     he: 'אבטחת סייבר' },
-  healthcare:        { en: 'HEALTHCARE',        he: 'חדשנות רפואית' },
-  finance:           { en: 'FINANCIAL INTELLIGENCE', he: 'מודיעין פיננסי' },
-  leadership:        { en: 'LEADERSHIP',        he: 'מנהיגות' },
-  business_strategy: { en: 'BUSINESS STRATEGY', he: 'אסטרטגיה עסקית' },
-};
-
-// Lightweight category classification (telemetry/kicker only — the INTENT drives
+// Lightweight category classification (telemetry only — the INTENT drives
 // the image). Deterministic keyword scan over title + goal; never an LLM call.
 function classify(text: string): string {
   const t = text.toLowerCase();
@@ -36,12 +28,15 @@ function classify(text: string): string {
   return 'business_strategy';
 }
 
-// Phrase-aware, balanced line wrapping. NEVER reverses or reorders — it only chooses
-// WHERE to break the logical word sequence. Prefers breaks after punctuation, balances
-// line lengths, avoids orphan/fragment lines, caps at maxLines, and shortens an
-// over-long headline (… ) rather than forcing awkward long lines. Mixed tokens like
-// "ה-AI" / "GPU" / "TSMC" are single space-delimited words and are never split.
+// Semantic, balanced line wrapping. Sprint 3.1: this is the ONLY headline concern —
+// choose good break points (≤ maxLines), prefer punctuation/phrase boundaries, balance
+// line lengths, avoid orphan fragments. It NEVER reverses/reorders, NEVER truncates,
+// NEVER adds "…". Final font sizing is the RENDERER's job (it pixel-fits the wrapped
+// lines). Mixed tokens ("ה-AI"/"GPU"/"TSMC") are single words and never split.
 const PUNCT_END = /[,.;:!?…]+$/;
+// Used ONLY to choose how many lines look balanced — never as a truncation cap.
+// (~≤26 → 1 line, ~27–52 → 2 lines, ~53+ → 3 lines; the renderer pixel-fits the font.)
+const IDEAL_LINE_CHARS = 26;
 
 function* combos(items: number[], k: number, start = 0): Generator<number[]> {
   if (k === 0) { yield []; return; }
@@ -57,16 +52,16 @@ function partition(words: string[], cuts: number[]): string[][] {
   return groups;
 }
 
-// Best balanced partition of `words` into exactly L lines, each <= maxChars; null if none.
-function bestPartition(words: string[], L: number, maxChars: number): string[] | null {
-  if (L > words.length) return null;
+// Most balanced, phrase-aware partition of `words` into exactly L lines. No width cap,
+// no truncation — always returns a partition (every word kept).
+function bestPartition(words: string[], L: number): string[] {
+  if (L >= words.length) return words.map(w => w); // one word per line (degenerate)
   const breakPositions = Array.from({ length: words.length - 1 }, (_, i) => i + 1);
-  let best: string[] | null = null;
+  let best: string[] = [words.join(' ')];
   let bestScore = Infinity;
   for (const cut of combos(breakPositions, L - 1)) {
     const groups = partition(words, cut);
     const lens = groups.map(g => g.join(' ').length);
-    if (Math.max(...lens) > maxChars) continue;            // hard width cap
     let score = (Math.max(...lens) - Math.min(...lens)) + Math.max(...lens) * 0.1; // balance
     for (let i = 0; i < groups.length - 1; i++) if (PUNCT_END.test(groups[i].join(' '))) score -= 6; // phrase boundary
     for (const ln of lens) if (ln < 6) score += 8;          // avoid tiny orphan fragments
@@ -77,26 +72,14 @@ function bestPartition(words: string[], L: number, maxChars: number): string[] |
   return best;
 }
 
-export function wrapHeadline(text: string, maxChars: number, maxLines = 3): string[] {
+export function wrapHeadline(text: string, maxLines = 3): string[] {
   const clean = removeEmDashes(text).replace(/\s+/g, ' ').trim();
   const words = clean.split(' ').filter(Boolean);
   if (words.length <= 1) return [clean];
-  if (clean.length <= maxChars) return [clean];           // short enough for one line
-
-  for (let L = 2; L <= maxLines; L++) {
-    const part = bestPartition(words, L, maxChars);
-    if (part) return part;                                 // fewest lines that fit, balanced
-  }
-
-  // Too long even at maxLines: shorten the headline (drop trailing words + …) rather
-  // than forcing long awkward lines.
-  let w = words.slice(0, 16);
-  while (w.length > maxLines) {
-    w = w.slice(0, -1);
-    const part = bestPartition(w, maxLines, maxChars);
-    if (part) { const li = part.length - 1; part[li] = part[li].replace(PUNCT_END, '') + '…'; return part; }
-  }
-  return [w.join(' ')];
+  // Pick a line count by visual balance (never to truncate); renderer pixel-fits the font.
+  const L = Math.min(maxLines, words.length, Math.max(1, Math.ceil(clean.length / IDEAL_LINE_CHARS)));
+  if (L <= 1) return [clean];
+  return bestPartition(words, L);
 }
 
 function readBreakdown(output: ContentOutput): Record<string, unknown> {
@@ -112,21 +95,30 @@ export function isRtlText(s: string): boolean {
   return RTL_RE.test(s ?? '');
 }
 
+// Build an OverlaySpec from a (possibly Visual-Intelligence-compressed) headline.
+// Direction follows the headline's script; phrase-aware wrapping. WHITE by default;
+// `accent` (only when the plan asks for it) tints the LAST line in accent blue.
+export function overlayFromHeadline(headline: string, accent = false): OverlaySpec {
+  const rtl = isRtlText(headline);
+  const lines = wrapHeadline(headline, 3);
+  // Accent only a trailing punchline when there's a clear two-part hierarchy (≥2 lines).
+  const accentLine = accent && lines.length >= 2 ? lines.length - 1 : null;
+  return { lines, accentLine, dir: rtl ? 'rtl' : 'ltr' };
+}
+
 export function buildVisualBrief(output: ContentOutput, caseItem: ContentCase): VisualBrief {
   const bd = readBreakdown(output);
   const hook = (typeof bd.hook === 'string' && bd.hook.trim()) ? bd.hook.trim() : output.title;
   const rtl = isRtlText(hook);
   const language: 'en' | 'he' = rtl ? 'he' : 'en';
   const category = classify(`${output.title} ${caseItem.contentGoal ?? ''} ${caseItem.title ?? ''}`);
-  // Hebrew tolerates wider lines (clean 2-line split); English stays ~3 tight lines.
-  const lines = wrapHeadline(hook, rtl ? 30 : 18, 3);
+  const lines = wrapHeadline(hook, 3);
   return {
     visualCategory: category,
     language,
     overlay: {
-      kicker: (KICKER[category] ?? KICKER.business_strategy)[language],
       lines,
-      emphasisLine: Math.max(0, lines.length - 1),
+      accentLine: null, // white by default
       dir: rtl ? 'rtl' : 'ltr',
     },
     fields: {
