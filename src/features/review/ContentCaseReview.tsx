@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
 import { CaseStatusBadge, PlatformBadge, OutputStatusBadge } from '../../components/ui/Badge';
@@ -7,6 +7,8 @@ import { Icon } from '../../components/ui/Icon';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { useLibraryStore } from '../../stores/libraryStore';
 import { useLiveCase } from '../content-cases/useLiveCase';
+import { VisualPanel } from './VisualPanel';
+import { useVisual } from './useVisual';
 import { useT } from '../../i18n/useT';
 import type { StringKey } from '../../i18n/strings';
 import type { Platform, ContentOutput } from '../../types';
@@ -175,6 +177,49 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
   const [actionError, setActionError]   = useState<string | null>(null);
   const [copyState,  setCopyState]  = useState<'idle' | 'copied' | 'error'>('idle');
   const [shareState, setShareState] = useState<'idle' | 'shared' | 'copied' | 'error'>('idle');
+  const [showBreakdown, setShowBreakdown] = useState(false); // editorial breakdown collapsed by default
+
+  // Visual Engine state (shared by the header button + the Visual section). LinkedIn/Facebook only.
+  const visualPlatform = output.platform === 'linkedin' || output.platform === 'facebook' ? output.platform : null;
+  const visual = useVisual(caseId, output.id, visualPlatform);
+  const visualRef = useRef<HTMLElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Prefetch the ready visual PNG into a ref so Share can call navigator.share()
+  // synchronously (preserving the iOS user-activation gesture). Cleared when the
+  // visual isn't ready or its URL changes.
+  const visualFileRef = useRef<File | null>(null);
+  const visualFinalUrl = visual.isReady ? visual.asset.finalUrl ?? null : null;
+  useEffect(() => {
+    visualFileRef.current = null;
+    if (!visualFinalUrl || !visualPlatform) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(visualFinalUrl, { credentials: 'include' });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        if (cancelled) return;
+        visualFileRef.current = new File([blob], `lumai-${visualPlatform}.png`, { type: 'image/png' });
+      } catch { /* leave null → Share falls back to text-only */ }
+    })();
+    return () => { cancelled = true; };
+  }, [visualFinalUrl, visualPlatform]);
+
+  // Header/menu "Visual" is NAVIGATION — smooth-scroll to the section; generation
+  // happens only from the large card CTA.
+  function scrollToVisual() {
+    visualRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Close the mobile actions menu on outside click.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDoc(e: MouseEvent) { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [menuOpen]);
 
   const updateOutputStatus   = useContentCasesStore(s => s.updateOutputStatus);
   const setOutputStatusLocal = useContentCasesStore(s => s.setOutputStatusLocal);
@@ -257,7 +302,26 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
   // Share via the native Web Share API when available; otherwise fall back to
   // copying the content. A dismissed native sheet (AbortError) is not an error.
   async function handleShare() {
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+
+    // 1. If a visual is ready and its File is prefetched, try to share image + text.
+    //    Uses the cached File so share() stays in the user-gesture (iOS-safe). Any
+    //    failure other than user-cancel falls through to the text paths below.
+    const file = visualFileRef.current;
+    if (canNativeShare && file && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ title: output.title, text: output.body, files: [file] });
+        setShareState('shared');
+        setTimeout(() => setShareState('idle'), 2000);
+        return;
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return; // user cancelled
+        // any other failure → fall through to text-only share
+      }
+    }
+
+    // 2. Text-only native share (unchanged behavior).
+    if (canNativeShare) {
       try {
         await navigator.share({ title: output.title, text: output.body });
         setShareState('shared');
@@ -283,7 +347,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
   return (
     <div className="flex flex-col h-full">
       {/* ── Action bar (top, above the draft — stays visible while reading) ── */}
-      <div className="shrink-0 border-b border-outline-variant bg-surface px-4 md:px-8 py-3 flex items-center gap-2 flex-wrap">
+      <div className="shrink-0 border-b border-outline-variant bg-surface px-4 md:px-8 py-3 flex items-center gap-1.5 sm:gap-2 flex-wrap">
         {editing ? (
           <>
             <Button onClick={handleSaveEdit} loading={saving} disabled={busy}>
@@ -308,45 +372,109 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
 
             <span className="hidden sm:block w-px h-6 bg-outline-variant/60 mx-1" />
 
-            {/* Edit + Regenerate — utility actions (icon-only below sm) */}
-            <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={status === 'approved' || busy} title={t('review.edit')}>
-              <Icon name="edit" size="sm" />
-              <span className="hidden sm:inline">{t('review.edit')}</span>
-            </Button>
-            <Button size="sm" variant="ghost" onClick={handleRegenerate} loading={regenerating} disabled={busy} title={t('review.regenerate')}>
-              <Icon name="refresh" size="sm" />
-              <span className="hidden sm:inline">{regenerating ? t('review.regenerating') : t('review.regenerate')}</span>
-            </Button>
+            {/* Desktop utility actions (sm+). Visual button is NAVIGATION (scrolls). */}
+            <div className="hidden sm:flex items-center gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={status === 'approved' || busy} title={t('review.edit')}>
+                <Icon name="edit" size="sm" />
+                <span>{t('review.edit')}</span>
+              </Button>
+              <Button size="sm" variant="ghost" onClick={handleRegenerate} loading={regenerating} disabled={busy} title={t('review.regenerate')}>
+                <Icon name="refresh" size="sm" />
+                <span>{regenerating ? t('review.regenerating') : t('review.regenerate')}</span>
+              </Button>
+              {visual.enabled && (
+                <Button size="sm" variant="ghost" onClick={scrollToVisual} title="Go to visual">
+                  <Icon name="image" size="sm" />
+                  <span>{visual.isActive ? 'Generating…' : visual.isReady ? 'View Visual' : 'Visual'}</span>
+                </Button>
+              )}
+            </div>
+
+            {/* Mobile "More" menu — keeps the bar to Copy/Share/Approve/Reject + this. */}
+            <div className="sm:hidden relative" ref={menuRef}>
+              <Button size="sm" variant="ghost" onClick={() => setMenuOpen(o => !o)} disabled={busy} title="More actions" aria-haspopup="menu" aria-expanded={menuOpen}>
+                <Icon name="more_vert" size="sm" />
+              </Button>
+              {menuOpen && (
+                <div role="menu" className="absolute z-50 mt-1 start-0 min-w-[210px] rounded-xl border border-outline-variant/60 bg-surface-container-lowest shadow-xl py-1">
+                  <button role="menuitem" onClick={() => { setMenuOpen(false); setEditing(true); }} disabled={status === 'approved'} className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 disabled:opacity-40 text-start">
+                    <Icon name="edit" size="sm" /> {t('review.edit')}
+                  </button>
+                  <button role="menuitem" onClick={() => { setMenuOpen(false); void handleRegenerate(); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 text-start">
+                    <Icon name="refresh" size="sm" /> {t('review.regenerate')}
+                  </button>
+                  {visual.enabled && (
+                    <button role="menuitem" onClick={() => { setMenuOpen(false); scrollToVisual(); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 text-start">
+                      <Icon name="image" size="sm" /> {visual.isActive ? 'Generating…' : visual.isReady ? 'View Visual' : 'Visual'}
+                    </button>
+                  )}
+                  {visual.enabled && visual.isReady && (
+                    <>
+                      <button role="menuitem" onClick={() => { setMenuOpen(false); visual.regenerate(); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 text-start">
+                        <Icon name="refresh" size="sm" /> Regenerate Background
+                      </button>
+                      <a role="menuitem" href={visual.asset.finalUrl ?? '#'} download={`lumai-${output.platform}.png`} onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 text-start">
+                        <Icon name="download" size="sm" /> Download Visual
+                      </a>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="flex-1" />
 
-            {/* Reviewed-state indicator */}
-            {status === 'approved' && (
-              <span className="flex items-center gap-1.5 text-[13px] font-medium text-green-700">
-                <Icon name="check_circle" size="sm" /> {t('review.approved')}
-              </span>
-            )}
-            {status === 'rejected' && (
-              <span className="flex items-center gap-1.5 text-[13px] font-medium text-error">
-                <Icon name="cancel" size="sm" /> {t('review.rejected')}
-              </span>
-            )}
+            {/* Decision group — Approve / Reject. Stays inline (same row) at all sizes.
+                Both buttons are ALWAYS exactly the same size (identical box classes;
+                only color differs). Icon-only under 400px, icon + label above. */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {status === 'approved' && (
+                <span className="hidden sm:flex items-center gap-1.5 text-[13px] font-medium text-green-700">
+                  <Icon name="check_circle" size="sm" /> {t('review.approved')}
+                </span>
+              )}
+              {status === 'rejected' && (
+                <span className="hidden sm:flex items-center gap-1.5 text-[13px] font-medium text-error">
+                  <Icon name="cancel" size="sm" /> {t('review.rejected')}
+                </span>
+              )}
 
-            {/* Reject — destructive, secondary to Approve */}
-            {status !== 'rejected' && (
-              <Button size="sm" variant="danger" onClick={handleReject} loading={rejecting} disabled={busy}>
-                <Icon name="cancel" size="sm" />
-                {rejecting ? t('review.rejecting') : t('review.reject')}
-              </Button>
-            )}
+              {/* Reject — quiet secondary: near-white with a subtle red tint + soft border */}
+              {status !== 'rejected' && (
+                <button
+                  onClick={handleReject}
+                  disabled={busy}
+                  title={t('review.reject')}
+                  className="inline-flex items-center justify-center gap-1.5 h-10 px-3 min-w-10 min-[400px]:min-w-[104px] rounded-xl
+                             bg-error/[0.06] text-error/90 font-semibold text-[13px] border border-error/20
+                             transition-all duration-150 ease-out hover:bg-error/[0.10] hover:border-error/30 active:scale-[0.98]
+                             disabled:opacity-60 disabled:pointer-events-none"
+                >
+                  {rejecting
+                    ? <span className="w-4 h-4 rounded-full border-2 border-error/30 border-t-error animate-spin" />
+                    : <Icon name="close" size="sm" />}
+                  <span className="hidden min-[400px]:inline">{rejecting ? t('review.rejecting') : t('review.reject')}</span>
+                </button>
+              )}
 
-            {/* Approve — most prominent action when pending */}
-            {status !== 'approved' && (
-              <Button onClick={handleApprove} loading={approving} disabled={busy} className="px-6">
-                <Icon name="check_circle" size="sm" />
-                {approving ? t('review.approving') : t('review.approve')}
-              </Button>
-            )}
+              {/* Approve — primary, calmer flat blue (no gradient/glow/shadow) */}
+              {status !== 'approved' && (
+                <button
+                  onClick={handleApprove}
+                  disabled={busy}
+                  title={t('review.approve')}
+                  className="inline-flex items-center justify-center gap-1.5 h-10 px-3 min-w-10 min-[400px]:min-w-[104px] rounded-xl
+                             bg-primary/90 text-white font-semibold text-[13px] border border-transparent
+                             transition-all duration-150 ease-out hover:bg-primary active:scale-[0.98]
+                             disabled:opacity-60 disabled:pointer-events-none"
+                >
+                  {approving
+                    ? <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                    : <Icon name="check" size="sm" />}
+                  <span className="hidden min-[400px]:inline">{approving ? t('review.approving') : t('review.approve')}</span>
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -406,8 +534,25 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
             </article>
           )}
 
-          {/* Editorial Breakdown — prominent structured panel */}
-          {!editing && hasBreakdown && <EditorialBreakdown breakdown={output.breakdown!} />}
+          {/* Visual Section — directly after the post (LinkedIn / Facebook only) */}
+          {!editing && visualPlatform && (
+            <VisualPanel platform={visualPlatform} visual={visual} sectionRef={visualRef} />
+          )}
+
+          {/* Editorial Breakdown — moved below the visual, collapsed by default */}
+          {!editing && hasBreakdown && (
+            <section className="border-t border-outline-variant/30 pt-5">
+              <button
+                onClick={() => setShowBreakdown(v => !v)}
+                className="flex items-center gap-2 text-[14px] font-semibold text-on-surface hover:text-primary transition-colors"
+                aria-expanded={showBreakdown}
+              >
+                <Icon name={showBreakdown ? 'expand_less' : 'expand_more'} size="sm" />
+                How this draft was built
+              </button>
+              {showBreakdown && <div className="mt-4"><EditorialBreakdown breakdown={output.breakdown!} /></div>}
+            </section>
+          )}
         </div>
       </div>
     </div>

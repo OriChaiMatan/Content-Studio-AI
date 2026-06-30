@@ -84,6 +84,15 @@ enum OutputStatus {
   rejected
 }
 
+// Visual Engine — async generation lifecycle for a per-output background+overlay asset.
+enum VisualStatus {
+  pending
+  generating
+  rendering
+  ready
+  failed
+}
+
 enum ScheduleFrequency {
   manual
   daily
@@ -274,10 +283,44 @@ model ContentOutput {
   contentCase        ContentCase  @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
   pipelineRun        PipelineRun? @relation(fields: [pipelineRunId], references: [id], onDelete: SetNull)
   libraryItem        LibraryItem?
+  visualAssets       VisualAsset[]
 
   @@index([contentCaseId, platform])
   @@index([contentCaseId, status])
   @@map("content_outputs")
+}
+
+// Visual Engine — one generated visual (AI background + LumAI overlay), versioned
+// per output. Binaries live in object/local storage; only KEYS are stored here.
+// Background and final are stored separately so a text edit can re-render the
+// overlay without paying for a new background.
+model VisualAsset {
+  id               String       @id @default(cuid())
+  contentOutputId  String
+  contentCaseId    String       // denormalized for ownership scoping/index
+  version          Int          @default(1)
+  platform         Platform
+  language         Language     @default(en)
+  status           VisualStatus @default(pending)
+  visualCategory   String?
+  visualIntent     String?      @db.Text
+  backgroundPrompt String?      @db.Text
+  overlaySpec      Json?
+  provider         String?      // "openai" | "mock" | "disabled"
+  model            String?
+  backgroundKey    String?      // storage key (raw AI/placeholder background)
+  finalKey         String?      // storage key (composited platform PNG)
+  width            Int?
+  height           Int?
+  errorCode        String?      // "disabled" | "provider_error" | "render_error" | ...
+  errorMessage     String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  contentOutput    ContentOutput @relation(fields: [contentOutputId], references: [id], onDelete: Cascade)
+
+  @@index([contentOutputId, version(sort: Desc)])
+  @@map("visual_assets")
 }
 
 // PipelineStep — current state of each of the 3 steps for a case.

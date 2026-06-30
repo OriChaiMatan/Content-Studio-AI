@@ -31,3 +31,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+# Visual prototype generated artifacts
+visual-prototype/*.png
+visual-prototype/*.jpg
+visual-prototype/*.jpeg
+visual-prototype/*.webp
+visual-prototype/*.log
+visual-prototype/*_report.json
+visual-prototype/*_DONE

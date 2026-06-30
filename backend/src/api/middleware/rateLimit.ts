@@ -1,6 +1,7 @@
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import type { Request, Response } from 'express';
 import type { RateLimitRequestHandler, RateLimitInfo } from 'express-rate-limit';
+import { imageGenConfig } from '../../lib/visualConfig';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase Security-1 — Rate limiting (cost-abuse + brute-force protection).
@@ -97,3 +98,7 @@ export const aiHeavyLimiter = makeLimiter({ windowMs: 60 * MINUTE, max: rateLimi
 // Ingestion — user-based. sources + sources/batch (covers URL extraction, which
 // runs inside these handlers — there is no separate extraction route).
 export const ingestionLimiter = makeLimiter({ windowMs: 60 * MINUTE, max: rateLimitConfig.ingestMax, scope: 'user' });
+
+// Visual generation — user-based. The priciest action (image API $/image); given
+// its own limit, NOT shared with the AI-text limiter. Max from imageGenConfig.
+export const imageGenLimiter = makeLimiter({ windowMs: 60 * MINUTE, max: imageGenConfig.rateLimitMax, scope: 'user' });
