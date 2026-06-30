@@ -28,7 +28,10 @@ export const imageGenConfig = {
   // Resolved from the backend working directory (same in dev via tsx and in prod
   // via `node dist/server.js`, both run from backend/).
   fontsDir: process.env.VISUAL_FONTS_DIR ?? path.resolve(process.cwd(), 'assets/fonts'),
-  storageDir: process.env.VISUAL_STORAGE_DIR ?? path.resolve(process.cwd(), 'var/visuals'),
+  // Always resolve to an ABSOLUTE path: a relative env value would make
+  // res.sendFile throw ("path must be absolute"). path.resolve handles both
+  // (absolute passes through unchanged; relative resolves against cwd).
+  storageDir: path.resolve(process.env.VISUAL_STORAGE_DIR ?? 'var/visuals'),
 } as const;
 
 /** Which provider will actually run, honoring the "disabled => degraded, never call
