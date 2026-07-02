@@ -1,178 +1,247 @@
 import { getAnthropicClient, sourceAnalysisConfig } from '../../lib/anthropic';
 import { removeEmDashes } from '../outputSanitizer';
 import type { VisualBrief } from './visualBrief';
+import {
+  ACTIVE_FAMILIES, ANCHORS, BACKGROUND_FAMILIES, DEFAULT_FAMILY, DEFAULT_LAYOUT, LAYOUTS,
+  isValidAnchor, isValidLabelPosition, type AnchorId, type BackgroundFamily, type LabelPosition, type LayoutId,
+} from './lumaiDesign';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Visual Intelligence layer (Sprint 3). Sits between thesis extraction and prompt
-// generation. ONE structured Claude call returns a visual PLAN, turning "generic
-// cinematic AI art" into a thesis-driven editorial scene:
-//   1. archetype     — the structural shape of the thesis
-//   2. scene         — a SPECIFIC, concrete editorial scene (a visual argument)
-//   3. palette       — color-harmony hint (exposed for future overlay accent matching)
-//   4. anti-cliché   — banned imagery is hard-rejected (deterministic guarantee)
-//   5. headline      — a compressed, high-impact editorial headline (post language)
-// Never throws; falls back to deterministic classification + archetype scene.
+// Visual Intelligence — LEAN Creative Director (Sprint 10). The planner is LOCKED:
+// a single Claude pass that picks the strongest INEVITABLE visual concept and writes
+// English editorial copy. Taste is no longer simulated from text — the heavy text-side
+// proxy quality logic (frame-strength regex, mechanism-stress regex, stop-scroll/label
+// heuristics, per-word gates) has been DELETED. Actual quality is judged on the rendered
+// PIXELS downstream (best-of-N + a Claude-vision Render Critic in visualAssetService).
+//
+// Only minimal pre-generation safeguards remain: cliché rejection, grammar consistency,
+// and basic thesis/headline sanity — just enough to avoid wasting generations.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const ARCHETYPES = [
-  'power_shift', 'hidden_infrastructure', 'collapse_fragility',
-  'race_acceleration', 'transformation', 'signal_vs_noise',
-] as const;
-export type Archetype = (typeof ARCHETYPES)[number];
-export type Palette = 'warm' | 'cool' | 'neutral' | 'high_contrast';
-// Sprint 4.5 — lighting mode. Default is BRIGHT editorial; darkness is the exception.
-export type LightingMode = 'bright_editorial' | 'balanced_contrast' | 'dark_dramatic';
-export const LIGHTING_MODES: readonly LightingMode[] = ['bright_editorial', 'balanced_contrast', 'dark_dramatic'];
+export const VISUAL_GRAMMARS = ['object', 'relationship', 'system'] as const;
+export type VisualGrammar = (typeof VISUAL_GRAMMARS)[number];
+
+export interface VisualGroup {
+  description: string;
+  label: string | null;         // OPTIONAL English label (default none — the critic decides if it helps)
+  labelPosition: LabelPosition;
+  anchor: AnchorId;
+}
 
 export interface VisualPlan {
-  archetype: Archetype;
-  scene: string;
-  palette: Palette;
-  lighting: LightingMode;
-  accent: boolean; // Sprint 4.7 — headline is WHITE by default; true tints the punchline blue
-  headline: string;
-  source: string; // 'claude' | 'fallback:*'
+  thesis: string;
+  mechanism: string;
+  visualGrammar: VisualGrammar;
+  scene: string;                 // the strongest inevitable image, as a premium 3D still
+  visualGroups: VisualGroup[];   // 1–3 objects (relationship ⇒ ≥ 2); labels default NONE
+  backgroundFamily: BackgroundFamily;
+  layout: LayoutId;
+  allowHumans: boolean;
+  headline: string;              // English editorial headline
+  supportingLine: string | null; // English 2–4 line paragraph, ≤ 32 words
+  source: string;                // 'claude' | 'claude:retry' | 'fallback:*'
 }
 
-// (3) Anti-cliché — hard-reject list. Applies to the SCENE (image), not the headline.
-const CLICHE = /\b(soldiers?|battles?|warfare|fortress(es)?|castles?|lighthouses?|chess|robot faces?|neon cit(y|ies)|circuit[\s-]?boards?|glowing eyes|sci-?fi wallpaper|knights?|swords?)\b/i;
+// ── Minimal pre-generation safeguards (kept) ──────────────────────────────────
+const CLICHE = /\b(soldiers?|battles?|warfare|fortress(es)?|castles?|lighthouses?|robot faces?|neon cit(y|ies)|circuit[\s-]?boards?|glowing eyes|sci-?fi wallpaper|knights?|swords?)\b/i;
+const WEAK_ANALOGY = /\b(scales?|balance beams?|see-?saws?|chess|arrows?|shields?|funnels?|light[\s-]?bulbs?|lightbulbs?|stacked blocks?|bar charts?|pie charts?|gears?)\b/i;
+const TOPIC_CLICHE = /\b(calendars?|clocks?|stopwatch(es)?|wall clock|cubicles?|handshakes?|stock photo|generic (dashboard|saas|ui|app|interface|screen)|office worker|briefcases?)\b/i;
+const PROCESS_RE = /\b(loop|cycle|belt|conveyor|treadmill|ratchet|escalator|refill|reload|again|repeat|repeating|feeds?|circulat|spiral|rotat|endless|continuous|feedback|pipeline|flow)\b/i;
 
-// (1) Deterministic archetype classification — fallback + when Claude is unavailable.
-export function classifyArchetype(text: string): Archetype {
-  const t = (text ?? '').toLowerCase();
-  if (/\b(control|power|dominat|monopol|gatekeep|leverage|who (wins|owns|controls)|shift)\b/.test(t)) return 'power_shift';
-  if (/\b(infrastructure|beneath|behind|hidden|underlying|plumbing|supply chain|foundation|substrate|pipes?)\b/.test(t)) return 'hidden_infrastructure';
-  if (/\b(collapse|fragil|crisis|break|bubble|vulnerable|brittle|risk|strain|overload)\b/.test(t)) return 'collapse_fragility';
-  if (/\b(race|faster|speed|accelerat|compete|sprint|momentum|outpace|relentless)\b/.test(t)) return 'race_acceleration';
-  if (/\b(transform|becoming|evolv|reinvent|future of|redefin|shift(ing)? from|reshap)\b/.test(t)) return 'transformation';
-  if (/\b(signal|noise|clarity|distraction|focus|hype|what (really )?matters|cut through)\b/.test(t)) return 'signal_vs_noise';
-  return 'transformation';
+function sceneBlob(p: VisualPlan): string {
+  return `${p.scene} ${p.visualGroups.map(g => g.description).join(' ')}`;
+}
+export function isCliche(p: VisualPlan): boolean {
+  const b = sceneBlob(p);
+  return CLICHE.test(b) || WEAK_ANALOGY.test(b) || TOPIC_CLICHE.test(b);
+}
+export function grammarConsistent(p: VisualPlan): boolean {
+  if (p.visualGrammar === 'relationship') return p.visualGroups.length >= 2;
+  if (p.visualGrammar === 'system') return PROCESS_RE.test(sceneBlob(p));
+  return p.visualGroups.length >= 1;
+}
+export function labelCount(p: VisualPlan): number {
+  return p.visualGroups.filter(g => g.label && g.label.trim()).length;
+}
+// The ONLY pre-gen gate: not cliché, grammar-consistent, basic thesis/headline sanity.
+export function passesInvariants(p: VisualPlan): boolean {
+  if (isCliche(p)) return false;
+  if (!grammarConsistent(p)) return false;
+  if (!p.thesis.trim() || !p.headline.trim()) return false;
+  return true;
 }
 
-// (4) Deterministic lighting classification. BRIGHT editorial is the strong default;
-// dark_dramatic is reserved for theses that genuinely turn on secrecy/fraud/collapse.
-// Note: "breach"/"crisis" alone do NOT force darkness — a resilience/containment framing
-// is optimistic and should stay bright.
-const DARK_TRIGGER = /\b(fraud|corrupt(ion)?|scandal|cover[\s-]?up|collapse|secrecy|secret(ly)?|systemic failure|hidden risk|embezzl|deceit|conceal)\b/i;
-export function classifyLighting(text: string): LightingMode {
-  return DARK_TRIGGER.test(text ?? '') ? 'dark_dramatic' : 'bright_editorial';
-}
-
-// Sprint 4.6 — humans are FORBIDDEN by default; allowed only when the thesis is
-// explicitly about human dynamics (leadership, psychology, hiring, consumer behavior,
-// interpersonal). Everything else → zero people.
-const HUMAN_OK = /\b(leader|leadership|manager?s?|managing|team|hir(e|ing)|recruit|talent|employ|workforce|psycholog|behaviou?r|culture|interpersonal|customers?|consumers?|clients?|negotiat|empathy|mentor|coach)\b/i;
+const HUMAN_OK = /\b(leader|leadership|manager?s?|managing|team|hir(e|ing)|recruit|talent|employ|workforce|psycholog|behaviou?r|emotion|culture|interpersonal|customers?|consumers?|clients?|negotiat|empathy|mentor|coach)\b/i;
 export function humansAllowed(domain: string, text: string): boolean {
   return domain === 'leadership' || HUMAN_OK.test(text ?? '');
 }
 
-// Concrete, cliché-free, BRIGHT fallback scene per archetype (used when Claude is
-// unavailable or its scene tripped the anti-cliché filter). Bright/editorial by default.
-const ARCHETYPE_SCENE: Record<Archetype, string> = {
-  power_shift: 'a bright modern facility in clean daylight where one cluster of machines is clearly the busiest hub, every detail crisply visible',
-  hidden_infrastructure: 'a clean, brightly lit architectural cutaway revealing the pipes, conduits and cabling beneath a modern facility in sharp daylight detail',
-  collapse_fragility: 'a pristine modern structure in clear daylight with a single fine stress fracture spreading visibly across its otherwise flawless surface',
-  race_acceleration: 'a bright, airy automated production line in natural daylight, components moving briskly with crisp, fully visible detail',
-  transformation: 'a bright, sunlit production line where raw material visibly becomes a finished, refined product, every stage clearly lit',
-  signal_vs_noise: 'a clean, brightly lit scene where one crisply ordered element stands out clearly against a lightly scattered background',
-};
-
-// (5) Deterministic headline compression fallback (used only when Claude is unavailable).
-function compressFallback(brief: VisualBrief['fields']): string {
-  const src = removeEmDashes(brief.hook || brief.thesis || brief.title || '').replace(/\s+/g, ' ').trim();
-  const words = src.split(' ').filter(Boolean);
-  return words.length > 12 ? words.slice(0, 12).join(' ') : src;
-}
-
-// Hard guarantee: a visual headline is at most 12 words (never truncated with "…";
-// just clamped). Primary punchiness comes from the LLM (see SYSTEM headline rule).
 function clampHeadline(s: string): string {
-  const w = s.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
-  return w.length > 12 ? w.slice(0, 12).join(' ') : w.join(' ');
+  const w = removeEmDashes(s).replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  return w.length > 8 ? w.slice(0, 8).join(' ') : w.join(' ');
+}
+function clampParagraph(s: string): string {
+  const clean = removeEmDashes(s).replace(/\s+/g, ' ').trim();
+  if (clean.split(' ').filter(Boolean).length <= 32) return clean;
+  const sentences = clean.match(/[^.!?]+[.!?]+/g) ?? [];
+  let out = ''; let words = 0;
+  for (const sent of sentences) {
+    const n = sent.trim().split(/\s+/).filter(Boolean).length;
+    if (out && words + n > 32) break;
+    out += sent; words += n;
+    if (words >= 32) break;
+  }
+  return out.trim() || clean.split(' ').slice(0, 32).join(' ');
+}
+// Text Minimalism — keep at most 2 labels, each ≤ 2 words; everything else → null.
+function enforceLabelDiscipline(groups: VisualGroup[]): VisualGroup[] {
+  let kept = 0;
+  return groups.map(g => {
+    if (!g.label || !g.label.trim()) return { ...g, label: null };
+    const words = g.label.trim().split(/\s+/).filter(Boolean);
+    if (words.length > 2 || kept >= 2) return { ...g, label: null };
+    kept += 1;
+    return { ...g, label: g.label.trim() };
+  });
+}
+function chooseFallbackHeadline(fields: VisualBrief['fields']): string {
+  const title = removeEmDashes(fields.title || '').replace(/\s+/g, ' ').trim();
+  const n = title.split(' ').filter(Boolean).length;
+  if (title && n >= 2 && n <= 8 && !/[֐-׿]/.test(title)) return clampHeadline(title);
+  return 'The Real Trade-Off';
 }
 
-function fallbackPlan(brief: VisualBrief['fields'], reason: string): VisualPlan {
-  const blob = `${brief.thesis ?? ''} ${brief.hook ?? ''} ${brief.title ?? ''}`;
-  const archetype = classifyArchetype(blob);
-  return { archetype, scene: ARCHETYPE_SCENE[archetype], palette: 'neutral', lighting: classifyLighting(blob), accent: false, headline: compressFallback(brief), source: `fallback:${reason}` };
+// MINIMAL safe plan — the ONLY fallback (LLM unavailable/unparseable). No templates.
+export function deterministicPlan(fields: VisualBrief['fields'], domain: string, reason = 'fallback'): VisualPlan {
+  const blob = `${fields.thesis ?? ''} ${fields.hook ?? ''} ${fields.title ?? ''}`;
+  return {
+    thesis: (fields.thesis || fields.title || '').replace(/\s+/g, ' ').trim() || 'A specific, non-obvious tension in this topic.',
+    mechanism: 'the visible surface conceals the real force underneath',
+    visualGrammar: 'object',
+    scene: 'a single premium matte object tipping off-balance on a clean bright white studio sweep, one soft shadow, generous negative space',
+    visualGroups: [{ description: 'one premium matte object tipping off-balance on white', label: null, labelPosition: 'top', anchor: 'VISUAL_MAIN' }],
+    backgroundFamily: DEFAULT_FAMILY,
+    layout: DEFAULT_LAYOUT,
+    allowHumans: humansAllowed(domain, blob),
+    headline: chooseFallbackHeadline(fields),
+    supportingLine: null,
+    source: `fallback:${reason}`,
+  };
 }
 
-const SYSTEM = `You are a visual intelligence director for a premium editorial brand — think The Economist, Bloomberg, or Stratechery cover art. Given a post's thesis, produce a STRUCTURED visual PLAN that turns the thesis into a visual ARGUMENT, not generic AI wallpaper.
+// ── Claude call ─────────────────────────────────────────────────────────────
 
-Return ONLY a JSON object (no prose, no code fences):
-{
-  "archetype": one of "power_shift" | "hidden_infrastructure" | "collapse_fragility" | "race_acceleration" | "transformation" | "signal_vs_noise",
-  "scene": a SPECIFIC, concrete editorial scene that makes the thesis visible. Name real-world objects/systems/places in the post's domain. It must be a literal scene a cinematographer could stage — NOT an abstract mood. 12-30 words, English.
-  "palette": one of "warm" | "cool" | "neutral" | "high_contrast",
-  "lighting": one of "bright_editorial" | "balanced_contrast" | "dark_dramatic",
-  "accent": boolean — whether the headline should use a blue accent line. DEFAULT false (white). Set true ONLY when the headline has a clear punchline/CTA line AND the content is visionary or future-positive. For cyber, finance, enterprise or analysis content, almost always false (white).
-  "headline": a PUNCHY, memorable editorial headline that works as a strong LinkedIn visual CTA — 4-8 words IDEAL, 12 words MAXIMUM, in the SAME language as the post. Title Case for English. It must be a crafted, shareable headline — NOT the thesis sentence reworded or cropped.
-}
+const SYSTEM = `You are the creative director for LumAI — Apple / Stripe / OpenAI editorial quality. For a post in ANY language, produce ONE inevitable editorial image concept plus its ENGLISH copy. Output ONLY JSON. Commit like a director.
 
-Headline examples:
-- BAD (too long, just the sentence): "The real AI bottleneck is silicon, not algorithms" → GOOD: "Silicon Controls AI" or "Compute Beats Algorithms".
-- BAD: "Traditional security can no longer protect modern enterprises" → GOOD: "Perimeter Security Is Dead".
+The one question: "Which image feels INEVITABLE once seen?" — not merely correct, not logical, INEVITABLE. Show the MECHANISM with real tension / asymmetry / surprise. NEVER the topic, NEVER a symptom, NEVER a cliché (no scales, funnels, arrows, gears, blocks, charts, light bulbs, calendars, clocks, dashboards, stock office). A correct-but-boring image is a FAILURE.
 
-Lighting rules (IMPORTANT — bright is the default; darkness is the exception):
-- "bright_editorial" (DEFAULT, ~70% of posts): bright natural daylight, clean airy composition, high object visibility, optimistic and premium — like an Apple keynote or a Bloomberg/Financial Times cover.
-- "balanced_contrast" (~25%): clearly lit with moderate, purposeful contrast and a focused highlight; objects still fully visible.
-- "dark_dramatic" (RARE, ~5%): choose ONLY if the thesis genuinely turns on secrecy, fraud, corruption, collapse, systemic failure, or hidden risk. A breach/crisis framed around RESILIENCE or recovery is optimistic — keep it bright.
-- Test every scene: "Would this still feel strong if brightly lit?" If no, the scene is too weak and leans on mood — pick a stronger, bright scene.
+STEP 1 — THESIS: the real argument.
+STEP 2 — MECHANISM: in one sentence, the process/relationship that makes it true.
+STEP 3 — VISUAL GRAMMAR (pick ONE): "object" (one object carries it), "relationship" (contrast/asymmetry between TWO things — give ≥2 groups), "system" (a loop/feedback/repeating process — show it repeating).
+STEP 4 — SCENE: the STRONGEST frame as ONE concrete PREMIUM 3D still on a clean bright pure-white studio sweep, with VISIBLE tension/consequence (12–24 words). Prefer the frame with the most tension/asymmetry/surprise (a glass that looks full but has a false bottom; a tiny trigger causing a huge collapse; the weak side crumbling) over the cleanest one.
+TEXT MINIMALISM: the image must explain ITSELF. DEFAULT no scene labels — every object BLANK/text-free. Labels ONLY if the thesis needs asymmetric naming: max 2, ≤2 words each.
 
-Scene rules:
-- Be concrete and domain-specific. BAD: "glowing futuristic city". GOOD: "semiconductor fabrication lines feeding massive inference datacenters".
-- Prefer BRIGHT, real-world environments: daylight, bright modern offices, well-lit industrial/lab spaces, clear interiors. Avoid dark, moody, night, or underexposed scenes unless lighting is "dark_dramatic".
-- COMPOSITION-FIRST: compose so there is a naturally calm, uncluttered region (open sky, plain wall, glass, soft fog, blurred depth) where a headline can sit — the scene itself provides the negative space, never a dark overlay. Keep the key subject and most detail to one side.
-- NEVER use these cliches: soldiers, battles, war imagery, fortresses, castles, lighthouses, chess, robot faces, neon cities, circuit-board macros, humans with glowing eyes, generic dark sci-fi wallpaper.
-- PEOPLE: by default include ZERO people/humans/figures — describe the environment, system, or objects only. Include a person ONLY if the thesis is explicitly about human dynamics (leadership, psychology, hiring, consumer behavior, interpersonal); even then keep them secondary and non-identifiable. This should feel like premium editorial cover art, not stock photography or an ad.
-- No text, words, logos, UI, or readable signage in the scene. No brands.
-- The archetype must match the thesis's structural shape; the scene must embody that archetype.`;
+visualGroups: 1–3 objects, each {description, label (null by default; ≤2 words), labelPosition ("left"|"right"|"top"|"bottom"), anchor ("VISUAL_MAIN"|"VISUAL_SECONDARY"|"VISUAL_ACCENT")}. relationship ⇒ ≥2 groups. Objects BLANK/text-free.
+layout ("LEFT_HEAVY"|"CENTER_BALANCED"|"RIGHT_HEAVY"); allowHumans (false unless the thesis is about human dynamics).
+
+EDITORIAL COPY — ENGLISH ONLY, never copied; DISTILL the thesis (Apple/Stripe/OpenAI voice):
+- headline: 3–8 words, extra-bold, punchy, emotionally sharp.
+- supportingParagraph: 2–4 short lines, ≤ 32 words, compressed — never verbose/academic.
+
+LENGTH DISCIPLINE: mechanism ≤ 16 words; scene ≤ 24 words; each group description ≤ 12 words.
+
+Return ONLY this JSON (no prose, no code fences):
+{"thesis":string,"mechanism":string,"visualGrammar":"object"|"relationship"|"system","scene":string,"visualGroups":[{"description":string,"label":string|null,"labelPosition":"left"|"right"|"top"|"bottom","anchor":"VISUAL_MAIN"|"VISUAL_SECONDARY"|"VISUAL_ACCENT"}],"backgroundFamily":"SOFT_STUDIO","layout":"LEFT_HEAVY"|"CENTER_BALANCED"|"RIGHT_HEAVY","allowHumans":boolean,"headline":string,"supportingParagraph":string}`;
+
+const RETRY_NOTE = 'That was cliché or broke its grammar. Redo: show the MECHANISM as an INEVITABLE image with real tension/asymmetry (not the topic, not a symptom, not a cliché). Correct the grammar (relationship ⇒ two elements; system ⇒ a loop). English copy only.';
+
+// Passed by visualAssetService when the Render Critic rejects ALL rendered candidates.
+export const REFRAME_NOTE = 'The previous concepts were CORRECT BUT BORING — safe, generic, too literal. Find a STRONGER, more INEVITABLE visual with far more tension, asymmetry, or surprise (an illusion vs reality, a tiny trigger causing a massive consequence, a collapse). It must be impossible to ignore and worthy of Apple/Stripe/OpenAI editorial publishing.';
 
 function parseJson(text: string): Record<string, unknown> | null {
   const a = text.indexOf('{'); const b = text.lastIndexOf('}');
   if (a < 0 || b <= a) return null;
   try { return JSON.parse(text.slice(a, b + 1)) as Record<string, unknown>; } catch { return null; }
 }
+function str(v: unknown, fallback = ''): string {
+  return typeof v === 'string' && v.trim() ? v.trim() : fallback;
+}
 
-export async function analyzeVisual(brief: VisualBrief['fields'], domain: string): Promise<VisualPlan> {
+function coerceGroups(raw: unknown, fb: VisualGroup[]): VisualGroup[] {
+  if (!Array.isArray(raw) || raw.length === 0) return fb;
+  const groups = raw.slice(0, 3).map((g, i): VisualGroup => {
+    const o = (g ?? {}) as Record<string, unknown>;
+    const anchor: AnchorId = isValidAnchor(String(o.anchor)) ? o.anchor as AnchorId : ANCHORS[Math.min(i, ANCHORS.length - 1)];
+    const labelPosition: LabelPosition = isValidLabelPosition(String(o.labelPosition)) ? o.labelPosition as LabelPosition : 'top';
+    const label = str(o.label);
+    return { description: str(o.description, 'a single premium object in soft studio light'), label: label || null, labelPosition, anchor };
+  });
+  return groups.length ? groups : fb;
+}
+
+function coercePlan(json: Record<string, unknown>, fb: VisualPlan, source: string): VisualPlan {
+  const rawBg = String(json.backgroundFamily);
+  const bgFamily: BackgroundFamily = (BACKGROUND_FAMILIES as readonly string[]).includes(rawBg) && ACTIVE_FAMILIES.includes(rawBg as BackgroundFamily)
+    ? rawBg as BackgroundFamily : DEFAULT_FAMILY;
+  const grammar: VisualGrammar = (VISUAL_GRAMMARS as readonly string[]).includes(String(json.visualGrammar)) ? json.visualGrammar as VisualGrammar : fb.visualGrammar;
+  const paragraph = str(json.supportingParagraph) || str(json.supportingLine);
+  return {
+    thesis: str(json.thesis, fb.thesis),
+    mechanism: str(json.mechanism, fb.mechanism),
+    visualGrammar: grammar,
+    scene: str(json.scene, fb.scene),
+    visualGroups: enforceLabelDiscipline(coerceGroups(json.visualGroups, fb.visualGroups)),
+    backgroundFamily: bgFamily,
+    layout: (LAYOUTS as readonly string[]).includes(String(json.layout)) ? json.layout as LayoutId : fb.layout,
+    allowHumans: json.allowHumans === true,
+    headline: clampHeadline(str(json.headline, fb.headline)),
+    supportingLine: paragraph ? clampParagraph(paragraph) : null,
+    source,
+  };
+}
+
+export async function analyzeVisual(
+  fields: VisualBrief['fields'],
+  domain: string,
+  opts: { reframeNote?: string } = {},
+): Promise<VisualPlan> {
   const client = getAnthropicClient();
-  if (!client) return fallbackPlan(brief, 'no-client');
+  if (!client) return deterministicPlan(fields, domain, 'no-client');
 
-  const userMsg = [
-    brief.thesis && `Thesis: ${brief.thesis}`,
-    brief.reframe && `Angle: ${brief.reframe}`,
-    brief.hook && `Hook: ${brief.hook}`,
-    brief.keyInsight && `Key insight: ${brief.keyInsight}`,
-    brief.title && `Title: ${brief.title}`,
+  const base = [
+    fields.thesis && `Thesis: ${fields.thesis}`,
+    fields.reframe && `Angle: ${fields.reframe}`,
+    fields.hook && `Hook: ${fields.hook}`,
+    fields.keyInsight && `Key insight: ${fields.keyInsight}`,
+    fields.title && `Title: ${fields.title}`,
     `Domain: ${domain}`,
-    `Post language: ${brief.lang}`,
-    'Return the visual PLAN as JSON only.',
+    `Post language: ${fields.lang} (editorial copy MUST be English)`,
+    'Return the LumAI visual PLAN as JSON only.',
   ].filter(Boolean).join('\n');
+  const userMsg = opts.reframeNote ? `${base}\n\n${opts.reframeNote}` : base;
 
-  try {
-    const msg = await client.messages.create({
-      model: sourceAnalysisConfig.model,
-      max_tokens: 400,
-      system: SYSTEM,
-      messages: [{ role: 'user', content: userMsg }],
-    });
-    const text = msg.content.filter(b => b.type === 'text').map(b => (b as { text: string }).text).join(' ');
-    const json = parseJson(text);
-    if (!json) return fallbackPlan(brief, 'parse');
-
-    const fb = fallbackPlan(brief, 'partial');
-    const archetype = (ARCHETYPES as readonly string[]).includes(String(json.archetype)) ? json.archetype as Archetype : fb.archetype;
-    let scene = typeof json.scene === 'string' && json.scene.trim() ? json.scene.trim() : fb.scene;
-    // (3) Hard anti-cliché guarantee: if the model slipped in a banned motif, swap to
-    // the deterministic archetype scene.
-    if (CLICHE.test(scene)) scene = ARCHETYPE_SCENE[archetype];
-    const palette: Palette = (['warm', 'cool', 'neutral', 'high_contrast'] as string[]).includes(String(json.palette)) ? json.palette as Palette : 'neutral';
-    const lighting: LightingMode = (LIGHTING_MODES as string[]).includes(String(json.lighting)) ? json.lighting as LightingMode : fb.lighting;
-    const accent = json.accent === true;
-    const headline = clampHeadline(typeof json.headline === 'string' && json.headline.trim() ? removeEmDashes(json.headline.trim()) : fb.headline);
-
-    return { archetype, scene, palette, lighting, accent, headline, source: 'claude' };
-  } catch {
-    return fallbackPlan(brief, 'error');
+  // One committed pass; regenerate ONCE only if a minimal safeguard fails; then accept best.
+  let note = '';
+  let last: VisualPlan | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const msg = await client.messages.create({
+        model: sourceAnalysisConfig.model,
+        max_tokens: 1100,
+        system: SYSTEM,
+        messages: [{ role: 'user', content: note ? `${userMsg}\n\n${note}` : userMsg }],
+      });
+      const text = msg.content.filter(b => b.type === 'text').map(b => (b as { text: string }).text).join(' ');
+      const json = parseJson(text);
+      if (json) {
+        const plan = coercePlan(json, deterministicPlan(fields, domain, 'partial'), attempt === 0 ? 'claude' : 'claude:retry');
+        last = plan;
+        if (passesInvariants(plan)) return plan;
+      }
+    } catch {
+      return deterministicPlan(fields, domain, 'error');
+    }
+    note = RETRY_NOTE;
   }
+  return last ?? deterministicPlan(fields, domain, 'quality');
 }

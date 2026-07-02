@@ -41,3 +41,6 @@ visual-prototype/*.webp
 visual-prototype/*.log
 visual-prototype/*_report.json
 visual-prototype/*_DONE
+
+# Generated visual artifacts
+backend/var/visuals/

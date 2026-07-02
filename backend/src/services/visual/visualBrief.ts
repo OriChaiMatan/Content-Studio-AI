@@ -1,12 +1,22 @@
 import type { ContentCase, ContentOutput } from '@prisma/client';
 import { removeEmDashes } from '../outputSanitizer';
+import { DEFAULT_LAYOUT, type AnchorId, type LabelPosition, type LayoutId } from './lumaiDesign';
+
+// A composited label chip: the renderer annotates `text` NEAR the object's anchor zone,
+// on the requested side (Sprint 6.2 relational placement), never pinned to a rigid pixel.
+// The AI background stays text-free; all readable labels come from this overlay layer.
+export interface LabelChip { text: string; anchor: AnchorId; position: LabelPosition }
 
 export interface OverlaySpec {
+  // Sprint 6 — two-tier text (Apple Minimal Editorial): a bold charcoal headline plus an
+  // optional muted-grey supporting paragraph. `layout` picks the composition preset;
+  // `labels` are composited over the visual. Headline colour is a fixed brand token
+  // (charcoal on light), so there is no per-line accent any more.
   lines: string[];
-  // Sprint 4.7 — headline is WHITE by default. accentLine is the single line to render
-  // in accent blue, or null for all-white (the ~90% case). No kicker (removed in 4.6).
-  accentLine: number | null;
+  body: string | null;
   dir: 'ltr' | 'rtl';
+  layout: LayoutId;
+  labels: LabelChip[];
 }
 export interface VisualBrief {
   visualCategory: string;
@@ -95,15 +105,23 @@ export function isRtlText(s: string): boolean {
   return RTL_RE.test(s ?? '');
 }
 
-// Build an OverlaySpec from a (possibly Visual-Intelligence-compressed) headline.
-// Direction follows the headline's script; phrase-aware wrapping. WHITE by default;
-// `accent` (only when the plan asks for it) tints the LAST line in accent blue.
-export function overlayFromHeadline(headline: string, accent = false): OverlaySpec {
+// Build a full two-tier OverlaySpec. Direction follows the headline's script (phrase-
+// aware wrapping, never reversed). `body` is the optional supporting paragraph; `layout`
+// and `labels` come from the visual plan. The renderer wraps `body` to the text column.
+export function buildOverlay(
+  headline: string,
+  body: string | null = null,
+  layout: LayoutId = DEFAULT_LAYOUT,
+  labels: LabelChip[] = [],
+): OverlaySpec {
   const rtl = isRtlText(headline);
-  const lines = wrapHeadline(headline, 3);
-  // Accent only a trailing punchline when there's a clear two-part hierarchy (≥2 lines).
-  const accentLine = accent && lines.length >= 2 ? lines.length - 1 : null;
-  return { lines, accentLine, dir: rtl ? 'rtl' : 'ltr' };
+  const clean = (body ?? '').replace(/\s+/g, ' ').trim();
+  return { lines: wrapHeadline(headline, 3), body: clean || null, dir: rtl ? 'rtl' : 'ltr', layout, labels };
+}
+
+// Thin back-compat helper (headline-only overlay with brand defaults).
+export function overlayFromHeadline(headline: string): OverlaySpec {
+  return buildOverlay(headline);
 }
 
 export function buildVisualBrief(output: ContentOutput, caseItem: ContentCase): VisualBrief {
@@ -112,15 +130,10 @@ export function buildVisualBrief(output: ContentOutput, caseItem: ContentCase): 
   const rtl = isRtlText(hook);
   const language: 'en' | 'he' = rtl ? 'he' : 'en';
   const category = classify(`${output.title} ${caseItem.contentGoal ?? ''} ${caseItem.title ?? ''}`);
-  const lines = wrapHeadline(hook, 3);
   return {
     visualCategory: category,
     language,
-    overlay: {
-      lines,
-      accentLine: null, // white by default
-      dir: rtl ? 'rtl' : 'ltr',
-    },
+    overlay: buildOverlay(hook), // headline-only default; the plan enriches it (body/layout/labels)
     fields: {
       thesis: typeof bd.insight === 'string' ? bd.insight : output.title,
       reframe: typeof bd.context === 'string' ? bd.context : undefined,

@@ -3,9 +3,12 @@ import type { VisualAsset, VisualStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { effectiveProvider } from '../../lib/visualConfig';
 import { visualStorage } from '../../lib/visualStorage';
-import { buildVisualBrief, overlayFromHeadline, type OverlaySpec } from './visualBrief';
-import { analyzeVisual, humansAllowed, LIGHTING_MODES, type LightingMode } from './visualIntelligence';
-import { buildBackgroundPrompt } from './visualPrompt';
+import { buildOverlay, type LabelChip, type OverlaySpec } from './visualBrief';
+import { buildVisualBrief } from './visualBrief';
+import { analyzeVisual, deterministicPlan, REFRAME_NOTE, type VisualPlan } from './visualIntelligence';
+import { buildImagePrompt, visualDebug } from './visualPrompt';
+import { critiqueRenders } from './renderCritic';
+import { DESIGN_VERSION } from './lumaiDesign';
 import { getBackground, ProviderError } from './backgroundProvider';
 import { renderOverlay } from './overlayRender';
 
@@ -49,8 +52,26 @@ async function setStatus(id: string, data: VisualPatch) {
   await prisma.visualAsset.update({ where: { id }, data });
 }
 
-// Reuse payload for regenerate (reroll the image, keep the concept + headline + lighting).
-interface ReusePlan { scene: string; overlay?: OverlaySpec; palette?: string; archetype?: string; lighting?: string }
+// Reuse payload for regenerate (reroll the image, keep the WHOLE visual plan + overlay
+// so no second Visual-Intelligence LLM call is spent).
+interface ReusePlan { plan: VisualPlan; overlay?: OverlaySpec }
+
+// Sprint 10 — best-of-N: image generation is stochastic, so draw several and let the
+// Render Critic pick. 3 by default (clamped 1–4).
+const BEST_OF = Math.max(1, Math.min(4, parseInt(process.env.IMAGE_BEST_OF ?? '3', 10) || 3));
+
+// Generate N backgrounds (in parallel) and composite each into a final PNG. Tolerant of a
+// few failed draws — needs only one to succeed.
+async function generateAndComposite(prompt: string, overlay: OverlaySpec, platform: string): Promise<{
+  bgs: Buffer[]; finals: Array<{ png: Buffer; width: number; height: number }>;
+}> {
+  const settled = await Promise.allSettled(Array.from({ length: BEST_OF }, () => getBackground('openai', prompt)));
+  const bgs = settled.filter((s): s is PromiseFulfilledResult<Buffer> => s.status === 'fulfilled').map(s => s.value);
+  if (bgs.length === 0) throw (settled.find(s => s.status === 'rejected') as PromiseRejectedResult).reason;
+  const finals: Array<{ png: Buffer; width: number; height: number }> = [];
+  for (const bg of bgs) finals.push(await renderOverlay(bg, overlay, platform)); // sequential — one browser
+  return { bgs, finals };
+}
 
 // The detached worker. NEVER throws — every failure becomes a clean `failed` row.
 async function generate(assetId: string, opts: { reuse?: ReusePlan } = {}): Promise<void> {
@@ -70,50 +91,65 @@ async function generate(assetId: string, opts: { reuse?: ReusePlan } = {}): Prom
     await setStatus(assetId, { status: 'generating' });
     const brief = buildVisualBrief(output, caseItem);
 
-    // Visual Intelligence: thesis → archetype + concrete scene + palette + compressed
-    // headline. On regenerate, reuse the prior plan (reroll image, keep the idea).
-    // mock/offline path stays deterministic (no LLM).
-    let scene: string;
-    let overlay: OverlaySpec = brief.overlay;
-    let palette: string | undefined;
-    let archetype: string | undefined;
-    let lighting: LightingMode = 'bright_editorial'; // Sprint 4.5 — bright editorial is the default
-
-    if (opts.reuse?.scene) {
-      scene = opts.reuse.scene;
-      overlay = opts.reuse.overlay ?? brief.overlay;
-      palette = opts.reuse.palette;
-      archetype = opts.reuse.archetype;
-      if (opts.reuse.lighting && LIGHTING_MODES.includes(opts.reuse.lighting as LightingMode)) lighting = opts.reuse.lighting as LightingMode;
+    // LEAN planner: one Claude pass → the strongest inevitable concept + English copy.
+    // On regenerate, reuse the stored plan (reroll the image, keep the idea). mock/offline
+    // stays deterministic (no LLM).
+    let plan: VisualPlan;
+    if (opts.reuse) {
+      plan = opts.reuse.plan;
     } else if (provider === 'openai') {
-      const plan = await analyzeVisual(brief.fields, brief.visualCategory);
-      scene = plan.scene; palette = plan.palette; archetype = plan.archetype; lighting = plan.lighting;
-      overlay = overlayFromHeadline(plan.headline, plan.accent); // compressed headline → overlay (white by default)
+      plan = await analyzeVisual(brief.fields, brief.visualCategory);
     } else {
-      scene = (brief.fields.thesis || brief.fields.title || 'A bright, clean editorial scene.').replace(/\.?$/, '.');
+      plan = deterministicPlan(brief.fields, brief.visualCategory, 'mock');
     }
 
-    // Humans forbidden by default; allowed only for human-dynamics theses.
-    const allowHumans = humansAllowed(brief.visualCategory, `${brief.fields.thesis ?? ''} ${brief.fields.hook ?? ''} ${brief.fields.title ?? ''}`);
-    // Tell the model which side to keep clear so white text reads with no overlay.
-    const textSide: 'left' | 'right' = overlay.dir === 'rtl' ? 'right' : 'left';
-    const prompt = buildBackgroundPrompt(scene, archetype, lighting, allowHumans, textSide);
-    await setStatus(assetId, {
-      visualCategory: brief.visualCategory, visualIntent: scene, backgroundPrompt: prompt,
-      // palette/archetype/lighting exposed via the existing Json column (no schema change).
-      overlaySpec: { ...overlay, ...(palette ? { palette } : {}), ...(archetype ? { archetype } : {}), lighting } as unknown as Prisma.InputJsonValue,
+    // Build the two-tier overlay from a plan. Layout (not RTL) drives the text-zone side;
+    // labels come from any visual group that carries one (default: none).
+    const overlayFor = (pl: VisualPlan): OverlaySpec => {
+      if (opts.reuse?.overlay) return opts.reuse.overlay;
+      const labels: LabelChip[] = pl.visualGroups.filter(g => g.label).map(g => ({ text: g.label as string, anchor: g.anchor, position: g.labelPosition }));
+      return buildOverlay(pl.headline, pl.supportingLine, pl.layout, labels);
+    };
+    const storePlan = (pl: VisualPlan, ov: OverlaySpec, pr: string) => setStatus(assetId, {
+      visualCategory: brief.visualCategory, visualIntent: pl.scene, backgroundPrompt: pr,
+      overlaySpec: { ...ov, plan: pl, designVersion: DESIGN_VERSION } as unknown as Prisma.InputJsonValue,
       provider, model: provider === 'openai' ? 'gpt-image-1' : 'mock',
     });
 
-    const bg = await getBackground(provider, prompt);
+    let overlay = overlayFor(plan);
+    let prompt = buildImagePrompt(plan);
+    await storePlan(plan, overlay, prompt);
+    if (process.env.VISUAL_DEBUG === '1') console.debug('[visual] plan+prompt', JSON.stringify(visualDebug(plan, prompt)));
+
+    let bg: Buffer;
+    let final: { png: Buffer; width: number; height: number };
+
+    if (provider === 'openai') {
+      // Best-of-N generation → Render Critic judges the ACTUAL pixels → pick the winner.
+      // If the critic REJECTS ALL as "correct but boring", reframe ONCE and regenerate.
+      let sel = await generateAndComposite(prompt, overlay, asset.platform);
+      let critique = await critiqueRenders(sel.finals.map(f => f.png), plan);
+      if (critique.rejectAll && !opts.reuse) {
+        plan = await analyzeVisual(brief.fields, brief.visualCategory, { reframeNote: REFRAME_NOTE });
+        overlay = overlayFor(plan); prompt = buildImagePrompt(plan);
+        await storePlan(plan, overlay, prompt);
+        sel = await generateAndComposite(prompt, overlay, asset.platform);
+        critique = await critiqueRenders(sel.finals.map(f => f.png), plan);
+      }
+      const idx = critique.winnerIndex ?? 0;
+      bg = sel.bgs[idx]; final = sel.finals[idx];
+      if (process.env.VISUAL_DEBUG === '1') console.debug('[visual] critic', JSON.stringify({ n: sel.finals.length, idx, rejectAll: critique.rejectAll, source: critique.source }));
+    } else {
+      bg = await getBackground(provider, prompt);
+      final = await renderOverlay(bg, overlay, asset.platform);
+    }
+
     const bgKey = `${assetId}/bg.png`;
     await visualStorage.put(bgKey, bg);
     await setStatus(assetId, { status: 'rendering', backgroundKey: bgKey });
-
-    const { png, width, height } = await renderOverlay(bg, overlay, asset.platform);
     const finalKey = `${assetId}/final.png`;
-    await visualStorage.put(finalKey, png);
-    await setStatus(assetId, { status: 'ready', finalKey, width, height });
+    await visualStorage.put(finalKey, final.png);
+    await setStatus(assetId, { status: 'ready', finalKey, width: final.width, height: final.height });
   } catch (err) {
     const code = err instanceof ProviderError ? err.code : 'render_error';
     const message = err instanceof Error ? err.message : 'Visual generation failed.';
@@ -156,9 +192,11 @@ export const visualAssetService = {
     const asset = await prisma.visualAsset.create({
       data: { contentOutputId, contentCaseId, platform, language: latest?.language ?? 'en', status: 'pending', version: (latest?.version ?? 0) + 1 },
     });
-    const spec = (latest?.overlaySpec ?? null) as (OverlaySpec & { palette?: string; archetype?: string; lighting?: string }) | null;
-    const reuse = latest?.visualIntent
-      ? { reuse: { scene: latest.visualIntent, overlay: spec ?? undefined, palette: spec?.palette, archetype: spec?.archetype, lighting: spec?.lighting } }
+    const spec = (latest?.overlaySpec ?? null) as (OverlaySpec & { plan?: VisualPlan }) | null;
+    // Reuse only when a stored plan exists (new assets). Legacy rows without one fall
+    // through to a fresh plan (one extra LLM call) rather than break the reroll.
+    const reuse = spec?.plan
+      ? { reuse: { plan: spec.plan, overlay: { lines: spec.lines, body: spec.body, dir: spec.dir, layout: spec.layout, labels: spec.labels ?? [] } } }
       : {};
     void generate(asset.id, reuse);
     return asset;

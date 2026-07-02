@@ -1,40 +1,77 @@
-import type { LightingMode } from './visualIntelligence';
+import { isRtlText } from './visualBrief';
+import type { VisualPlan } from './visualIntelligence';
+import { ART_DIRECTION, FAMILY_DIRECTIVE, NEGATIVE_TAIL, resolveSides } from './lumaiDesign';
 
-// Editorial background prompt builder. Wraps the Visual Intelligence SCENE (a concrete,
-// thesis-driven scene) in a premium editorial template. Sprint 4.5: BRIGHT, clean,
-// editorial is the DEFAULT; darkness is the exception (only `dark_dramatic`). Colors are
-// unrestricted; no generated text/logos/people; composition is free but overlay-safe.
+// ─────────────────────────────────────────────────────────────────────────────
+// Deterministic image-prompt builder. Claude decides the visual argument (VisualPlan);
+// this file formats the gpt-image-1 prompt from FIXED LumAI design-system constants
+// (art direction, family directive, negatives) plus a small variable slot (the physical-
+// analogy SCENE + 1–3 objects). ~70% of the string is constant, which is what makes every
+// LumAI image look related.
+//
+// The background stays strictly TEXT-FREE — labels are composited by the renderer.
+// Guaranteed < 900 chars.
+// ─────────────────────────────────────────────────────────────────────────────
 
-const LIGHTING_DIRECTIVE: Record<LightingMode, string> = {
-  bright_editorial:
-    'Lighting: BRIGHT, natural daylight, clean and airy. Every object clearly visible with high detail. Optimistic, confident, premium and modern — like an Apple keynote, a Bloomberg cover, or a Financial Times visual essay. NOT dark, NOT moody, NOT a night scene, NOT underexposed, NOT a movie poster.',
-  balanced_contrast:
-    'Lighting: clearly lit with moderate, purposeful contrast and a focused highlight. Objects remain fully visible and detailed. Premium editorial — never dark, murky, or underexposed.',
-  dark_dramatic:
-    'Lighting: deliberately darker and dramatic to convey the subject\'s weight (secrecy / risk / failure), but still clean, premium and readable — key objects clearly visible, never horror, never black-dominant to the point of hiding detail.',
+const MAX_PROMPT = 900;
+// Sprint 9 — reinforce the chosen visual grammar in the image prompt.
+const GRAMMAR_HINT: Record<string, string> = {
+  object: 'one strong subject carries the whole idea',
+  relationship: 'show TWO distinct subjects in relation, not one object',
+  system: 'show a repeating process or loop, not a static state',
 };
 
-export function buildBackgroundPrompt(scene: string, archetype?: string, lighting: LightingMode = 'bright_editorial', allowHumans = false, textSide: 'left' | 'right' = 'left'): string {
-  const frame = archetype ? `\nStructural archetype (the visual argument): ${archetype.replace(/_/g, ' ')}.` : '';
-  const bright = lighting !== 'dark_dramatic';
-  const people = allowHumans
-    ? 'People: include a person ONLY if essential to the idea; keep them secondary and non-identifiable (no faces of real or recognizable people), never the sole focus.'
-    : 'People: NONE. Absolutely no people, humans, figures, silhouettes, hands, body parts, faces, or crowds anywhere in the image — show only the environment, systems, and objects. This is premium editorial cover art, not stock photography.';
-  return `Create a photorealistic, premium editorial scene that visually argues this idea:
-${scene}${frame}
+function clipWords(s: string, n: number): string {
+  if (s.length <= n) return s;
+  const cut = s.lastIndexOf(' ', n);
+  return s.slice(0, cut > 0 ? cut : n).trim();
+}
 
-Requirements: visually striking, premium editorial quality, clean and clear composition, strong sense of depth, HIGH object visibility with crisp detail in every important element, realistic real-world environment, modern and intelligent. The scene must be specific and concrete — a real place/system, never an abstract mood or generic wallpaper. It must read instantly at a glance.
+export function buildImagePrompt(plan: VisualPlan): string {
+  const rtl = isRtlText(plan.headline);
+  const { textSide, visualSide } = resolveSides(plan.layout, rtl);
+  const family = FAMILY_DIRECTIVE[plan.backgroundFamily] ?? FAMILY_DIRECTIVE.SOFT_STUDIO;
+  const people = plan.allowHumans
+    ? ' Any people must be secondary and non-identifiable.'
+    : ' No people.';
 
-${LIGHTING_DIRECTIVE[lighting]}
+  // Mutable copies of the variable-length fields (whitespace-normalized). Anchors are
+  // NOT spelled out in the prompt (gpt-image-1 ignores fine placement anyway) — they
+  // drive the renderer's chip placement. The ONE IDEA is the physical-analogy scene.
+  let scene = plan.scene.replace(/\s+/g, ' ').trim();
+  const groups = plan.visualGroups.map(g => ({ d: g.description.replace(/\s+/g, ' ').trim() }));
 
-Visual style: premium editorial — in the spirit of an Apple keynote, Bloomberg/Financial Times covers, OpenAI launch visuals, or high-end B2B SaaS branding. Photorealistic, real-world, not illustration, not cartoon, not abstract AI-art noise, not sci-fi.
-Colors: free — use whatever palette best serves the scene${bright ? ', but keep the overall image bright and well-exposed' : ''}. Do not restrict to any brand palette.
+  const grammar = GRAMMAR_HINT[plan.visualGrammar] ?? GRAMMAR_HINT.object;
+  const assemble = (): string => `${ART_DIRECTION}
+${family}
 
-Composition (design the headline space INTO the scene — think magazine cover, NOT a banner with an overlay): reserve a calm, uncluttered area on the ${textSide.toUpperCase()} side of the frame where a WHITE headline will sit and read clearly WITHOUT any added overlay, scrim, gradient, vignette, or darkening. Make that area a naturally quiet region — open sky, a plain or softly-shadowed wall, tinted glass, soft fog, or a blurred depth-of-field zone — kept mid-to-deep in tone (NOT pure white, NOT busy) so white text is legible against it on its own. Keep the thesis's key subject and the most detailed elements on the opposite (${(textSide === 'left' ? 'right' : 'left')}) side. Keep real depth and a clear focal subject; the headline must feel native to the scene, not pasted on.
+ONE IDEA: ${scene}
+GRAMMAR (${plan.visualGrammar}): ${grammar}.
+COMPOSITION ${plan.layout}: visual mass on the ${visualSide}; keep the ${textSide} ~40% clear for the headline.
+SUBJECTS (max 3, blank & text-free): ${groups.map(g => g.d).join('; ')}
+${NEGATIVE_TAIL}${people}`;
 
-Strict guardrails (must NOT appear): recognizable public figures, soldiers, firefighters, lone hero figures, national flags, political or military symbols, weapons, castles, fortresses, lighthouses, knights, swords, medieval or fantasy motifs, chess, robot faces, humans with glowing eyes, neon cities, circuit-board macros, generic sci-fi wallpaper, warning/hazard symbols, brand or company logos, any readable text/words/letters/numbers, UI screens or dashboards, charts, watermarks.
-${people}
-ZERO TEXT (critical): the image must contain NO text of any kind — no signage, labels, lettering, captions, readable words, letters or numbers anywhere; no text on walls, screens, monitors, doors, glass, documents, boxes, racks, or equipment; no warning labels, no interface/UI text, no brand names or logos. Every surface, screen and panel is completely blank. (Earlier renders wrongly added words like "QUARANTINE" and "BANK" — never do this.)
+  let out = assemble();
 
-Avoid${bright ? ' (this is a BRIGHT editorial image)' : ''}: ${bright ? 'dark cinematic scenes, low-key lighting, heavy shadows, black-dominant frames, night scenes, underexposure, orange-on-black sci-fi looks, horror/thriller mood, movie-poster energy, ' : ''}generic stock-photo look, flat composition, cartoon or illustration, abstract AI-art noise, cheap SaaS aesthetics.`;
+  // Safety net: keep the final string < 900 chars. Priority — NEVER trim the scene (it
+  // carries the visual trick) until every lower-priority subject description has been
+  // trimmed first. The fixed art direction / grammar / render instructions are never trimmed.
+  let guard = 0;
+  while (out.length >= MAX_PROMPT && guard++ < 80) {
+    const longest = groups.reduce((a, b) => (b.d.length > a.d.length ? b : a), groups[0]);
+    if (longest && longest.d.length > 24) {
+      longest.d = clipWords(longest.d, Math.floor(longest.d.length * 0.85));
+    } else if (scene.length > 60) {           // last resort only
+      scene = clipWords(scene, Math.floor(scene.length * 0.85));
+    } else {
+      break;
+    }
+    out = assemble();
+  }
+  return out;
+}
+
+// Local debugging only (never exposed to users). Gate any logging behind VISUAL_DEBUG.
+export function visualDebug(plan: VisualPlan, prompt: string): { plan: VisualPlan; prompt: string; promptLength: number } {
+  return { plan, prompt, promptLength: prompt.length };
 }
