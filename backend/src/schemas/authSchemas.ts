@@ -26,6 +26,20 @@ export const changeWhatsappNumberSchema = z.object({
   whatsappPhone: e164Phone,
 });
 
+// Password recovery — request a reset link. Email is normalized (trim + lowercase)
+// so lookups match how registration stored it.
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().toLowerCase().email('A valid email is required'),
+});
+
+// Password recovery — perform the reset. Same min-length policy as registration (8).
+export const resetPasswordSchema = z.object({
+  token:    z.string().trim().min(1, 'Reset token is required'),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(200),
+});
+
 export type RegisterInput             = z.infer<typeof registerSchema>;
 export type LoginInput                = z.infer<typeof loginSchema>;
 export type ChangeWhatsappNumberInput = z.infer<typeof changeWhatsappNumberSchema>;
+export type ForgotPasswordInput       = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput        = z.infer<typeof resetPasswordSchema>;

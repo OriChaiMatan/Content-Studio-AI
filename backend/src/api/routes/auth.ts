@@ -3,11 +3,17 @@ import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import type { WhatsAppIdentity } from '@prisma/client';
 import { authService, serializeUser } from '../../services/authService';
-import { registerSchema, loginSchema, changeWhatsappNumberSchema } from '../../schemas/authSchemas';
+import { registerSchema, loginSchema, changeWhatsappNumberSchema, forgotPasswordSchema, resetPasswordSchema } from '../../schemas/authSchemas';
 import { setAuthCookie, clearAuthCookie, verifyToken, AUTH_COOKIE } from '../../lib/auth';
 import { requireAuth } from '../middleware/auth';
-import { authLoginLimiter, authRegisterLimiter } from '../middleware/rateLimit';
+import { authLoginLimiter, authRegisterLimiter, authForgotPasswordLimiter, authResetPasswordLimiter } from '../middleware/rateLimit';
 import { whatsappConfig } from '../../lib/whatsapp';
+import { emailService } from '../../services/emailService';
+import { emailConfig } from '../../lib/emailConfig';
+import { RESET_TTL_MINUTES } from '../../lib/passwordReset';
+
+// Always-identical response for /forgot-password — never reveals whether the email exists.
+const FORGOT_GENERIC = { message: "If an account exists for this email, we've sent a password reset link." };
 
 const router = Router();
 
@@ -71,6 +77,57 @@ router.post('/login', authLoginLimiter, async (req: Request, res: Response) => {
     }
     console.error('[POST /api/auth/login]', err);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// ── POST /api/auth/forgot-password ────────────────────────────────────────────
+// Enumeration-safe: ALWAYS returns the same generic message and 200, whether or not
+// the email maps to an account. A reset email is sent only when it does. Rate-limited.
+router.post('/forgot-password', authForgotPasswordLimiter, async (req: Request, res: Response) => {
+  try {
+    const { email } = forgotPasswordSchema.parse(req.body);
+    const result = await authService.createPasswordReset(email);
+    if (result.ok && result.sent) {
+      const resetUrl = `${emailConfig.appBaseUrl}/reset-password?token=${encodeURIComponent(result.token)}`;
+      // Best-effort send — a provider failure must NOT change the response (no leak).
+      await emailService.sendPasswordReset({
+        to: result.user.email,
+        name: result.user.name,
+        resetUrl,
+        expiresMinutes: RESET_TTL_MINUTES,
+      }).catch(err => console.error('[POST /api/auth/forgot-password] email send error:', err instanceof Error ? err.message : err));
+    }
+    res.json(FORGOT_GENERIC);
+  } catch (err) {
+    if (err instanceof ZodError) {
+      res.status(400).json({ error: 'Validation failed', details: err.errors });
+      return;
+    }
+    console.error('[POST /api/auth/forgot-password]', err);
+    // Even on an unexpected error we avoid leaking; the client shows the same success UI.
+    res.json(FORGOT_GENERIC);
+  }
+});
+
+// ── POST /api/auth/reset-password ─────────────────────────────────────────────
+// Consumes a one-time token and sets the new password. Invalid / expired / already-used
+// tokens all return the same generic 400. Does NOT auth the user in (they sign in fresh).
+router.post('/reset-password', authResetPasswordLimiter, async (req: Request, res: Response) => {
+  try {
+    const { token, password } = resetPasswordSchema.parse(req.body);
+    const result = await authService.resetPassword(token, password);
+    if (!result.ok) {
+      res.status(400).json({ error: 'invalid_or_expired', message: 'This password reset link is invalid or has expired.' });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof ZodError) {
+      res.status(400).json({ error: 'Validation failed', details: err.errors });
+      return;
+    }
+    console.error('[POST /api/auth/reset-password]', err);
+    res.status(500).json({ error: 'Password reset failed' });
   }
 });
 

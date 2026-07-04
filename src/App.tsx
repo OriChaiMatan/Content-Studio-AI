@@ -12,6 +12,8 @@ import { LibraryPage } from './features/library/LibraryPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { RegisterPage } from './features/auth/RegisterPage';
+import { ForgotPasswordPage } from './features/auth/ForgotPasswordPage';
+import { ResetPasswordPage } from './features/auth/ResetPasswordPage';
 import { VerifyWhatsAppPage } from './features/auth/VerifyWhatsAppPage';
 import { PrivacyPolicyPage } from './features/legal/PrivacyPolicyPage';
 import { useAuthStore } from './stores/authStore';
@@ -42,6 +44,8 @@ function AuthedApp() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/verify-whatsapp" element={<VerifyWhatsAppPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        {/* Reachable while signed in so an emailed reset link still resolves. */}
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppLayout>
@@ -77,6 +81,8 @@ export default function App() {
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       )}

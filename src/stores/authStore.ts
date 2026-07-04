@@ -62,6 +62,9 @@ interface AuthState {
   // Phase 13B — re-issue the code / change the number; both refresh whatsappVerification.
   resendWhatsappCode: () => Promise<void>;
   changeWhatsappNumber: (whatsappPhone: string) => Promise<void>;
+  // Password recovery. Neither changes auth status; both just call the API.
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (token: string, password: string) => Promise<void>;
   // Called when a protected request returns 401 (cookie expired/invalid).
   handleUnauthorized: () => void;
 }
@@ -119,6 +122,18 @@ export const useAuthStore = create<AuthState>((set) => ({
       '/auth/whatsapp/number', { whatsappPhone },
     );
     set({ whatsappVerification });
+  },
+
+  // Password recovery — request a reset link. The backend ALWAYS returns the same
+  // generic success (never reveals whether the email exists), so this resolves on 2xx.
+  forgotPassword: async (email) => {
+    await api.post('/auth/forgot-password', { email });
+  },
+
+  // Password recovery — set a new password with a one-time token. Throws ApiError on an
+  // invalid/expired/used token (400) so the page can show its error state.
+  resetPassword: async (token, password) => {
+    await api.post('/auth/reset-password', { token, password });
   },
 
   handleUnauthorized: () => set({ user: null, status: 'unauthenticated' }),

@@ -522,6 +522,25 @@ export const strings = {
   'auth.createOne':      { en: 'Create one',             he: 'צור חשבון' },
   'auth.haveAccount':    { en: 'Already a member?',      he: 'כבר רשום?' },
   'auth.createCta':      { en: 'Create account',         he: 'יצירת חשבון' },
+
+  // ── Password recovery ──
+  'auth.forgotLink':       { en: 'Forgot your password?', he: 'שכחת את הסיסמה?' },
+  'auth.forgotTitle':      { en: 'Reset your password',   he: 'איפוס הסיסמה' },
+  'auth.forgotSubtitle':   { en: "Enter your email address and we'll send you a secure password reset link.", he: 'הזינו את כתובת האימייל ונשלח לכם קישור מאובטח לאיפוס הסיסמה.' },
+  'auth.forgotCta':        { en: 'Send reset link',       he: 'שליחת קישור איפוס' },
+  'auth.forgotSuccess':    { en: "If an account exists for this email, we've sent a password reset link.", he: 'אם קיים חשבון עבור כתובת זו, שלחנו אליו קישור לאיפוס הסיסמה.' },
+  'auth.backToSignIn':     { en: 'Back to Sign In',       he: 'חזרה להתחברות' },
+  'auth.resetTitle':       { en: 'Choose a new password', he: 'בחירת סיסמה חדשה' },
+  'auth.resetSubtitle':    { en: 'Enter and confirm your new password below.', he: 'הזינו ואשרו את הסיסמה החדשה למטה.' },
+  'auth.newPassword':      { en: 'New password',          he: 'סיסמה חדשה' },
+  'auth.confirmPassword':  { en: 'Confirm password',      he: 'אימות סיסמה' },
+  'auth.passwordMismatch': { en: 'Passwords do not match', he: 'הסיסמאות אינן תואמות' },
+  'auth.resetCta':         { en: 'Update password',       he: 'עדכון סיסמה' },
+  'auth.resetSuccessTitle':{ en: 'Password updated',      he: 'הסיסמה עודכנה' },
+  'auth.resetSuccessBody': { en: 'Password updated successfully. You can now sign in with your new password.', he: 'הסיסמה עודכנה בהצלחה. ניתן כעת להתחבר עם הסיסמה החדשה.' },
+  'auth.resetInvalidTitle':{ en: 'Link expired or invalid', he: 'הקישור פג או אינו תקין' },
+  'auth.resetInvalidBody': { en: 'This password reset link is invalid, expired, or has already been used. Please request a new one.', he: 'קישור איפוס הסיסמה אינו תקין, פג תוקף או שכבר נעשה בו שימוש. אנא בקשו קישור חדש.' },
+  'auth.backToLogin':      { en: 'Back to Login',         he: 'חזרה להתחברות' },
 } satisfies Record<string, Entry>;
 
 export type StringKey = keyof typeof strings;

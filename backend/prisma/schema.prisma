@@ -155,6 +155,8 @@ model User {
   updatedAt               DateTime      @updatedAt
 
   cases                   ContentCase[]
+  // Password recovery — one-time reset tokens (hashed at rest). Cascade-deleted with the user.
+  passwordResetTokens     PasswordResetToken[]
   // Phase 13B — optional 1:1 WhatsApp channel identity. Nullable so legacy/seed
   // users (and any future passwordless flows) remain valid without a number.
   whatsappIdentity        WhatsAppIdentity?
@@ -165,6 +167,23 @@ model User {
   whatsappPendingSource   WhatsAppPendingSource[]
 
   @@map("users")
+}
+
+// One-time password-reset token. The RAW token is NEVER stored — only its SHA-256 hash
+// (unique, so lookup is by hash). Short-lived (60 min); single-use (usedAt is stamped on
+// success); prior unused tokens for a user are deleted when a new one is issued.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 // ContentCase — the core persistent workspace.

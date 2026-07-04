@@ -52,6 +52,11 @@ export function LoginPage() {
             </button>
           }
         />
+        <div className="-mt-2 flex justify-end">
+          <Link to="/forgot-password" className="text-[13px] font-medium text-primary hover:underline underline-offset-4">
+            {t('auth.forgotLink')}
+          </Link>
+        </div>
         {error && <p className="text-[13px] text-error" role="alert">{error}</p>}
         <Button type="submit" fullWidth loading={busy} className="rounded-lg py-3">
           {t('auth.signIn')} <Icon name="arrow_forward" size="sm" />

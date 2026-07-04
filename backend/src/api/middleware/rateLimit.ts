@@ -91,6 +91,10 @@ export function makeLimiter(
 // Auth — IP-based.
 export const authLoginLimiter = makeLimiter({ windowMs: 15 * MINUTE, max: rateLimitConfig.authMax, scope: 'ip' });
 export const authRegisterLimiter = makeLimiter({ windowMs: 60 * MINUTE, max: 5, scope: 'ip' });
+// Password recovery — IP-based, deliberately tight to blunt enumeration probing and
+// email-bombing. Forgot: 5 / 15 min. Reset (token submit): 10 / 15 min (brute-force floor).
+export const authForgotPasswordLimiter = makeLimiter({ windowMs: 15 * MINUTE, max: 5, scope: 'ip' });
+export const authResetPasswordLimiter = makeLimiter({ windowMs: 15 * MINUTE, max: 10, scope: 'ip' });
 
 // AI-heavy (shared) — user-based. pipeline start/run/advance + output regenerate.
 export const aiHeavyLimiter = makeLimiter({ windowMs: 60 * MINUTE, max: rateLimitConfig.aiMax, scope: 'user' });
