@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
 import { PlatformBadge } from '../../components/ui/Badge';
 import { Icon } from '../../components/ui/Icon';
 import { useLibraryStore } from '../../stores/libraryStore';
+import { useContentCasesStore } from '../../stores/contentCasesStore';
+import { podcastApi } from '../podcast/api';
 import { useT } from '../../i18n/useT';
 import type { LibraryRunGroup, LibraryItem, Platform } from '../../types';
+import type { PodcastEpisodeSummary } from '../podcast/types';
 
 // Human label for the platform filter chips (badge component isn't a toggle).
 const PLATFORM_LABEL: Record<Platform, string> = {
@@ -190,6 +193,118 @@ function RunCard({ group }: { group: LibraryRunGroup }) {
   );
 }
 
+// ── Podcast Episodes section ──────────────────────────────
+
+interface CaseEpisodeRow {
+  caseId: string;
+  caseTitle: string;
+  episode: PodcastEpisodeSummary;
+}
+
+function PodcastLibrarySection() {
+  const { t, locale } = useT();
+  const navigate = useNavigate();
+  const cases = useContentCasesStore(s => s.cases);
+  const fetchCases = useContentCasesStore(s => s.fetchCases);
+  const casesLoading = useContentCasesStore(s => s.loading);
+  const [rows, setRows] = useState<CaseEpisodeRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Ensure cases are loaded (library may be the first page the user visits)
+  useEffect(() => {
+    if (cases.length === 0 && !casesLoading) {
+      fetchCases().catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const podcastCases = cases.filter(c => c.contentTargets?.includes('podcast'));
+
+  useEffect(() => {
+    if (casesLoading) return; // wait for cases to finish loading before checking
+    if (!podcastCases.length) { setLoading(false); return; }
+    let cancelled = false;
+    setLoading(true);
+    Promise.all(
+      podcastCases.map(c =>
+        podcastApi.listEpisodes(c.id)
+          .then(res => res.episodes
+            .filter(e => e.status === 'completed')
+            .map(e => ({ caseId: c.id, caseTitle: c.title, episode: e } satisfies CaseEpisodeRow)),
+          )
+          .catch(() => [] as CaseEpisodeRow[]),
+      ),
+    ).then(results => {
+      if (cancelled) return;
+      const all = results
+        .flat()
+        .sort((a, b) => (b.episode.completedAt ?? '').localeCompare(a.episode.completedAt ?? ''));
+      setRows(all);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [podcastCases.length, casesLoading]);
+
+  if (!podcastCases.length) return null;
+
+  return (
+    <section className="max-w-3xl mt-10">
+      <div className="flex items-center gap-2.5 mb-4">
+        <Icon name="mic" className="text-primary" />
+        <h2 className="text-[16px] font-semibold text-on-surface">{t('podcast.library.title')}</h2>
+        <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+          {t('podcast.betaBadge')}
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-on-surface-variant text-[13px] py-4">
+          <span className="animate-spin rounded-full h-4 w-4 border-2 border-outline border-t-primary" />
+          {t('common.loading')}
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="text-[13px] text-on-surface-variant py-3">{t('podcast.library.noEpisodes')}</p>
+      ) : (
+        <div className="space-y-3">
+          {rows.map(({ caseId, caseTitle, episode }) => {
+            const date = episode.completedAt
+              ? new Date(episode.completedAt).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })
+              : null;
+            return (
+              <div
+                key={episode.id}
+                className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 px-4 py-3.5 flex items-center gap-4"
+              >
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Icon name="mic" size="sm" className="text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-on-surface truncate" dir="auto">{episode.title || caseTitle}</p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-[11px] text-on-surface-variant">
+                    <span className="truncate" dir="auto">{caseTitle}</span>
+                    {episode.estimatedDurationMin > 0 && (
+                      <span>{t('podcast.library.duration', { min: episode.estimatedDurationMin })}</span>
+                    )}
+                    {date && <span>{date}</span>}
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate(`/cases/${caseId}/review?tab=podcast`)}
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80 transition-colors"
+                >
+                  <Icon name="play_circle" size="sm" />
+                  {t('podcast.library.viewEpisode')}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────
 
 export function LibraryPage() {
@@ -313,6 +428,8 @@ export function LibraryPage() {
               ))}
             </div>
           )}
+
+          <PodcastLibrarySection />
         </div>
 
         {/* Footer */}

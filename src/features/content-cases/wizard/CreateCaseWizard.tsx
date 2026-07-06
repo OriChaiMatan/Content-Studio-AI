@@ -39,10 +39,11 @@ const STYLE_OPTIONS: { value: ContentStyle; labelKey: StringKey }[] = [
   { value: 'other',         labelKey: 'style.other' },
 ];
 
-const TARGET_OPTIONS: { value: ContentTarget; label: string; icon: string }[] = [
+const TARGET_OPTIONS: { value: ContentTarget; label: string; icon: string; beta?: boolean; subtitleKey?: StringKey }[] = [
   { value: 'linkedin',    label: 'LinkedIn',    icon: 'work' },
   { value: 'facebook',    label: 'Facebook',    icon: 'groups' },
   { value: 'newsletter',  label: 'Newsletter',  icon: 'email' },
+  { value: 'podcast',     label: '🎙 Podcast',  icon: 'mic',  beta: true, subtitleKey: 'podcast.wizSubtitle' },
 ];
 
 const FREQUENCY_OPTIONS: { value: ScheduleFrequency; labelKey: StringKey; subKey: StringKey; icon: string }[] = [
@@ -208,15 +209,29 @@ function Step2StyleTargets({ form, update }: { form: WizardFormData; update: Upd
                 type="button"
                 onClick={() => toggleTarget(opt.value)}
                 className={[
-                  'flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all',
+                  'flex items-start gap-3 px-4 py-3 rounded-xl border-2 transition-all text-start',
                   selected
                     ? 'border-primary bg-secondary-container/40 text-primary'
                     : 'border-outline-variant text-on-surface-variant hover:border-primary/30 hover:bg-surface-container',
                 ].join(' ')}
               >
-                <Icon name={opt.icon} size="sm" className={selected ? 'text-primary' : 'text-outline'} />
-                <span className="text-[14px] font-medium">{opt.label}</span>
-                {selected && <Icon name="check_circle" size="sm" className="text-primary ms-auto" filled />}
+                <Icon name={opt.icon} size="sm" className={`${selected ? 'text-primary' : 'text-outline'} shrink-0 mt-0.5`} />
+                <span className="flex-1 min-w-0">
+                  <span className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[14px] font-medium">{opt.label}</span>
+                    {opt.beta && (
+                      <span className="text-[9px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full leading-none">
+                        {t('podcast.betaBadge')}
+                      </span>
+                    )}
+                  </span>
+                  {opt.subtitleKey && (
+                    <span className="block text-[11px] text-on-surface-variant mt-0.5 leading-relaxed font-normal line-clamp-2">
+                      {t(opt.subtitleKey)}
+                    </span>
+                  )}
+                </span>
+                {selected && <Icon name="check_circle" size="sm" className="text-primary shrink-0 mt-0.5" filled />}
               </button>
             );
           })}

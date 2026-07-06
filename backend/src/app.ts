@@ -16,6 +16,7 @@ import libraryRouter  from './api/routes/library';
 import whatsappRouter from './api/routes/whatsapp';
 import telegramRouter from './api/routes/telegram';
 import visualsRouter  from './api/routes/visuals';
+import podcastRouter  from './api/routes/podcast';
 
 const app = express();
 
@@ -97,6 +98,8 @@ app.use('/api/cases', requireAuth, pipelineRouter);
 app.use('/api/cases', requireAuth, outputsRouter);
 // visual engine routes: /:caseId/outputs/:outputId/visual (+ /regenerate, /:assetId/image)
 app.use('/api/cases', requireAuth, visualsRouter);
+// podcast engine routes: /:caseId/podcast/episodes (+ /:episodeId, /:episodeId/regenerate)
+app.use('/api/cases', requireAuth, podcastRouter);
 // library: grouped-by-run view of approved outputs (per-user)
 app.use('/api/library', requireAuth, libraryRouter);
 

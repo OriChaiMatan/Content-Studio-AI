@@ -1,0 +1,120 @@
+{
+  "label": "english-subscription-trap",
+  "language": "en",
+  "caseTitle": "The Subscription Trap",
+  "caseAudience": "Business professionals, tech-savvy consumers, product managers",
+  "pack": {
+    "thesis": "The subscription economy did not emerge from consumer demand for recurring value — it emerged from a deliberate industry shift to extract predictable revenue from habitual behavior, and the data shows users are now paying more for less while losing the ability to opt out.",
+    "audience": "Business professionals, tech-savvy consumers, product managers",
+    "language": "en",
+    "claims": [
+      {
+        "text": "The average US consumer now pays for 4.5 streaming subscriptions, up from 2.8 in 2020, yet reports watching the same or less content than before.",
+        "confidence": "reported",
+        "sourceRef": "S1: Deloitte Digital Media Trends 2024"
+      },
+      {
+        "text": "Subscription businesses achieve 5–8x higher customer lifetime value than one-time purchase businesses, according to industry benchmarks.",
+        "confidence": "reported",
+        "sourceRef": "S2: Zuora Subscription Economy Index"
+      },
+      {
+        "text": "Price increases for major streaming services averaged 43% between 2020 and 2024, while content libraries grew by less than 12% in the same period.",
+        "confidence": "reported",
+        "sourceRef": "S1"
+      },
+      {
+        "text": "Subscription cancellation rates drop by 60–70% when companies add friction to the cancellation process — such as requiring phone calls instead of online cancellation.",
+        "confidence": "verified",
+        "sourceRef": "S3: FTC Report on Negative Option Marketing 2023"
+      },
+      {
+        "text": "The average consumer underestimates their monthly subscription spending by $133, according to a Chase Bank analysis.",
+        "confidence": "verified",
+        "sourceRef": "S1"
+      },
+      {
+        "text": "Software-as-a-Service companies are now valued at 7–12x annual recurring revenue on average, creating massive financial incentives to shift all products to subscriptions.",
+        "confidence": "reported",
+        "sourceRef": "S2"
+      }
+    ],
+    "keyFacts": [
+      "Average US consumer pays for 4.5 streaming subscriptions (up from 2.8 in 2020)",
+      "Streaming prices rose 43% on average from 2020–2024; content grew less than 12%",
+      "Consumers underestimate their subscription spending by $133/month on average",
+      "FTC documented that friction-based cancellation (requiring phone calls) reduces cancellations by 60–70%",
+      "The FTC filed enforcement actions in 2023 against companies using 'negative option' subscription tactics",
+      "SaaS companies valued at 7–12x ARR vs 1–2x revenue for one-time purchase software"
+    ],
+    "keyNumbers": [
+      "4.5 average streaming subscriptions per US household (2024)",
+      "43% average streaming price increase 2020–2024",
+      "$133 monthly underestimate of personal subscription spend",
+      "60–70% cancellation reduction from friction-based cancellation flows",
+      "7–12x ARR valuation premium for subscription vs. one-time software"
+    ],
+    "importantEntities": [
+      "Netflix, Disney+, Hulu, Apple TV+ (major streaming services with documented price increases)",
+      "Zuora (subscription management platform; publishes industry benchmarks)",
+      "FTC (Federal Trade Commission; 2023 enforcement actions against dark patterns)",
+      "Adobe (converted Creative Suite from one-time purchase to subscription, 2013 — early case study)"
+    ],
+    "sourceRefs": [
+      "S1: Deloitte Digital Media Trends Survey 2024",
+      "S2: Zuora Subscription Economy Index Q4 2023",
+      "S3: FTC Report on Negative Option Marketing, October 2023"
+    ],
+    "counterarguments": [
+      "Subscriptions do provide genuine consumer value: lower upfront cost, automatic updates, access to broad catalogs that would cost far more to own outright",
+      "Consumers retain choice — they can cancel at any time, even if cancellation is sometimes made harder",
+      "The subscription model funds ongoing development and maintenance that one-time purchases cannot sustain economically"
+    ],
+    "openQuestions": [
+      "At what point does subscription fatigue trigger a meaningful industry correction, or do network effects prevent it?",
+      "Do regulatory interventions (like FTC enforcement) actually change corporate behavior, or just surface-level UX?",
+      "Is there a viable alternative business model for software that requires continuous infrastructure and support?"
+    ],
+    "researchDensity": "medium",
+    "podcastRecommendation": {
+      "verdict": "recommended",
+      "reason": "Strong thesis with 3 documented sources, specific quantitative claims, and a clear mechanism (friction-based retention + pricing power) that makes for a compelling analytical episode."
+    },
+    "researchNotes": {
+      "verifiedFacts": [
+        {
+          "fact": "FTC documented that requiring phone calls for cancellation reduces cancellations by 60–70%",
+          "source": "S3: FTC Report on Negative Option Marketing 2023"
+        },
+        {
+          "fact": "Average consumer underestimates subscription spend by $133/month",
+          "source": "S1: Deloitte Digital Media Trends 2024"
+        },
+        {
+          "fact": "FTC filed enforcement actions in 2023 against companies using negative option subscription tactics",
+          "source": "S3"
+        }
+      ],
+      "primarySources": [
+        "Deloitte Digital Media Trends Survey 2024",
+        "Zuora Subscription Economy Index Q4 2023",
+        "FTC Report on Negative Option Marketing, October 2023"
+      ],
+      "importantEntities": [
+        "FTC (filed 2023 enforcement actions)",
+        "Adobe (early subscription conversion pioneer)",
+        "Netflix, Disney+, Hulu (documented price increases)"
+      ],
+      "openQuestions": [
+        "At what subscription count does consumer backlash become measurable market behavior?",
+        "Does FTC enforcement actually deter dark patterns or only create compliance theater?",
+        "Is there a hybrid model (ownership + service layer) that solves both consumer and business problems?"
+      ],
+      "lowerConfidenceClaims": [
+        "Streaming price increase of 43% (S1 reported; methodology not independently verified)",
+        "7–12x ARR valuation multiples (Zuora is not a neutral party — they profit from subscription adoption)",
+        "Content library growth below 12% (difficult to measure consistently across catalogs)"
+      ]
+    }
+  }
+}

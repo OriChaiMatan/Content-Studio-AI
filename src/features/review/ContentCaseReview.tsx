@@ -9,9 +9,12 @@ import { useLibraryStore } from '../../stores/libraryStore';
 import { useLiveCase } from '../content-cases/useLiveCase';
 import { VisualPanel } from './VisualPanel';
 import { useVisual } from './useVisual';
+import { PodcastPanel } from '../podcast/PodcastPanel';
 import { useT } from '../../i18n/useT';
 import type { StringKey } from '../../i18n/strings';
 import type { Platform, ContentOutput } from '../../types';
+
+type ActiveTab = Platform | 'podcast_engine';
 
 const PLATFORM_ORDER: Platform[] = ['linkedin', 'facebook', 'newsletter', 'podcast'];
 
@@ -26,33 +29,7 @@ function platformName(p: Platform): string {
   return p.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
-// ── Editorial quality label (action-oriented; numeric score secondary) ────────
-function qualityLabel(score: number): { labelKey: StringKey; tone: string } {
-  if (score >= 85) return { labelKey: 'review.quality.publishReady',  tone: 'bg-green-100 text-green-700' };
-  if (score >= 70) return { labelKey: 'review.quality.strongDraft',   tone: 'bg-primary-fixed/60 text-primary' };
-  if (score >= 55) return { labelKey: 'review.quality.needsRevision', tone: 'bg-amber-100 text-amber-800' };
-  return { labelKey: 'review.quality.weakDraft', tone: 'bg-red-100 text-red-800' };
-}
 
-function QualityChip({ output, size = 'md' }: { output: ContentOutput; size?: 'sm' | 'md' }) {
-  const { t } = useT();
-  const score = output.contentScore;
-  if (score == null) return null;
-  const q = qualityLabel(score);
-  const tp = output.metadata?.thesisPreservation;
-  const title = tp
-    ? t('review.thesisPreservationTitle', { score: tp.score, presence: tp.thesisPresence, spine: tp.spinePosition, crossSource: tp.crossSource, sharpness: tp.editorialSharpness, register: tp.registerFidelity, nonFlattening: tp.nonFlattening })
-    : t('review.qualityScoreTitle', { score });
-  return (
-    <span
-      title={title}
-      className={`inline-flex items-center gap-1.5 rounded-full font-bold ${q.tone} ${size === 'md' ? 'px-3 py-1 text-[12px]' : 'px-2 py-0.5 text-[10px]'}`}
-    >
-      {t(q.labelKey)}
-      <span className="opacity-60 font-semibold">{score}</span>
-    </span>
-  );
-}
 
 // ── v2 degradation badges (Phase 9 / 10D.0) ───────────────
 function isDegraded(output: ContentOutput): boolean {
@@ -501,7 +478,6 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
               <div className="flex items-center gap-2 flex-wrap justify-end">
                 {isResearchDegraded(output) && <ResearchDegradedBadge />}
                 {isDegraded(output) && <DegradedBadge />}
-                <QualityChip output={output} />
                 <OutputStatusBadge status={status} />
               </div>
             </div>
@@ -571,7 +547,10 @@ export function ContentCaseReview() {
   const caseItem = useLiveCase(id);
   const loading  = useContentCasesStore(s => s.loading);
   const liveOutputs = useContentCasesStore(s => s.getCaseById(id ?? '')?.outputs);
-  const [activePlatform, setActivePlatform] = useState<Platform>('linkedin');
+  const tabParam = searchParams.get('tab');
+  const [activePlatform, setActivePlatform] = useState<ActiveTab>(
+    tabParam === 'podcast' ? 'podcast_engine' : 'linkedin',
+  );
 
   if (!caseItem) {
     return (
@@ -595,9 +574,18 @@ export function ContentCaseReview() {
   const targetRunId  = runIdParam ?? c.currentRun?.id ?? null;
   const isHistorical = runIdParam !== null && runIdParam !== c.currentRun?.id;
 
-  const reviewOutputs = targetRunId
+  // Podcast Engine tab is visible when case has 'podcast' in contentTargets
+  const hasPodcastTarget = c.contentTargets?.includes('podcast') ?? false;
+
+  const allRunOutputs = targetRunId
     ? c.outputs.filter(o => o.pipelineRunId === targetRunId)
     : c.outputs;
+
+  // When Podcast Engine is active, filter out legacy platform='podcast' ContentOutputs
+  // so they don't appear as a duplicate tab in the regular output list.
+  const reviewOutputs = hasPodcastTarget
+    ? allRunOutputs.filter(o => o.platform !== 'podcast')
+    : allRunOutputs;
 
   const statusOf = (o: ContentOutput) => liveOutputs?.find(x => x.id === o.id)?.status ?? o.status;
   const approvedCount = reviewOutputs.filter(o => statusOf(o) === 'approved').length;
@@ -608,8 +596,9 @@ export function ContentCaseReview() {
     PLATFORM_ORDER.indexOf(a.platform) - PLATFORM_ORDER.indexOf(b.platform),
   );
 
-  const resolvedPlatform: Platform = sortedOutputs.find(o => o.platform === activePlatform)
-    ? activePlatform
+  const isPodcastActive = activePlatform === 'podcast_engine';
+  const resolvedPlatform: Platform = (!isPodcastActive && sortedOutputs.find(o => o.platform === activePlatform))
+    ? (activePlatform as Platform)
     : (sortedOutputs[0]?.platform ?? 'linkedin');
   const activeOutput = sortedOutputs.find(o => o.platform === resolvedPlatform) ?? sortedOutputs[0];
 
@@ -728,8 +717,7 @@ export function ContentCaseReview() {
               <nav className="p-3 space-y-1">
                 {sortedOutputs.map(output => {
                   const st = statusOf(output);
-                  const active = output.platform === resolvedPlatform;
-                  const q = output.contentScore != null ? qualityLabel(output.contentScore) : null;
+                  const active = !isPodcastActive && output.platform === resolvedPlatform;
                   return (
                     <button
                       key={output.id}
@@ -743,12 +731,24 @@ export function ContentCaseReview() {
                         {st === 'rejected' && <Icon name="cancel" size="sm" className="text-error" />}
                         {st === 'draft' && <span className="w-2 h-2 rounded-full bg-amber-400" title={t('review.pendingReview')} />}
                       </div>
-                      {q && (
-                        <p className="text-[11px] mt-0.5 ms-6 opacity-80">{t(q.labelKey)} · {output.contentScore}</p>
-                      )}
                     </button>
                   );
                 })}
+                {/* Podcast Engine tab */}
+                {hasPodcastTarget && (
+                  <button
+                    onClick={() => setActivePlatform('podcast_engine')}
+                    className={`w-full text-left rounded-lg px-3 py-2.5 transition-colors ${isPodcastActive ? 'bg-secondary-container text-on-secondary-container' : 'hover:bg-surface-container'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon name="mic" size="sm" />
+                      <span className="text-[13px] font-medium flex-1">{t('podcast.tab')}</span>
+                      <span className="text-[9px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full leading-none">
+                        {t('podcast.betaBadge')}
+                      </span>
+                    </div>
+                  </button>
+                )}
               </nav>
             </aside>
 
@@ -760,16 +760,31 @@ export function ContentCaseReview() {
                   <button
                     key={output.id}
                     onClick={() => setActivePlatform(output.platform)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap ${output.platform === resolvedPlatform ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container'}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap ${!isPodcastActive && output.platform === resolvedPlatform ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container'}`}
                   >
                     <Icon name={platformIcon[output.platform]} size="sm" />
                     {platformName(output.platform)}
                     {statusOf(output) === 'approved' && <Icon name="check_circle" size="sm" className="text-green-600" />}
                   </button>
                 ))}
+                {hasPodcastTarget && (
+                  <button
+                    onClick={() => setActivePlatform('podcast_engine')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap ${isPodcastActive ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container'}`}
+                  >
+                    <Icon name="mic" size="sm" />
+                    {t('podcast.tab')}
+                    <span className="text-[9px] font-bold bg-primary/10 text-primary px-1 py-0.5 rounded-full leading-none">
+                      {t('podcast.betaBadge')}
+                    </span>
+                  </button>
+                )}
               </div>
 
-              {activeOutput && <DraftPane key={activeOutput.id} output={activeOutput} caseId={c.id} />}
+              {isPodcastActive
+                ? <PodcastPanel caseId={c.id} pipelineRunId={targetRunId} autoStart={hasPodcastTarget && !isHistorical} />
+                : activeOutput && <DraftPane key={activeOutput.id} output={activeOutput} caseId={c.id} />
+              }
             </div>
           </div>
         )}

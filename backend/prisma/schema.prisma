@@ -1,13 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Content Studio AI — Prisma Schema
-// PostgreSQL + Prisma ORM
-// ─────────────────────────────────────────────────────────────────────────────
-
 generator client {
   provider      = "prisma-client-js"
-  // "native" → local dev (macOS/whatever). "debian-openssl-3.0.x" → the production
-  // node:20-slim (Debian bookworm, OpenSSL 3.0) runtime image. Both query engines are
-  // generated so the client finds the right one in each environment.
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
@@ -16,7 +8,320 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ── Enums ─────────────────────────────────────────────────────────────────────
+model User {
+  id                      String                  @id @default(cuid())
+  name                    String
+  email                   String                  @unique
+  role                    String                  @default("Editor")
+  avatarUrl               String?
+  language                Language                @default(en)
+  notifGenerationComplete Boolean                 @default(true)
+  notifFactCheckConflict  Boolean                 @default(true)
+  notifDraftReady         Boolean                 @default(false)
+  lastActiveAt            DateTime                @default(now())
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  passwordHash            String?
+  cases                   ContentCase[]
+  passwordResetTokens     PasswordResetToken[]
+  telegramIdentity        TelegramIdentity?
+  whatsappIdentity        WhatsAppIdentity?
+  whatsappPendingSource   WhatsAppPendingSource[]
+
+  @@map("users")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model ContentCase {
+  id                   String            @id @default(cuid())
+  userId               String
+  title                String
+  status               CaseStatus        @default(draft)
+  language             Language          @default(en)
+  targetAudience       String            @default("")
+  industry             String            @default("")
+  experienceLevel      ExperienceLevel   @default(intermediate)
+  writingStyle         String            @default("")
+  goals                String            @default("")
+  aiInstructions       String            @default("")
+  scheduleFrequency    ScheduleFrequency @default(manual)
+  scheduleTime         String?
+  scheduleDayOfWeek    Int?
+  scheduleDayOfMonth   Int?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  contentGoal          ContentGoal       @default(build_authority)
+  contentStyle         ContentStyle      @default(professional)
+  contentTargets       String[]          @default([])
+  goalCustom           String?
+  styleCustom          String?
+  lastScheduledSlotKey String?
+  user                 User              @relation(fields: [userId], references: [id])
+  outputs              ContentOutput[]
+  sources              ContentSource[]
+  libraryItems         LibraryItem[]
+  pipelineRuns         PipelineRun[]
+  pipelineSteps        PipelineStep[]
+  podcastEpisodes      PodcastEpisode[]
+
+  @@index([userId, status])
+  @@index([updatedAt(sort: Desc)])
+  @@map("content_cases")
+}
+
+model ContentSource {
+  id                 String       @id @default(cuid())
+  contentCaseId      String
+  type               SourceType
+  label              String
+  content            String
+  filePath           String?
+  fileSize           Int?
+  mimeType           String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime?
+  lastUsedAt         DateTime?
+  status             SourceStatus @default(new)
+  usedInRunId        String?
+  sourceIntelligence Json?
+  extractedAt        DateTime?
+  extractedText      String?
+  extractedTitle     String?
+  extractionError    String?
+  extractionStatus   String?
+  contentCase        ContentCase  @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
+
+  @@index([contentCaseId, createdAt(sort: Desc)])
+  @@index([contentCaseId, status])
+  @@map("content_sources")
+}
+
+model ContentOutput {
+  id                 String        @id @default(cuid())
+  contentCaseId      String
+  pipelineRunId      String?
+  platform           Platform
+  title              String
+  body               String
+  status             OutputStatus  @default(draft)
+  version            String        @default("v1.0.0")
+  contentScore       Int?
+  researchConfidence Int?
+  factCheckAccuracy  Int?
+  generatedAt        DateTime      @default(now())
+  reviewedAt         DateTime?
+  breakdown          Json?
+  metadata           Json?
+  contentCase        ContentCase   @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
+  pipelineRun        PipelineRun?  @relation(fields: [pipelineRunId], references: [id])
+  libraryItem        LibraryItem?
+  visualAssets       VisualAsset[]
+
+  @@index([contentCaseId, platform])
+  @@index([contentCaseId, status])
+  @@map("content_outputs")
+}
+
+model VisualAsset {
+  id               String        @id @default(cuid())
+  contentOutputId  String
+  contentCaseId    String
+  version          Int           @default(1)
+  platform         Platform
+  language         Language      @default(en)
+  status           VisualStatus  @default(pending)
+  visualCategory   String?
+  visualIntent     String?
+  backgroundPrompt String?
+  overlaySpec      Json?
+  provider         String?
+  model            String?
+  backgroundKey    String?
+  finalKey         String?
+  width            Int?
+  height           Int?
+  errorCode        String?
+  errorMessage     String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  contentOutput    ContentOutput @relation(fields: [contentOutputId], references: [id], onDelete: Cascade)
+
+  @@index([contentOutputId, version(sort: Desc)])
+  @@map("visual_assets")
+}
+
+model PipelineStep {
+  id            String             @id @default(cuid())
+  contentCaseId String
+  name          PipelineStepName
+  status        PipelineStepStatus @default(idle)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  summary       String?
+  confidence    Int?
+  contentCase   ContentCase        @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([contentCaseId, name])
+  @@map("pipeline_steps")
+}
+
+model PipelineRun {
+  id               String          @id @default(cuid())
+  contentCaseId    String
+  triggeredBy      String          @default("manual")
+  status           JobStatus       @default(running)
+  sourceCount      Int             @default(0)
+  startedAt        DateTime        @default(now())
+  completedAt      DateTime?
+  errorMessage     String?
+  contextSourceIds String[]        @default([])
+  primarySourceIds String[]        @default([])
+  contentPackage   Json?
+  factCheckReport  Json?
+  researchContext  Json?
+  outputLanguage   String?
+  outputs          ContentOutput[]
+  libraryItems     LibraryItem[]
+  jobs             PipelineJob[]
+  podcastEpisodes  PodcastEpisode[]
+  contentCase      ContentCase     @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
+
+  @@index([contentCaseId, startedAt(sort: Desc)])
+  @@map("pipeline_runs")
+}
+
+model PipelineJob {
+  id            String           @id @default(cuid())
+  pipelineRunId String
+  stepName      PipelineStepName
+  status        JobStatus        @default(pending)
+  queueJobId    String?
+  attempts      Int              @default(0)
+  maxAttempts   Int              @default(3)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  result        Json?
+  errorMessage  String?
+  createdAt     DateTime         @default(now())
+  pipelineRun   PipelineRun      @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
+
+  @@index([pipelineRunId, stepName])
+  @@map("pipeline_jobs")
+}
+
+model LibraryItem {
+  id            String        @id @default(cuid())
+  contentCaseId String
+  outputId      String        @unique
+  platform      Platform
+  title         String
+  body          String
+  status        OutputStatus
+  version       String
+  date          DateTime      @default(now())
+  pipelineRunId String?
+  contentCase   ContentCase   @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
+  output        ContentOutput @relation(fields: [outputId], references: [id], onDelete: Cascade)
+  pipelineRun   PipelineRun?  @relation(fields: [pipelineRunId], references: [id])
+
+  @@index([contentCaseId])
+  @@index([pipelineRunId])
+  @@index([platform, status])
+  @@map("library_items")
+}
+
+model WhatsAppMessage {
+  id          String   @id @default(cuid())
+  waMessageId String?  @unique
+  phoneE164   String
+  direction   String
+  kind        String
+  body        String
+  raw         Json?
+  createdAt   DateTime @default(now())
+
+  @@index([phoneE164, createdAt])
+  @@map("whatsapp_messages")
+}
+
+model WhatsAppIdentity {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  phoneE164     String    @unique
+  verified      Boolean   @default(false)
+  verifiedAt    DateTime?
+  verifyCode    String?
+  verifyExpires DateTime?
+  attemptCount  Int       @default(0)
+  optOut        Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([phoneE164])
+  @@map("whatsapp_identities")
+}
+
+model WhatsAppPendingSource {
+  id          String   @id @default(cuid())
+  userId      String
+  sourceType  String
+  label       String
+  content     String
+  caseOptions Json
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  caseId      String?
+  mode        String   @default("select_case")
+  sourceId    String?
+  channel     String   @default("whatsapp")
+  externalId  String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channel, externalId])
+  @@index([userId])
+  @@map("whatsapp_pending_sources")
+}
+
+model TelegramIdentity {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  telegramUserId String?   @unique
+  chatId         String?
+  username       String?
+  displayName    String?
+  verified       Boolean   @default(false)
+  verifyToken    String?
+  verifyExpires  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("telegram_identities")
+}
+
+model ChannelInboundDedup {
+  id         String   @id @default(cuid())
+  channel    String
+  externalId String
+  createdAt  DateTime @default(now())
+
+  @@unique([channel, externalId])
+  @@map("channel_inbound_dedup")
+}
 
 enum Language {
   en
@@ -29,7 +334,6 @@ enum SourceType {
   pdf
 }
 
-// What the user wants to achieve with this Content Case
 enum ContentGoal {
   build_authority
   generate_leads
@@ -40,7 +344,6 @@ enum ContentGoal {
   other
 }
 
-// Tone/voice for content generation
 enum ContentStyle {
   professional
   authoritative
@@ -52,11 +355,6 @@ enum ContentStyle {
   other
 }
 
-// Lifecycle of a ContentSource within its Case.
-// new     → just added, available as primary material for the next pipeline run
-// used    → consumed as primary source in a completed run that was approved (Phase 5)
-// ignored → manually excluded by the user from future runs
-// error   → could not be processed (URL unreachable, PDF parse failure, etc.)
 enum SourceStatus {
   new
   used
@@ -88,7 +386,6 @@ enum OutputStatus {
   rejected
 }
 
-// Visual Engine — async generation lifecycle for a per-output background+overlay asset.
 enum VisualStatus {
   pending
   generating
@@ -131,438 +428,61 @@ enum JobStatus {
   cancelled
 }
 
-// ── Models ────────────────────────────────────────────────────────────────────
+// ── Podcast Engine ────────────────────────────────────────────────────────────
 
-// Users — userId FK is present on ContentCase now so auth can be added
-// without a schema migration later.
-model User {
-  id                      String        @id @default(cuid())
-  name                    String
-  email                   String        @unique
-  // Phase 12 — auth credential. Nullable so the migration is non-destructive to the
-  // existing seed user and leaves room for future passwordless/OAuth users. Email+
-  // password registration always sets it. NEVER serialized to the client.
-  passwordHash            String?
-  role                    String        @default("Editor")
-  avatarUrl               String?
-  language                Language      @default(en)
-  // Notification preferences (denormalized — no separate prefs table needed)
-  notifGenerationComplete Boolean       @default(true)
-  notifFactCheckConflict  Boolean       @default(true)
-  notifDraftReady         Boolean       @default(false)
-  lastActiveAt            DateTime      @default(now())
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
-
-  cases                   ContentCase[]
-  // Password recovery — one-time reset tokens (hashed at rest). Cascade-deleted with the user.
-  passwordResetTokens     PasswordResetToken[]
-  // Phase 13B — optional 1:1 WhatsApp channel identity. Nullable so legacy/seed
-  // users (and any future passwordless flows) remain valid without a number.
-  whatsappIdentity        WhatsAppIdentity?
-  // Optional 1:1 Telegram channel identity (additional channel; nullable).
-  telegramIdentity        TelegramIdentity?
-  // Phase 13D — short-lived pending sources awaiting a case selection / manual text.
-  // Now one-to-many: a user may hold one pending per channel (whatsapp/telegram).
-  whatsappPendingSource   WhatsAppPendingSource[]
-
-  @@map("users")
+enum PodcastEpisodeStatus {
+  pending          // row created, runner not yet started
+  generating       // runner active (Stage 1 in progress)
+  pack_ready       // Stage 1 complete: researchPack stored
+  blueprint_ready  // Stage 2 complete: blueprint stored; Stage 3 starts immediately
+  critique_ready   // Stage 4 complete: critique stored
+  completed        // Stage 5 complete: full episode ready
+  failed           // terminal error; see errorMessage
 }
 
-// One-time password-reset token. The RAW token is NEVER stored — only its SHA-256 hash
-// (unique, so lookup is by hash). Short-lived (60 min); single-use (usedAt is stamped on
-// success); prior unused tokens for a user are deleted when a new one is issued.
-model PasswordResetToken {
-  id        String    @id @default(cuid())
-  userId    String
-  tokenHash String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
+model PodcastEpisode {
+  id                   String               @id @default(cuid())
+  contentCaseId        String
+  pipelineRunId        String
+  version              Int                  @default(1)
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status               PodcastEpisodeStatus @default(pending)
+  errorMessage         String?
 
-  @@index([userId])
-  @@map("password_reset_tokens")
-}
+  // Stage 1 artifact
+  researchPack         Json?
+  // Stage 2 artifact
+  blueprint            Json?
+  // Stage 3 artifacts — sections array grows as each section completes
+  sections             Json?
+  sectionsCompleted    Int                  @default(0)
+  // Stage 4 artifact
+  critique             Json?
+  // Stage 5 artifact
+  podcastPackage       Json?
 
-// ContentCase — the core persistent workspace.
-// Sources are added over time; generation uses all sources present at run time.
-model ContentCase {
-  id                 String            @id @default(cuid())
-  userId             String
-  title              String
-  status             CaseStatus        @default(draft)
-  language           Language          @default(en)
-  targetAudience     String            @default("")
-  industry           String            @default("")
-  experienceLevel    ExperienceLevel   @default(intermediate)
-  writingStyle       String            @default("") @db.Text
-  goals              String            @default("") @db.Text
-  aiInstructions     String            @default("") @db.Text
+  // Denormalized summary fields — set at completion (Stage 5)
+  title                String               @default("")
+  subtitle             String               @default("")
+  language             String               @default("en")
+  wordCount            Int                  @default(0)
+  estimatedDurationMin Int                  @default(0)
+  researchDensity      String               @default("limited")
+  qualityStatus        String?              // pass | needs_review | blocked
+  approximateCostUsd   Float?
 
-  // Schedule columns — denormalized from the Schedule interface.
-  // Serialized back to { frequency, time, dayOfWeek, dayOfMonth } by the API layer.
-  scheduleFrequency  ScheduleFrequency @default(manual)
-  scheduleTime       String?           // "HH:MM" — null for manual
-  scheduleDayOfWeek  Int?              // 0–6 for weekly; null otherwise
-  scheduleDayOfMonth Int?              // 1–31 for monthly; null otherwise
+  // Per-stage timing — set at completion
+  telemetry            Json?
 
-  // Phase 14C — scheduler idempotency. The unique key of the scheduled slot the
-  // scheduler last processed for this case, e.g. "2026-06-16|daily|14:30". Set once
-  // per due slot (consume-on-due) so a slot fires at most once even across overlapping
-  // ticks. Null until the scheduler first processes a slot for this case.
-  lastScheduledSlotKey String?
+  startedAt            DateTime             @default(now())
+  completedAt          DateTime?
+  updatedAt            DateTime             @updatedAt
 
-  // ── Simplified wizard fields ────────────────────────────────────────────────
-  // Collected in the 3-step wizard. Old cases default to first option / empty.
-  contentGoal    ContentGoal  @default(build_authority)
-  goalCustom     String?                   // free text when goal = 'other'
-  contentStyle   ContentStyle @default(professional)
-  styleCustom    String?                   // free text when style = 'other'
-  // Which platforms the pipeline generates outputs for.
-  // Empty [] = legacy backward compat (generate all 6). New cases must be non-empty.
-  contentTargets String[]     @default([])
-
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-
-  user               User              @relation(fields: [userId], references: [id])
-  sources            ContentSource[]
-  outputs            ContentOutput[]
-  pipelineSteps      PipelineStep[]    // current step state (always 3 rows per case)
-  pipelineRuns       PipelineRun[]     // full execution history
-  libraryItems       LibraryItem[]
-
-  @@index([userId, status])
-  @@index([updatedAt(sort: Desc)])
-  @@map("content_cases")
-}
-
-// ContentSource — added continuously over the case lifetime.
-// Supports text notes, URLs, and PDF file references.
-// Each source has a lifecycle: new → used (on approval in Phase 5).
-model ContentSource {
-  id            String        @id @default(cuid())
-  contentCaseId String
-  type          SourceType
-  label         String
-  content       String        @db.Text  // text body, URL string, or original filename
-  filePath      String?                 // server-side path for PDF files
-  fileSize      Int?                    // bytes; null for text and url types
-  mimeType      String?                 // "application/pdf" or null
-
-  // Source lifecycle — managed by the pipeline and approval systems.
-  status        SourceStatus  @default(new)
-  usedInRunId   String?                 // ID of the run that last consumed this source (set in Phase 5)
-  lastUsedAt    DateTime?               // timestamp of last use (set in Phase 5)
-
-  // Deterministic mock analysis generated on create/edit. Null for legacy sources.
-  sourceIntelligence Json?
-
-  // URL content extraction (Phase 8.5). Populated for url sources only.
-  // extractionStatus values: "pending" | "success" | "partial" | "failed" | "skipped".
-  // "partial" = OG/meta preview text only (Phase B) — full body unavailable.
-  // content always remains the original URL; extracted body lives here.
-  extractedTitle    String?
-  extractedText     String?  @db.Text
-  extractionStatus  String?
-  extractionError   String?
-  extractedAt       DateTime?
-
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime?               // null until a text source is edited
-
-  contentCase   ContentCase   @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
-
-  @@index([contentCaseId, createdAt(sort: Desc)])
-  @@index([contentCaseId, status])
-  @@map("content_sources")
-}
-
-// ContentOutput — one row per platform per pipeline run.
-// Tracks editorial status and quality scores from AI generation.
-model ContentOutput {
-  id                 String       @id @default(cuid())
-  contentCaseId      String
-  pipelineRunId      String?      // links output to the run that produced it
-  platform           Platform
-  title              String
-  body               String       @db.Text
-  status             OutputStatus @default(draft)
-  version            String       @default("v1.0.0")
-  contentScore       Int?         // 0–100 AI quality score; null until AI is connected
-  researchConfidence Int?         // 0–100
-  factCheckAccuracy  Int?         // 0–100
-  // Content Output v2 (Phase 9). body = readyToPublish (editable). breakdown is
-  // the read-only platform-specific structure; metadata holds hashtags, image
-  // prompts, reading time / duration, generatorVersion, degraded flag, etc.
-  // Null on legacy v1 outputs → consumers fall back to body.
-  breakdown          Json?
-  metadata           Json?
-  generatedAt        DateTime     @default(now())
-  reviewedAt         DateTime?    // set when status is changed to approved/rejected
-
-  contentCase        ContentCase  @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
-  pipelineRun        PipelineRun? @relation(fields: [pipelineRunId], references: [id], onDelete: SetNull)
-  libraryItem        LibraryItem?
-  visualAssets       VisualAsset[]
-
-  @@index([contentCaseId, platform])
-  @@index([contentCaseId, status])
-  @@map("content_outputs")
-}
-
-// Visual Engine — one generated visual (AI background + LumAI overlay), versioned
-// per output. Binaries live in object/local storage; only KEYS are stored here.
-// Background and final are stored separately so a text edit can re-render the
-// overlay without paying for a new background.
-model VisualAsset {
-  id               String       @id @default(cuid())
-  contentOutputId  String
-  contentCaseId    String       // denormalized for ownership scoping/index
-  version          Int          @default(1)
-  platform         Platform
-  language         Language     @default(en)
-  status           VisualStatus @default(pending)
-  visualCategory   String?
-  visualIntent     String?      @db.Text
-  backgroundPrompt String?      @db.Text
-  overlaySpec      Json?
-  provider         String?      // "openai" | "mock" | "disabled"
-  model            String?
-  backgroundKey    String?      // storage key (raw AI/placeholder background)
-  finalKey         String?      // storage key (composited platform PNG)
-  width            Int?
-  height           Int?
-  errorCode        String?      // "disabled" | "provider_error" | "render_error" | ...
-  errorMessage     String?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-
-  contentOutput    ContentOutput @relation(fields: [contentOutputId], references: [id], onDelete: Cascade)
-
-  @@index([contentOutputId, version(sort: Desc)])
-  @@map("visual_assets")
-}
-
-// PipelineStep — current state of each of the 3 steps for a case.
-// Always exactly 3 rows per ContentCase (enforced by @@unique).
-// Reset to idle at the start of each new run; updated as jobs complete.
-model PipelineStep {
-  id            String             @id @default(cuid())
-  contentCaseId String
-  name          PipelineStepName
-  status        PipelineStepStatus @default(idle)
-  startedAt     DateTime?
-  completedAt   DateTime?
-  summary       String?            @db.Text
-  confidence    Int?               // 0–100
-
-  contentCase   ContentCase        @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
-
-  @@unique([contentCaseId, name])
-  @@map("pipeline_steps")
-}
-
-// PipelineRun — one record per execution (manual or scheduled).
-// Stores which sources were selected as primary (new) vs context (used/background).
-model PipelineRun {
-  id               String        @id @default(cuid())
-  contentCaseId    String
-  triggeredBy      String        @default("manual")   // "manual" | "schedule"
-  // Output language chosen at generation time (Phase 8.6). "en" | "he".
-  // Null on legacy runs → falls back to case.language ?? "en".
-  outputLanguage   String?
-  status           JobStatus     @default(running)
-  // Source selection snapshot at run time
-  primarySourceIds String[]      @default([])          // source IDs with status=new, used as main material
-  contextSourceIds String[]      @default([])          // source IDs with status=used, used as background only
-  sourceCount      Int           @default(0)           // total sources in this run (primary + context)
-  startedAt        DateTime      @default(now())
-  completedAt      DateTime?
-  errorMessage     String?       @db.Text
-
-  // ── AI Pipeline Contract artifacts ───────────────────────────────────────────
-  // Populated stage-by-stage as the pipeline advances.
-  // Null until that stage completes. Replaced by real AI responses in Phase 8.
-  researchContext  Json?         // ResearchContext — Stage 1 output
-  factCheckReport  Json?         // FactCheckReport — Stage 2 output
-  contentPackage   Json?         // ContentPackage  — Stage 3 output (all 6 platforms + 2 image prompts)
-
-  contentCase      ContentCase   @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
-  outputs          ContentOutput[]
-  jobs             PipelineJob[]
-  libraryItems     LibraryItem[]
+  contentCase          ContentCase          @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
+  pipelineRun          PipelineRun          @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
 
   @@index([contentCaseId, startedAt(sort: Desc)])
-  @@map("pipeline_runs")
-}
-
-// PipelineJob — one row per BullMQ job within a PipelineRun.
-// Stores the queue job ID for progress lookups, retry tracking, and result metadata.
-model PipelineJob {
-  id            String           @id @default(cuid())
-  pipelineRunId String
-  stepName      PipelineStepName
-  status        JobStatus        @default(pending)
-  queueJobId    String?          // BullMQ job ID — set once job is enqueued
-  attempts      Int              @default(0)
-  maxAttempts   Int              @default(3)
-  startedAt     DateTime?
-  completedAt   DateTime?
-  result        Json?            // step metadata: source counts, AI model used, token counts, etc.
-  errorMessage  String?          @db.Text
-  createdAt     DateTime         @default(now())
-
-  pipelineRun   PipelineRun      @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
-
-  @@index([pipelineRunId, stepName])
-  @@map("pipeline_jobs")
-}
-
-// LibraryItem — approved outputs surfaced in the global Library.
-// Created when a ContentOutput is approved; removed on rejection.
-// pipelineRunId links the item to its originating run for run-grouped display.
-// Multiple runs for the same case each produce their own set of LibraryItems.
-model LibraryItem {
-  id            String        @id @default(cuid())
-  contentCaseId String
-  outputId      String        @unique
-  pipelineRunId String?                    // which run produced this item (null for legacy items)
-  platform      Platform
-  title         String
-  body          String        @db.Text
-  status        OutputStatus
-  version       String
-  date          DateTime      @default(now())
-
-  contentCase   ContentCase   @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
-  output        ContentOutput @relation(fields: [outputId], references: [id], onDelete: Cascade)
-  pipelineRun   PipelineRun?  @relation(fields: [pipelineRunId], references: [id], onDelete: SetNull)
-
-  @@index([contentCaseId])
-  @@index([pipelineRunId])
-  @@index([platform, status])
-  @@map("library_items")
-}
-
-// WhatsAppMessage — Phase 13A inbound/outbound log + idempotency.
-// waMessageId is Meta's globally-unique message id; the @unique constraint is the
-// dedupe key so retried inbound webhooks never create duplicate rows. Outbound rows
-// carry no waMessageId (null). This table is logging/plumbing only — it has no FK to
-// User or ContentCase yet (phone→user mapping arrives in a later phase).
-model WhatsAppMessage {
-  id          String   @id @default(cuid())
-  waMessageId String?  @unique           // Meta message id — idempotency key (inbound only)
-  phoneE164   String                     // sender (inbound) / recipient (outbound)
-  direction   String                     // "inbound" | "outbound"
-  kind        String                     // "inbound" | "echo" | "error"
-  body        String   @db.Text
-  raw         Json?                       // parsed Meta message object (inbound), for debugging
-  createdAt   DateTime @default(now())
-
-  @@index([phoneE164, createdAt])
-  @@map("whatsapp_messages")
-}
-
-// WhatsAppIdentity — Phase 13B. One verified WhatsApp number per user (MVP).
-// Created at registration with verified=false; flipped to true by user-initiated
-// verification (the user sends verifyCode from their WhatsApp to the business
-// number; the inbound webhook matches sender + code). verifyCode/verifyExpires are
-// transient secrets and are NEVER serialized to the client. phoneE164 is stored in
-// canonical E.164 ("+972501234567"); inbound matching reconciles against Meta's
-// digit-only `from` via a shared normalizer.
-model WhatsAppIdentity {
-  id            String    @id @default(cuid())
-  userId        String    @unique           // one number per user (MVP)
-  phoneE164     String    @unique           // canonical E.164, e.g. "+972501234567"
-  verified      Boolean   @default(false)
-  verifiedAt    DateTime?
-  verifyCode    String?                     // single-use; cleared on success
-  verifyExpires DateTime?                   // now + 60 min on (re)generation
-  attemptCount  Int       @default(0)       // wrong-code guard
-  optOut        Boolean   @default(false)   // declared now; used by a later notification phase
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([phoneE164])
-  @@map("whatsapp_identities")
-}
-
-// WhatsAppPendingSource — Phase 13D. A classified inbound message held while a
-// verified sender chooses which of their multiple active cases to file it in.
-// One pending per phone/user (unique phoneE164) → "new pending replaces previous"
-// is a single upsert. caseOptions is a STORED SNAPSHOT of the numbered list shown
-// (ordered [{ index, caseId, title }]); selection resolves against it, then the
-// chosen case is re-checked live (owned + exists + not completed) before ingest.
-// Lazy expiry only (no sweeper): expiresAt is checked on read.
-// Channel-agnostic since Phase 1 of multi-channel ingestion: addressing is
-// (channel, externalId) rather than phoneE164, so the same pending/recovery flow
-// serves WhatsApp and (later) Telegram. Table/model name kept for a minimal,
-// non-breaking migration. One pending per (channel, externalId).
-model WhatsAppPendingSource {
-  id          String   @id @default(cuid())
-  userId      String                     // FK; NOT unique — a user may have one pending per channel
-  channel     String   @default("whatsapp")  // 'whatsapp' | 'telegram'
-  externalId  String                     // phoneE164 (whatsapp) / chat id (telegram); upsert key
-  // mode discriminates the pending intent:
-  //   'select_case'  → waiting for a numbered case selection (source not yet created)
-  //   'manual_text'  → a url source was created with failed/partial extraction; waiting
-  //                    for the next plain-text message to attach as manualText.
-  mode        String   @default("select_case")
-  sourceType  String                     // 'text' | 'url' (String — not SourceType; no pdf)
-  label       String
-  content     String   @db.Text
-  caseOptions Json                        // select_case: ordered [{ index, caseId, title }]; manual_text: []
-  // manual_text only — the already-created source to recover.
-  caseId      String?
-  sourceId    String?
-  expiresAt   DateTime                    // now + 30 min
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([channel, externalId])
-  @@index([userId])
-  @@map("whatsapp_pending_sources")
-}
-
-// TelegramIdentity — Phase 2 of Telegram ingestion. Maps a Telegram user to an app
-// user. Created/verified by the /start token binding in a later phase; until then
-// no rows exist, so inbound Telegram users get an onboarding-required reply.
-model TelegramIdentity {
-  id             String    @id @default(cuid())
-  userId         String    @unique           // one Telegram account per user (MVP)
-  // Null until /start binding completes — the token row is created at link-token
-  // time, before the Telegram user is known. @unique tolerates multiple NULLs.
-  telegramUserId String?   @unique           // Telegram numeric user id (stored as string)
-  chatId         String?                      // private chat id used for sending
-  username       String?                      // @handle (optional, may change)
-  displayName    String?                      // first/last name snapshot
-  verified       Boolean   @default(false)
-  verifyToken    String?                      // single-use /start binding token (later phase)
-  verifyExpires  DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("telegram_identities")
-}
-
-// ChannelInboundDedup — generic inbound idempotency. One row per processed
-// provider update/message id; the @@unique enforces "process once" via a P2002 on
-// insert (mirrors the WhatsApp waMessageId dedup, but channel-agnostic).
-model ChannelInboundDedup {
-  id         String   @id @default(cuid())
-  channel    String                          // 'telegram' (whatsapp uses its own message log)
-  externalId String                          // provider id — Telegram update_id (as string)
-  createdAt  DateTime @default(now())
-
-  @@unique([channel, externalId])
-  @@map("channel_inbound_dedup")
+  @@index([pipelineRunId, startedAt(sort: Desc)])
+  @@index([pipelineRunId, version(sort: Desc)])
+  @@map("podcast_episodes")
 }

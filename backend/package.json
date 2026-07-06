@@ -14,7 +14,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "validate": "prisma validate",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "podcast:spike": "tsx src/scripts/runPodcastSpike.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",

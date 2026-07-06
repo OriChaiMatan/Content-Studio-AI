@@ -127,7 +127,6 @@ export const strings = {
   'detail.emptyDraft':     { en: 'Add sources below, then start the pipeline.', he: 'הוסיפו מקורות למטה, ואז הפעילו את הצינור.' },
   'detail.emptyRunning':   { en: 'Pipeline is running — outputs will appear here.', he: 'הצינור פועל — הפלטים יופיעו כאן.' },
   'detail.emptyNoRun':     { en: 'No outputs for the current run.', he: 'אין פלטים להרצה הנוכחית.' },
-  'detail.score':          { en: 'Score', he: 'ציון' },
   // step labels
   'detail.sl.research.idle':            { en: 'Research Pending',   he: 'מחקר ממתין' },
   'detail.sl.research.running':         { en: 'Researching…',       he: 'במחקר…' },
@@ -270,12 +269,6 @@ export const strings = {
   'review.backToCases':  { en: 'Back to Cases', he: 'חזרה לתיקים' },
   'review.backToCase':   { en: 'Case',          he: 'תיק' },
   // Quality labels
-  'review.quality.publishReady':  { en: 'Publish Ready',  he: 'מוכן לפרסום' },
-  'review.quality.strongDraft':   { en: 'Strong Draft',   he: 'טיוטה חזקה' },
-  'review.quality.needsRevision': { en: 'Needs Revision', he: 'דורש תיקון' },
-  'review.quality.weakDraft':     { en: 'Weak Draft',     he: 'טיוטה חלשה' },
-  'review.thesisPreservationTitle': { en: 'Thesis Preservation {score}/100 — presence {presence} · spine {spine} · cross-source {crossSource} · sharpness {sharpness} · register {register} · non-flattening {nonFlattening}', he: 'שימור התזה {score}/100 — נוכחות {presence} · ציר {spine} · בין־מקורי {crossSource} · חדות {sharpness} · מרשם {register} · אי־השטחה {nonFlattening}' },
-  'review.qualityScoreTitle': { en: 'Quality score {score}/100', he: 'ציון איכות {score}/100' },
   // Degradation badges
   'review.degradedBadge':              { en: 'Generated with fallback', he: 'נוצר עם גיבוי' },
   'review.degradedBadgeTitle':         { en: 'This output was produced by the fallback generator, not the live generator.', he: 'פלט זה הופק על ידי מחולל הגיבוי, ולא על ידי המחולל החי.' },
@@ -541,6 +534,93 @@ export const strings = {
   'auth.resetInvalidTitle':{ en: 'Link expired or invalid', he: 'הקישור פג או אינו תקין' },
   'auth.resetInvalidBody': { en: 'This password reset link is invalid, expired, or has already been used. Please request a new one.', he: 'קישור איפוס הסיסמה אינו תקין, פג תוקף או שכבר נעשה בו שימוש. אנא בקשו קישור חדש.' },
   'auth.backToLogin':      { en: 'Back to Login',         he: 'חזרה להתחברות' },
+
+  // ── Podcast Engine ────────────────────────────────────────────────────────
+  'podcast.tab':                   { en: 'Podcast',                         he: 'פודקאסט' },
+  'podcast.betaBadge':             { en: 'Beta',                            he: 'בטא' },
+  'podcast.wizSubtitle':           { en: 'Create a complete expert podcast episode from your research.', he: 'צרו פרק פודקאסט מקצועי מלא מהמחקר שלכם.' },
+
+  // Not-started state
+  'podcast.notStarted.title':      { en: 'Generate Podcast Episode',        he: 'יצירת פרק פודקאסט' },
+  'podcast.notStarted.generate':   { en: 'Generate Podcast',                he: 'צור פודקאסט' },
+  'podcast.notStarted.noRun':      { en: 'Complete the content pipeline first to enable podcast generation.', he: 'יש להשלים את צינור התוכן תחילה כדי לאפשר יצירת פודקאסט.' },
+
+  // Failed state
+  'podcast.failed.title':          { en: 'Episode generation failed',       he: 'יצירת הפרק נכשלה' },
+  'podcast.failed.hint':           { en: 'This sometimes happens with complex topics. Retrying usually works.', he: 'לפעמים זה קורה עם נושאים מורכבים. ניסיון חוזר בדרך כלל עובד.' },
+  'podcast.failed.retry':          { en: 'Retry',                           he: 'נסה שוב' },
+
+  // Generating state
+  'podcast.generating.note':       { en: 'This takes 2–4 minutes. You can navigate away and return.', he: 'התהליך לוקח 2–4 דקות. ניתן לנווט לאחר ולחזור.' },
+
+  // Stage messages
+  'podcast.stage.pending':         { en: 'Preparing episode…',              he: 'מכין פרק…' },
+  'podcast.stage.generating':      { en: 'Gathering research…',             he: 'אוסף מחקר…' },
+  'podcast.stage.pack_ready':      { en: 'Building episode blueprint…',     he: 'בונה מתווה פרק…' },
+  'podcast.stage.blueprint_ready': { en: 'Writing sections…',               he: 'כותב קטעים…' },
+  'podcast.stage.writing_section': { en: 'Writing section {n}…',            he: 'כותב קטע {n}…' },
+  'podcast.stage.intro':           { en: 'Writing introduction…',           he: 'כותב מבוא…' },
+  'podcast.stage.critique_ready':  { en: 'Finalising episode…',             he: 'מסיים פרק…' },
+
+  // Episode tabs
+  'podcast.tab.episode':           { en: 'Episode',                         he: 'פרק' },
+  'podcast.tab.researchNotes':     { en: 'Research Notes',                  he: 'הערות מחקר' },
+
+  // Section headings
+  'podcast.section.summary':       { en: 'Executive Summary',               he: 'סיכום מנהלים' },
+  'podcast.section.takeaways':     { en: 'Key Takeaways',                   he: 'עיקרי הדברים' },
+  'podcast.section.sections':      { en: 'Sections',                        he: 'קטעים' },
+  'podcast.section.episode':       { en: 'Episode',                         he: 'פרק' },
+
+  // Metadata strip
+  'podcast.meta.duration':         { en: '{min} min listen',                he: '{min} דקות האזנה' },
+  'podcast.meta.words':            { en: '{count} words',                   he: '{count} מילים' },
+  'podcast.meta.sources':          { en: '{count} sources',                 he: '{count} מקורות' },
+  'podcast.meta.qualityPass':      { en: 'Quality: Pass',                   he: 'איכות: עבר' },
+  'podcast.meta.qualityReview':    { en: 'Quality: Review',                 he: 'איכות: דורש בדיקה' },
+  'podcast.meta.qualityBlocked':   { en: 'Quality: Blocked',                he: 'איכות: חסום' },
+
+  // Actions
+  'podcast.action.copy':           { en: 'Copy Episode',                    he: 'העתק פרק' },
+  'podcast.action.copied':         { en: 'Copied!',                         he: 'הועתק!' },
+  'podcast.action.download':       { en: 'Download',                        he: 'הורדה' },
+  'podcast.action.downloadMd':     { en: 'Download as Markdown',            he: 'הורד כ-Markdown' },
+  'podcast.action.downloadTxt':    { en: 'Download as Text',                he: 'הורד כטקסט' },
+  'podcast.action.regenerate':     { en: 'Regenerate',                      he: 'צור מחדש' },
+  'podcast.action.regenerating':   { en: 'Regenerating…',                   he: 'יוצר מחדש…' },
+
+  // Research Notes tab
+  'podcast.notes.keyFacts':        { en: 'Key Facts',                       he: 'עובדות מפתח' },
+  'podcast.notes.keyNumbers':      { en: 'Key Numbers',                     he: 'מספרים מפתח' },
+  'podcast.notes.overallScore':    { en: 'Overall quality score',           he: 'ציון איכות כולל' },
+  'podcast.notes.sources':         { en: 'Sources Used',                    he: 'מקורות שנוצלו' },
+  'podcast.notes.openQuestions':   { en: 'Open Questions',                  he: 'שאלות פתוחות' },
+  'podcast.notes.confidence':      { en: 'Quality & Confidence',            he: 'איכות ואמינות' },
+  'podcast.notes.empty':           { en: 'Research notes are not available for this episode.', he: 'הערות המחקר אינן זמינות לפרק זה.' },
+  'podcast.notes.intro':           { en: 'These notes reflect the AI\'s research process and confidence levels — not editorial judgements.', he: 'הערות אלו משקפות את תהליך המחקר של הבינה המלאכותית ורמות הביטחון שלה — לא שיקולים עריכתיים.' },
+
+  // Library
+  'podcast.library.title':         { en: 'Podcast Episodes',                he: 'פרקי פודקאסט' },
+  'podcast.library.duration':      { en: '{min} min',                       he: '{min} דקות' },
+  'podcast.library.viewEpisode':   { en: 'View Episode',                    he: 'צפה בפרק' },
+  'podcast.library.noEpisodes':    { en: 'No podcast episodes yet.',        he: 'אין עדיין פרקי פודקאסט.' },
+
+  // Auto-start
+  'podcast.autoStart.preparing':   { en: 'Preparing your episode…',         he: 'מכין את הפרק שלך…' },
+
+  // Episode classification (derived from researchDensity)
+  'podcast.meta.deepDive':         { en: 'Deep Dive',                       he: 'צלילה עמוקה' },
+  'podcast.meta.standardEpisode':  { en: 'Standard Episode',                he: 'פרק סטנדרטי' },
+  'podcast.meta.shortBriefing':    { en: 'Short Briefing',                  he: 'תדרוך קצר' },
+
+  // Fallbacks for malformed/untitled episodes
+  'podcast.meta.untitled':         { en: 'Untitled Episode',                he: 'פרק ללא שם' },
+  'podcast.fallback.title':        { en: 'Episode is ready, but narration is missing', he: 'הפרק מוכן, אך הנרציה חסרה' },
+  'podcast.fallback.hint':         { en: 'Please regenerate the episode to rebuild the narration.', he: 'נא לצור מחדש את הפרק כדי לשחזר את הנרציה.' },
+
+  // Generation progress metadata
+  'podcast.generating.episodeTitle': { en: 'Episode: {title}',             he: 'פרק: {title}' },
+  'podcast.generating.estimatedMin': { en: '~{min} min episode',            he: 'פרק של ~{min} דקות' },
 } satisfies Record<string, Entry>;
 
 export type StringKey = keyof typeof strings;
