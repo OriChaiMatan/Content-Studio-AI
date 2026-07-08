@@ -15,7 +15,6 @@ import { RegisterPage } from './features/auth/RegisterPage';
 import { ForgotPasswordPage } from './features/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from './features/auth/ResetPasswordPage';
 import { VerifyWhatsAppPage } from './features/auth/VerifyWhatsAppPage';
-import { PrivacyPolicyPage } from './features/legal/PrivacyPolicyPage';
 import { useAuthStore } from './stores/authStore';
 import { useContentCasesStore } from './stores/contentCasesStore';
 import { useLibraryStore } from './stores/libraryStore';
@@ -26,6 +25,9 @@ const LandingPage = lazy(() => import('./features/marketing/LandingPage').then(m
 const AboutPage = lazy(() => import('./features/marketing/AboutPage').then(m => ({ default: m.AboutPage })));
 const ContactPage = lazy(() => import('./features/marketing/ContactPage').then(m => ({ default: m.ContactPage })));
 const TermsPage = lazy(() => import('./features/marketing/TermsPage').then(m => ({ default: m.TermsPage })));
+// Reachable both signed-in (Chrome Web Store reviewers, existing users) and
+// signed-out (public), so it's imported once and used in both route trees below.
+const PrivacyPage = lazy(() => import('./features/marketing/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
 
 // The protected application shell + routes. Only rendered when authenticated, so this
 // is the single place that kicks off PROTECTED data loads (cases + library). Runs once
@@ -50,7 +52,7 @@ function AuthedApp() {
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/verify-whatsapp" element={<VerifyWhatsAppPage />} />
-        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/privacy" element={<Suspense fallback={null}><PrivacyPage /></Suspense>} />
         {/* Reachable while signed in so an emailed reset link still resolves. */}
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -91,7 +93,7 @@ export default function App() {
           <Route path="/contact" element={<Suspense fallback={null}><ContactPage /></Suspense>} />
           <Route path="/terms" element={<Suspense fallback={null}><TermsPage /></Suspense>} />
           {/* Public — reachable without auth (e.g. Chrome Web Store reviewers). */}
-          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/privacy" element={<Suspense fallback={null}><PrivacyPage /></Suspense>} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />

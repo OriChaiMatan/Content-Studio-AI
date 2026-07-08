@@ -17,6 +17,7 @@ import whatsappRouter from './api/routes/whatsapp';
 import telegramRouter from './api/routes/telegram';
 import visualsRouter  from './api/routes/visuals';
 import podcastRouter  from './api/routes/podcast';
+import contactRouter  from './api/routes/contact';
 
 const app = express();
 
@@ -82,6 +83,10 @@ app.use('/api/integrations/telegram', telegramRouter);
 // ── Auth routes (PUBLIC) — Phase 12 ───────────────────────────────────────────
 // register/login/logout/me. /me self-guards with requireAuth.
 app.use('/api/auth', authRouter);
+
+// ── Contact form (PUBLIC) ─────────────────────────────────────────────────────
+// Marketing-site contact form. No auth. Rate-limited inside the router.
+app.use('/api/contact', contactRouter);
 
 // ── API routes (PROTECTED) ────────────────────────────────────────────────────
 // requireAuth sets req.userId; every case/library route is per-user scoped, and

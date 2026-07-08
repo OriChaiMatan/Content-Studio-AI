@@ -1,24 +1,53 @@
 import { useState } from 'react';
 import { MarketingLayout } from './MarketingLayout';
 import { SubpageChrome } from './SubpageChrome';
-
-const SUPPORT_EMAIL = 'ori.chaimatan@gmail.com';
+import { api, ApiError } from '../../lib/api';
 
 const inputStyle: React.CSSProperties = {
   background: '#141828', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10,
   padding: '14px 16px', color: '#E9EBFF', fontSize: 14, fontFamily: "'Inter',sans-serif",
 };
 
+type Status = 'idle' | 'submitting' | 'success' | 'error';
+
 export function ContactPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
+  const [status, setStatus] = useState<Status>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const body = encodeURIComponent(`${message}\n\n— ${name} (${email})`);
-    window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('LumAI — Contact')}&body=${body}`;
+    if (status === 'submitting') return; // guards against double-submit (e.g. double-click)
+    setStatus('submitting');
+    setErrorMessage('');
+    try {
+      await api.post('/contact', { name, email, message });
+      setStatus('success');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        setErrorMessage('Too many messages sent. Please wait a bit and try again.');
+      } else if (err instanceof ApiError) {
+        setErrorMessage(err.message);
+      } else {
+        setErrorMessage('Something went wrong sending your message. Please try again.');
+      }
+      setStatus('error');
+    }
   };
+
+  if (status === 'success') {
+    return (
+      <MarketingLayout>
+        <SubpageChrome eyebrow="Contact" title="Message sent.">
+          <p style={{ fontSize: 17, color: '#A0A8C8', lineHeight: 1.8 }}>
+            Thanks for reaching out — we&apos;ve received your message and will get back to you soon.
+          </p>
+        </SubpageChrome>
+      </MarketingLayout>
+    );
+  }
 
   return (
     <MarketingLayout>
@@ -27,14 +56,32 @@ export function ContactPage() {
           Questions about LumAI, early access, or working together — we&apos;d like to hear from you.
         </p>
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 440 }}>
-          <input type="text" required placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
-          <input type="email" required placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
-          <textarea required placeholder="How can we help?" rows={4} value={message} onChange={(e) => setMessage(e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} />
+          <input
+            type="text" required placeholder="Your name" value={name}
+            onChange={(e) => setName(e.target.value)} disabled={status === 'submitting'} style={inputStyle}
+          />
+          <input
+            type="email" required placeholder="Email address" value={email}
+            onChange={(e) => setEmail(e.target.value)} disabled={status === 'submitting'} style={inputStyle}
+          />
+          <textarea
+            required placeholder="How can we help?" rows={4} value={message}
+            onChange={(e) => setMessage(e.target.value)} disabled={status === 'submitting'}
+            style={{ ...inputStyle, resize: 'vertical' }}
+          />
+          {status === 'error' && (
+            <p role="alert" style={{ fontSize: 13, color: '#FF9B9B', margin: 0 }}>{errorMessage}</p>
+          )}
           <button
             type="submit"
-            style={{ background: '#1E54C8', color: 'white', fontWeight: 700, fontSize: 15, padding: '14px 32px', borderRadius: 12, textAlign: 'center', boxShadow: '0 4px 16px rgba(30,84,200,0.4)', border: 'none', cursor: 'pointer' }}
+            disabled={status === 'submitting'}
+            style={{
+              background: '#1E54C8', color: 'white', fontWeight: 700, fontSize: 15, padding: '14px 32px',
+              borderRadius: 12, textAlign: 'center', boxShadow: '0 4px 16px rgba(30,84,200,0.4)', border: 'none',
+              cursor: status === 'submitting' ? 'default' : 'pointer', opacity: status === 'submitting' ? 0.7 : 1,
+            }}
           >
-            Send Message
+            {status === 'submitting' ? 'Sending…' : 'Send Message'}
           </button>
         </form>
       </SubpageChrome>

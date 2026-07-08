@@ -16,6 +16,9 @@ export interface SendEmailInput {
   subject: string;
   html: string;
   text: string;
+  // Set on notification emails (e.g. contact form) so the recipient can hit
+  // "reply" in their client and land in the submitter's inbox directly.
+  replyTo?: string;
 }
 export type SendResult = { sent: true; id: string | null } | { sent: false; reason: 'disabled' | 'error' };
 
@@ -50,6 +53,7 @@ async function send(input: SendEmailInput): Promise<SendResult> {
       subject: input.subject,
       html: input.html,
       text: input.text,
+      ...(input.replyTo ? { replyTo: input.replyTo } : {}),
     });
     return { sent: true, id: data?.id ?? null };
   } catch (err) {
@@ -140,10 +144,68 @@ export function renderPasswordResetEmail(input: PasswordResetEmailInput): { html
   return { html, text, subject };
 }
 
+// ── Contact form notification ─────────────────────────────────────────────────
+export interface ContactMessageEmailInput {
+  to: string;
+  name: string;
+  email: string;
+  message: string;
+}
+
+// Rendered separately (and exported) so it's testable/previewable without touching
+// the provider — same rationale as renderPasswordResetEmail above.
+export function renderContactMessageEmail(input: ContactMessageEmailInput): { html: string; text: string; subject: string } {
+  const name = esc(input.name);
+  const email = esc(input.email);
+  const message = esc(input.message).replace(/\n/g, '<br>');
+  const subject = `New contact form message from ${input.name}`;
+
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f6f7f9;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <tr><td style="padding:28px 32px 8px;">
+          <span style="display:inline-block;font-size:20px;font-weight:800;letter-spacing:-0.02em;color:${BRAND};">LumAI</span>
+          <span style="display:block;font-size:11px;color:${MUTED};letter-spacing:0.04em;margin-top:2px;">Marketing site — Contact form</span>
+        </td></tr>
+        <tr><td style="padding:16px 32px 0;">
+          <h1 style="margin:0 0 16px;font-size:22px;line-height:1.25;color:${INK};font-weight:800;letter-spacing:-0.01em;">New contact message</h1>
+          <p style="margin:0 0 4px;font-size:13px;color:${MUTED};">From</p>
+          <p style="margin:0 0 16px;font-size:15px;color:${INK};">${name} &lt;${email}&gt;</p>
+          <p style="margin:0 0 4px;font-size:13px;color:${MUTED};">Message</p>
+          <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:${INK};white-space:pre-wrap;">${message}</p>
+        </td></tr>
+        <tr><td style="padding:0 32px 28px;border-top:1px solid #f0f1f3;">
+          <p style="margin:18px 0 0;font-size:11px;line-height:1.5;color:#9ca3af;">Reply to this email to respond directly to ${email}.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  const text = [
+    `New contact form message`,
+    ``,
+    `From: ${input.name} <${input.email}>`,
+    ``,
+    input.message,
+    ``,
+    `Reply to this email to respond directly to ${input.email}.`,
+  ].join('\n');
+
+  return { html, text, subject };
+}
+
 export const emailService = {
   send,
   async sendPasswordReset(input: PasswordResetEmailInput): Promise<SendResult> {
     const { html, text, subject } = renderPasswordResetEmail(input);
     return send({ to: input.to, subject, html, text });
+  },
+  async sendContactMessage(input: ContactMessageEmailInput): Promise<SendResult> {
+    const { html, text, subject } = renderContactMessageEmail(input);
+    return send({ to: input.to, subject, html, text, replyTo: input.email });
   },
 };

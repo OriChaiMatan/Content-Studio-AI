@@ -106,3 +106,7 @@ export const ingestionLimiter = makeLimiter({ windowMs: 60 * MINUTE, max: rateLi
 // Visual generation — user-based. The priciest action (image API $/image); given
 // its own limit, NOT shared with the AI-text limiter. Max from imageGenConfig.
 export const imageGenLimiter = makeLimiter({ windowMs: 60 * MINUTE, max: imageGenConfig.rateLimitMax, scope: 'user' });
+
+// Public marketing-site contact form — no auth, so IP-based. Tight enough to
+// blunt spam/abuse while allowing a real visitor to retry after a mistake.
+export const contactLimiter = makeLimiter({ windowMs: 15 * MINUTE, max: 5, scope: 'ip' });
