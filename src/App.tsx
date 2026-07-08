@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAppDirection } from './i18n/useT';
 import { AppLayout } from './components/layout/AppLayout';
@@ -19,6 +19,13 @@ import { PrivacyPolicyPage } from './features/legal/PrivacyPolicyPage';
 import { useAuthStore } from './stores/authStore';
 import { useContentCasesStore } from './stores/contentCasesStore';
 import { useLibraryStore } from './stores/libraryStore';
+
+// Lazy-loaded: the marketing site is an animation-heavy bundle (canvas particles,
+// scroll choreography) with its own CSS that logged-in users never need to fetch.
+const LandingPage = lazy(() => import('./features/marketing/LandingPage').then(m => ({ default: m.LandingPage })));
+const AboutPage = lazy(() => import('./features/marketing/AboutPage').then(m => ({ default: m.AboutPage })));
+const ContactPage = lazy(() => import('./features/marketing/ContactPage').then(m => ({ default: m.ContactPage })));
+const TermsPage = lazy(() => import('./features/marketing/TermsPage').then(m => ({ default: m.TermsPage })));
 
 // The protected application shell + routes. Only rendered when authenticated, so this
 // is the single place that kicks off PROTECTED data loads (cases + library). Runs once
@@ -77,13 +84,19 @@ export default function App() {
         <AuthedApp />
       ) : (
         <Routes>
+          {/* Marketing site — the public face of the app for logged-out visitors.
+              Lazy-loaded (see imports above) so its bundle/CSS stay out of the auth pages. */}
+          <Route path="/" element={<Suspense fallback={null}><LandingPage /></Suspense>} />
+          <Route path="/about" element={<Suspense fallback={null}><AboutPage /></Suspense>} />
+          <Route path="/contact" element={<Suspense fallback={null}><ContactPage /></Suspense>} />
+          <Route path="/terms" element={<Suspense fallback={null}><TermsPage /></Suspense>} />
           {/* Public — reachable without auth (e.g. Chrome Web Store reviewers). */}
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       )}
     </BrowserRouter>

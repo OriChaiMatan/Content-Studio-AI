@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Noto+Serif:ital,wght@0,400;1,400;0,700&amp;display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #07090F; }
+    * { box-sizing: border-box; }
+    ::selection { background: rgba(9,76,178,0.35); }
+    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    @keyframes ringExpand { from { transform: scale(1); opacity: 0.6; } to { transform: scale(2.6); opacity: 0; } }
+    @keyframes orbBreathe { 0%,100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.1); opacity: 1; } }
+    @keyframes thesisPulse { 0%,100% { box-shadow: 0 0 40px rgba(9,76,178,0.2); border-color: rgba(9,76,178,0.35); } 50% { box-shadow: 0 0 64px rgba(9,76,178,0.45); border-color: rgba(9,76,178,0.65); } }
+    @keyframes shimmerMove { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+    @keyframes blinkCursor { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes studioGlow { 0%,100% { box-shadow: 0 0 70px rgba(9,76,178,0.15), 0 20px 60px rgba(0,0,0,0.5); } 50% { box-shadow: 0 0 100px rgba(9,76,178,0.28), 0 20px 60px rgba(0,0,0,0.5); } }
+    @keyframes notesGlow { 0%,100% { box-shadow: 0 0 0 rgba(9,76,178,0); } 50% { box-shadow: 0 0 24px rgba(9,76,178,0.15); } }
+    @keyframes outlineIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  </style>
+</helmet>
+
+<div ref="{{ setRootRef }}" style="--primary:#094CB2;--bright:#4D82E8;--pale:#B1C5FF;--bg-deep:#07090F;--bg-base:#0D1121;--bg-elevated:#141828;--bg-glass:rgba(13,17,33,0.6);--text-primary:#E9EBFF;--text-secondary:#A0A8C8;--text-muted:#606880;--border-subtle:rgba(255,255,255,0.07);--border-medium:rgba(255,255,255,0.12);--border-blue:rgba(9,76,178,0.3); position:relative; background:var(--bg-base); font-family:'Inter',sans-serif; color:var(--text-primary);">
+
+  <!-- LOAD OVERLAY -->
+  <div style="position: fixed; inset: 0; z-index: 999; background: #07090F; display: flex; align-items: center; justify-content: center; opacity: {{ loadOverlayOpacity }}; pointer-events: {{ loadOverlayPointer }}; transition: opacity 0.4s ease; left: 2px; top: 3px" onclick="{{ skipLoad }}">
+    <svg width="{{ logoLoadSize }}" height="{{ logoLoadSize }}" viewBox="0 0 56 56" style="transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease; transform:{{ logoLoadTransform }}; box-shadow:{{ logoLoadGlow }}; border-radius: 14px;">
+      <rect width="56" height="56" rx="14" fill="#094CB2"></rect>
+      <path d="M18 16 L18 38 L34 38" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+      <circle cx="38" cy="18" r="3.5" fill="white"></circle>
+    </svg>
+  </div>
+
+  <!-- AMBIENT CURSOR GLOW -->
+  <div style="position:fixed; inset:0; z-index:1; pointer-events:none; background:{{ ambientGlow }};"></div>
+
+  <!-- NAV -->
+  <nav style="position:fixed; top:0; left:0; right:0; height:64px; z-index:200; display:flex; align-items:center; justify-content:space-between; padding:0 40px; backdrop-filter:{{ navBlur }}; background:{{ navBg }}; border-bottom:{{ navBorder }}; transition:all 200ms ease; opacity:{{ contentOpacity }};">
+    <div style="display:flex; align-items:center;">
+      <svg width="32" height="32" viewBox="0 0 56 56"><rect width="56" height="56" rx="14" fill="#094CB2"></rect><path d="M18 16 L18 38 L34 38" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="38" cy="18" r="3.5" fill="white"></circle></svg>
+      <span style="font-weight:700; font-size:18px; margin-left:10px; color:var(--text-primary);">LumAI</span>
+    </div>
+    <div style="display:flex; gap:32px;" data-nav-links="1">
+      <a href="#how" style="font-size:14px; font-weight:500; color:var(--text-muted); text-decoration:none;">How it Works</a>
+      <a href="#outputs" style="font-size:14px; font-weight:500; color:var(--text-muted); text-decoration:none;">Outputs</a>
+      <a href="#watch-think" style="font-size:14px; font-weight:500; color:var(--text-muted); text-decoration:none;">Watch it Think</a>
+      <a href="#pricing" style="font-size:14px; font-weight:500; color:var(--text-muted); text-decoration:none;">Pricing</a>
+      <a href="#faq" style="font-size:14px; font-weight:500; color:var(--text-muted); text-decoration:none;">FAQ</a>
+    </div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <a href="#" style="font-size:14px; font-weight:500; color:var(--text-muted); text-decoration:none;">Sign In</a>
+      <a href="#" style="background:#1E54C8; color:white; font-weight:700; font-size:14px; padding:8px 20px; border-radius:10px; box-shadow:0 4px 16px rgba(30,84,200,0.4); text-decoration:none;">Start Free</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section style="position:relative; min-height:100vh; padding:120px 40px 60px; display:flex; align-items:center; gap:48px; opacity:{{ contentOpacity }}; transform:{{ contentScale }}; transition:opacity 0.3s ease, transform 0.3s ease; background:radial-gradient(ellipse 1400px 900px at 65% 45%, rgba(9,76,178,0.07) 0%, transparent 65%); background-image:linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px); background-size:44px 44px, 44px 44px;">
+    <div style="flex:0 0 38%; z-index:2;">
+      <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(9,76,178,0.12); border:1px solid rgba(9,76,178,0.25); color:#B1C5FF; padding:6px 14px; border-radius:100px; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:24px;">Narrative Intelligence Platform</div>
+      <div style="font-weight:700; font-size:56px; line-height:1.05; color:var(--text-primary); min-height:200px;">
+        <div style="opacity:{{ heroLine1 }}; transition:opacity 0.6s ease;">You have the sources.</div>
+        <div style="opacity:{{ heroLine2 }}; transition:opacity 0.6s ease;">LumAI finds</div>
+        <div style="opacity:{{ heroLine3 }}; transition:opacity 0.6s ease; font-style:italic;">the thesis.</div>
+      </div>
+      <p style="font-size:19px; color:var(--text-secondary); max-width:480px; line-height:1.7; margin-top:20px; opacity:{{ heroSub }}; transition:opacity 0.6s ease;">LumAI transforms articles, reports and research into thesis-driven content — from LinkedIn and Facebook posts to newsletters and complete expert-style podcast scripts.</p>
+      <div style="display:flex; gap:12px; margin-top:36px; opacity:{{ heroSub }}; transition:opacity 0.6s ease;">
+        <a href="#" style="background:#1E54C8; color:white; font-weight:700; font-size:15px; padding:14px 32px; border-radius:12px; box-shadow:0 4px 16px rgba(30,84,200,0.4); text-decoration:none;">Start Free</a>
+        <a href="#" onClick="{{ openDemo }}" style="border:1px solid rgba(255,255,255,0.15); color:var(--text-primary); font-weight:600; font-size:15px; padding:14px 32px; border-radius:12px; text-decoration:none;">Watch the demo →</a>
+      </div>
+      <div style="font-size:13px; color:var(--text-muted); margin-top:14px; opacity:{{ heroSub }};">No credit card required.</div>
+      <div style="display:flex; align-items:center; gap:8px; margin-top:20px; opacity:{{ heroSub }};">
+        <div style="width:6px; height:6px; border-radius:50%; background:#4D82E8; animation:float 1.6s ease-in-out infinite;"></div>
+        <span style="font-size:12px; font-weight:500; color:var(--text-muted);">847 theses formed today</span>
+      </div>
+    </div>
+
+    <div class="hero-canvas" style="flex:1; position:relative; height:640px; border-radius:24px; border:1px solid var(--border-subtle); overflow:hidden; background:var(--bg-elevated); z-index:2;" onMouseMove="{{ onHeroTilt }}" onMouseLeave="{{ onHeroTiltLeave }}">
+      <canvas ref="{{ setHeroCanvasRef }}" style="position:absolute; inset:0; z-index:0; width:100%; height:100%;"></canvas>
+      <div class="hero-foreground" ref="{{ setHeroForegroundRef }}" style="position:absolute; inset:0; z-index:1; transition:transform 0.15s ease-out; transform:perspective(1200px) rotateX(0) rotateY(0);">
+        <sc-for list="{{ sourceCards }}" as="card" hint-placeholder-count="5">
+          <div style="position:absolute; left:{{ card.x }}; top:{{ card.y }}; width:150px; background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:10px; padding:10px 12px; opacity:{{ card.opacity }}; transform:{{ card.transform }}; transition:opacity 0.5s ease, transform 0.5s ease; animation:float {{ card.floatDur }} ease-in-out infinite;">
+            <div style="font-size:10px; color:var(--text-muted); margin-bottom:6px; display:flex; align-items:center; gap:4px;"><span style="width:6px;height:6px;border-radius:2px;background:var(--text-muted);"></span>{{ card.name }}</div>
+            <div style="height:6px; width:70%; background:rgba(255,255,255,0.35); border-radius:3px; margin-bottom:5px;"></div>
+            <div style="height:4px; width:100%; background:rgba(255,255,255,0.12); border-radius:2px; margin-bottom:4px;"></div>
+            <div style="height:4px; width:60%; background:rgba(255,255,255,0.12); border-radius:2px;"></div>
+          </div>
+        </sc-for>
+
+        <div style="position:absolute; left:50%; top:50%; width:160px; height:160px; margin-left:-80px; margin-top:-80px; border-radius:50%; background:radial-gradient(circle, rgba(77,130,232,0.18) 0%, transparent 70%); opacity:{{ centerGlowOpacity }}; transition:opacity 1s ease;"></div>
+
+        <sc-for list="{{ evidenceLabels }}" as="lbl" hint-placeholder-count="4">
+          <div style="position:absolute; left:{{ lbl.x }}; top:{{ lbl.y }}; display:flex; align-items:center; gap:5px; opacity:{{ lbl.opacity }}; transition:opacity 0.5s ease;">
+            <div style="width:6px; height:6px; border-radius:50%; background:#4D82E8;"></div>
+            <span style="font-size:10px; font-weight:500; color:var(--text-muted); letter-spacing:0.05em;">{{ lbl.text }}</span>
+          </div>
+        </sc-for>
+
+        <div style="position:absolute; left:50%; top:50%; width:220px; height:170px; margin-left:-110px; margin-top:-85px; pointer-events:none; border-radius:50%; background:radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%); opacity:{{ flashOpacity }}; transition:opacity 0.4s ease;"></div>
+
+        <div style="position:absolute; left:50%; top:50%; width:230px; margin-left:-115px; margin-top:-70px; background:rgba(9,76,178,0.12); border:1.5px solid rgba(9,76,178,0.4); border-radius:14px; padding:16px 18px; opacity:{{ thesisOpacity }}; transform:{{ thesisTransform }}; transition:opacity 0.6s cubic-bezier(0.34,1.56,0.64,1), transform 0.6s cubic-bezier(0.34,1.56,0.64,1); animation:{{ thesisPulseAnim }};">
+          <div style="font-family:'Noto Serif',serif; font-style:italic; font-size:14px; color:#B1C5FF; line-height:1.5;">{{ thesisText }}</div>
+        </div>
+
+        <sc-for list="{{ outputCards }}" as="oc" hint-placeholder-count="3">
+          <div style="position:absolute; left:{{ oc.x }}; top:{{ oc.y }}; width:110px; background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:8px 10px; opacity:{{ oc.opacity }}; transform:{{ oc.transform }}; transition:opacity 0.6s ease, transform 0.6s ease;">
+            <div style="font-size:10px; font-weight:600; color:var(--text-primary);">{{ oc.name }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROBLEM -->
+  <section style="position:relative; padding:120px 40px 80px; text-align:center;">
+    <h2 data-reveal="1" style="font-size:48px; font-weight:700; max-width:720px; margin:0 auto; line-height:1.2; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">The bottleneck is not information.<br>It is synthesis.</h2>
+    <p data-reveal="1" style="font-size:18px; color:var(--text-secondary); max-width:560px; margin:24px auto 0; line-height:1.85; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">
+      You already have the articles, reports, links and ideas.<br><br>
+      The problem is turning them into a clear point of view.<br><br>
+      Most AI tools can summarize your sources.<br>But summaries do not build authority.<br><br>
+      Authority comes from having a thesis.
+    </p>
+
+    <div ref="{{ setChaosRef }}" style="position:relative; width:820px; max-width:92vw; height:380px; margin:56px auto 0; background:var(--bg-base); border-radius:20px; border:1px solid var(--border-subtle); overflow:hidden;">
+      <div style="height:32px; display:flex; align-items:center; gap:6px; padding:0 14px; border-bottom:1px solid var(--border-subtle);">
+        <div style="width:8px; height:8px; border-radius:50%; background:#FF6B6B;"></div>
+        <div style="width:8px; height:8px; border-radius:50%; background:#F5C242;"></div>
+        <div style="width:8px; height:8px; border-radius:50%; background:#5EE38A;"></div>
+        <span style="font-size:11px; color:var(--text-muted); margin-left:8px;">LumAI — Reasoning Engine</span>
+      </div>
+      <div style="position:relative; height:348px;">
+
+        <sc-if value="{{ problemShowSources }}">
+          <sc-for list="{{ problemSources }}" as="src" hint-placeholder-count="7">
+            <div style="position:absolute; left:{{ src.left }}%; top:{{ src.top }}%; width:130px; background:rgba(255,255,255,0.045); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.09); border-radius:10px; padding:8px 10px; display:flex; align-items:center; gap:8px; opacity:{{ src.opacity }}; transition:opacity 0.6s ease; animation:float {{ src.floatDur }} ease-in-out infinite;">
+              <div style="width:24px; height:24px; border-radius:6px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:white; background:{{ src.accent }};">{{ src.mono }}</div>
+              <div style="min-width:0;"><div style="font-size:11px; font-weight:600; color:var(--text-primary); white-space:nowrap;">{{ src.name }}</div><div style="font-size:9px; color:var(--text-muted);">{{ src.type }}</div></div>
+            </div>
+          </sc-for>
+        </sc-if>
+
+        <sc-if value="{{ problemShowSignals }}">
+          <sc-for list="{{ problemSignals }}" as="sig" hint-placeholder-count="6">
+            <div style="position:absolute; left:{{ sig.left }}%; top:{{ sig.top }}%; font-size:11px; font-weight:600; color:var(--pale); background:rgba(9,76,178,0.14); border:1px solid rgba(9,76,178,0.3); border-radius:100px; padding:5px 12px; opacity:0; animation:outlineIn 0.5s ease forwards; animation-delay:{{ sig.delay }}; white-space:nowrap;">{{ sig.text }}</div>
+          </sc-for>
+        </sc-if>
+
+        <sc-if value="{{ problemShowThesis }}">
+          <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); text-align:center;">
+            <div style="background:rgba(9,76,178,0.12); border:1.5px solid rgba(9,76,178,0.45); border-radius:16px; padding:26px 48px; box-shadow:0 0 60px rgba(9,76,178,0.3); animation:thesisPulse 2.2s ease-in-out infinite;">
+              <div style="font-family:'Noto Serif',serif; font-style:italic; font-weight:700; font-size:30px; color:var(--pale); letter-spacing:0.02em;">Thesis</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ problemShowOutputs }}">
+          <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); text-align:center;">
+            <div style="font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted); margin-bottom:14px;">One Thesis. Every Format.</div>
+            <sc-for list="{{ problemOutputs }}" as="out" hint-placeholder-count="4">
+              <div style="opacity:0; animation:outlineIn 0.45s ease forwards; animation-delay:{{ out.delay }};">
+                <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:8px 16px; font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:6px;">{{ out.icon }} {{ out.name }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ problemShowQuestion }}">
+          <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(3,4,10,0.4);">
+            <div style="background:rgba(7,9,15,0.85); backdrop-filter:blur(8px); padding:14px 28px; border-radius:10px; font-weight:600; font-size:22px; color:var(--text-primary); text-align:center; max-width:80%; opacity:0; animation:outlineIn 0.5s ease forwards;">"What thesis is hiding inside these sources?"</div>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- INTERSTITIAL -->
+  <section style="padding:80px 40px; text-align:center;">
+    <div data-reveal="1" style="opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">
+      <div style="width:200px; height:1px; background:rgba(255,255,255,0.06); margin:0 auto 40px;"></div>
+      <p style="font-family:'Noto Serif',serif; font-style:italic; font-size:38px; color:var(--text-secondary); max-width:640px; margin:0 auto; line-height:1.5;">"Research without a thesis is just reading."</p>
+      <div style="width:200px; height:1px; background:rgba(255,255,255,0.06); margin:40px auto 0;"></div>
+    </div>
+  </section>
+
+  <!-- TRANSFORMATION -->
+  <section style="padding:80px 40px; text-align:center;">
+    <h2 data-reveal="1" style="font-size:44px; font-weight:700; margin:0 0 56px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">Before and after LumAI.</h2>
+    <div style="display:flex; max-width:1080px; margin:0 auto; gap:48px; align-items:center; text-align:left;">
+      <div data-reveal="1" style="flex:1; background:rgba(180,30,30,0.04); border:1px solid rgba(180,30,30,0.1); border-radius:16px; padding:32px 36px; opacity:0; transform:translateX(-16px); transition:opacity 0.55s ease, transform 0.55s ease;">
+        <span style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); color:var(--text-muted); font-size:11px; font-weight:700; letter-spacing:0.06em; padding:4px 10px; border-radius:100px;">BEFORE</span>
+        <div style="margin-top:20px; display:flex; flex-direction:column; gap:14px;">
+          <div style="font-size:15px; color:var(--text-secondary);">✕ 20 open tabs, no clear angle</div>
+          <div style="font-size:15px; color:var(--text-secondary);">✕ Generic AI summaries with no argument</div>
+          <div style="font-size:15px; color:var(--text-secondary);">✕ "What should I even say about this?"</div>
+          <div style="font-size:15px; color:var(--text-secondary);">✕ Publishing the same take as everyone else</div>
+          <div style="font-size:15px; color:var(--text-secondary);">✕ Content that describes instead of argues</div>
+          <div style="font-size:15px; color:var(--text-secondary);">✕ Research that expires before you use it</div>
+        </div>
+      </div>
+      <div style="flex:0 0 40px; height:40px; border-radius:50%; background:#1E54C8; box-shadow:0 0 16px rgba(30,84,200,0.5); display:flex; align-items:center; justify-content:center; color:white; font-size:18px;">→</div>
+      <div data-reveal="1" style="flex:1; background:rgba(9,76,178,0.06); border:1.5px solid rgba(9,76,178,0.2); border-radius:16px; padding:32px 36px; opacity:0; transform:translateX(16px); transition:opacity 0.55s ease, transform 0.55s ease;">
+        <span style="background:rgba(9,76,178,0.12); border:1px solid rgba(9,76,178,0.3); color:#B1C5FF; font-size:11px; font-weight:700; letter-spacing:0.06em; padding:4px 10px; border-radius:100px;">AFTER LUMAI</span>
+        <div style="margin-top:20px; display:flex; flex-direction:column; gap:14px;">
+          <div style="font-size:15px; color:var(--text-primary);">✓ One defensible thesis, grounded in your sources</div>
+          <div style="font-size:15px; color:var(--text-primary);">✓ Source-aware analysis with epistemic precision</div>
+          <div style="font-size:15px; color:var(--text-primary);">✓ Platform-ready outputs from a single research run</div>
+          <div style="font-size:15px; color:var(--text-primary);">✓ A distinct position, not a summarized consensus</div>
+          <div style="font-size:15px; color:var(--text-primary);">✓ Content that argues instead of describes</div>
+          <div style="font-size:15px; color:var(--text-primary);">✓ A library that compounds over time</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRODUCT FLOW -->
+  <section id="how" ref="{{ setFlowRef }}" style="position:relative; height:220vh;">
+    <div style="position:sticky; top:0; height:100vh; padding:80px 40px; display:flex; flex-direction:column;">
+      <h2 style="font-size:36px; font-weight:700; text-align:center; margin:0 0 40px;">From sources to authority in one research run.</h2>
+      <div style="display:flex; gap:56px; flex:1; max-width:1200px; margin:0 auto; width:100%;">
+        <div style="flex:0 0 220px; display:flex; flex-direction:column; gap:0; position:relative;">
+          <div style="position:absolute; left:9px; top:10px; bottom:10px; width:2px; background:rgba(255,255,255,0.08);"></div>
+          <div style="position:absolute; left:9px; top:10px; width:2px; background:#4D82E8; transition:height 0.3s ease; height:{{ flowProgressHeight }};"></div>
+          <sc-for list="{{ flowSteps }}" as="step" hint-placeholder-count="5">
+            <div style="display:flex; align-items:center; gap:14px; padding:14px 0;">
+              <div style="width:20px; height:20px; border-radius:50%; flex-shrink:0; background:{{ step.dotBg }}; border:2px solid {{ step.dotBorder }};"></div>
+              <span style="font-size:15px; font-weight:600; color:{{ step.textColor }};">{{ step.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex:1; background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:20px; padding:32px; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center;">
+          <sc-if value="{{ flowIsStep1 }}"><div style="width:100%; max-width:520px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+              <div><div style="font-weight:700; font-size:18px;">AI and the Knowledge Economy</div><div style="font-size:12px; color:var(--text-muted); margin-top:3px;">Case · Created July 3</div></div>
+              <span style="background:rgba(77,130,232,0.6); color:#07090F; border-radius:100px; padding:5px 12px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Draft</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.25); border:1px solid var(--border-subtle); border-radius:10px; padding:13px 16px; color:var(--text-muted); font-size:14px; margin:20px 0 18px;">
+              <span style="opacity:0.7;">🔗</span><span>Paste a link or upload a file</span>
+              <span style="margin-left:auto; background:rgba(9,76,178,0.15); color:var(--pale); border-radius:6px; padding:4px 10px; font-size:12px; font-weight:600;">+ Add</span>
+            </div>
+            <div style="font-size:11px; font-weight:600; letter-spacing:0.06em; color:var(--text-muted); text-transform:uppercase; margin-bottom:10px;">5 sources added</div>
+            <sc-for list="{{ sourceMockups }}" as="s" hint-placeholder-count="5">
+              <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:10px; padding:13px 14px; margin-bottom:8px; display:flex; align-items:center; gap:12px;">
+                <div style="width:32px; height:32px; border-radius:8px; background:rgba(9,76,178,0.12); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;">{{ s.icon }}</div>
+                <div style="flex:1; min-width:0;"><div style="font-weight:600; font-size:14px;">{{ s.name }}</div><div style="font-size:12px; color:var(--text-muted);">{{ s.domain }}</div></div>
+                <span style="font-size:11px; color:#5EE38A; background:rgba(40,200,80,0.1); border-radius:100px; padding:3px 10px; flex-shrink:0;">Indexed</span>
+              </div>
+            </sc-for>
+          </div></sc-if>
+          <sc-if value="{{ flowIsStep2 }}"><div style="width:100%; max-width:480px; border:1px solid rgba(9,76,178,0.3); background:rgba(9,76,178,0.08); border-radius:12px; padding:24px;">
+            <div style="display:flex; gap:14px; align-items:flex-start; margin-bottom:18px;">
+              <div style="width:48px; height:48px; border-radius:12px; background:#094CB2; display:flex; align-items:center; justify-content:center; font-size:20px; animation:spin 2s linear infinite;">🔍</div>
+              <div><div style="font-weight:600; font-size:18px;">Research</div><div style="font-size:14px; color:var(--text-secondary);">Analyzing sources</div></div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+              <div style="display:flex; justify-content:space-between; font-size:13px;"><span>✓ Reading source content</span><span style="color:#5EE38A;">Completed</span></div>
+              <div style="display:flex; justify-content:space-between; font-size:13px;"><span>✓ Identifying primary claims</span><span style="color:#5EE38A;">Completed</span></div>
+              <div style="display:flex; justify-content:space-between; font-size:13px;"><span>◐ Mapping contradictions</span><span style="color:#4D82E8;">In Progress</span></div>
+              <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text-muted);"><span>○ Forming thesis</span><span>Pending</span></div>
+            </div>
+            <div style="height:6px; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden;"><div style="width:60%; height:100%; background:linear-gradient(to right,#094CB2,#4D82E8);"></div></div>
+          </div></sc-if>
+          <sc-if value="{{ flowIsStep3 }}"><div style="width:100%; max-width:480px;">
+            <div style="width:480px; max-width:100%; background:rgba(9,76,178,0.1); border:1.5px solid rgba(9,76,178,0.4); border-radius:16px; padding:28px 32px; box-shadow:0 0 60px rgba(9,76,178,0.25); animation:thesisPulse 2.5s ease-in-out infinite;">
+              <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-muted); margin-bottom:10px;">Thesis Detected</div>
+              <div style="font-family:'Noto Serif',serif; font-style:italic; font-size:22px; color:#B1C5FF; line-height:1.6;">"AI does not just change search. It changes who pays for knowledge — and the incentives that keep it accurate."</div>
+              <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;">
+                <span style="font-size:11px; background:rgba(255,255,255,0.05); border:1px solid var(--border-subtle); border-radius:100px; padding:4px 10px;">✓ Reuters — confirmed</span>
+                <span style="font-size:11px; background:rgba(255,255,255,0.05); border:1px solid var(--border-subtle); border-radius:100px; padding:4px 10px;">✓ Gartner — consistent</span>
+              </div>
+              <div style="margin-top:14px; font-size:13px; color:#5EE38A; font-weight:500;">✓ Grounded in 5 independent sources</div>
+            </div>
+          </div></sc-if>
+          <sc-if value="{{ flowIsStep4 }}"><div style="width:100%; max-width:560px;">
+            <div style="display:flex; gap:6px; margin-bottom:20px; border-bottom:1px solid var(--border-subtle); padding-bottom:0;">
+              <sc-for list="{{ outputTabs }}" as="t" hint-placeholder-count="4"><span style="font-size:13px; font-weight:600; padding:10px 18px; border-radius:8px 8px 0 0; background:{{ t.bg }}; color:{{ t.color }}; position:relative; top:1px; border-bottom:{{ t.underline }};">{{ t.name }}</span></sc-for>
+            </div>
+            <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:12px; padding:22px 24px; position:relative; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+                <div style="width:36px; height:36px; border-radius:50%; background:rgba(96,104,128,0.4);"></div>
+                <div><div style="font-weight:600; font-size:13px;">LumAI Research</div><div style="font-size:11px; color:var(--text-muted);">Now</div></div>
+              </div>
+              <div style="font-weight:700; font-size:16px; line-height:1.4; margin-bottom:10px;">AI didn't just change search. It changed who pays for knowledge.</div>
+              <div style="font-size:14px; color:var(--text-secondary); line-height:1.65; max-height:110px; overflow:hidden; position:relative;">
+                The feedback loop that funded independent journalism for two decades is quietly breaking. AI-powered search answers the question before the click ever happens — and without the click, the economics that fund the source degrade.
+                <div style="position:absolute; bottom:0; left:0; right:0; height:44px; background:linear-gradient(to bottom, transparent, var(--bg-elevated));"></div>
+              </div>
+              <div style="display:flex; gap:16px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border-subtle); font-size:12px; color:var(--text-muted);"><span>👍 847</span><span>💬 23</span><span>↗ 41</span></div>
+            </div>
+          </div></sc-if>
+          <sc-if value="{{ flowIsStep5 }}"><div style="width:100%; max-width:600px; display:flex; gap:20px;">
+            <div style="flex:1; background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:12px; padding:22px 24px;">
+              <div style="font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:12px;">LinkedIn Post · Draft 1</div>
+              <div style="font-size:14px; color:var(--text-secondary); line-height:1.75;">AI didn't just change search. <span style="background:rgba(9,76,178,0.22); border-radius:2px; color:var(--text-primary); box-shadow:0 0 0 1px rgba(9,76,178,0.3);">It changed who pays for knowledge.</span> The feedback loop that funded independent journalism for two decades is quietly breaking — and most publishers haven't noticed yet.</div>
+            </div>
+            <div style="flex:0 0 160px; display:flex; flex-direction:column; gap:10px;">
+              <div style="background:#1E54C8; color:white; text-align:center; border-radius:10px; padding:12px; font-size:13px; font-weight:700; box-shadow:0 4px 16px rgba(30,84,200,0.35);">✓ Approve</div>
+              <div style="display:flex; flex-direction:column; gap:0; border:1px solid rgba(255,255,255,0.12); border-radius:10px; overflow:hidden;">
+                <div style="text-align:center; padding:11px; font-size:13px; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.1);">↻ Regenerate</div>
+                <div style="text-align:center; padding:11px; font-size:13px; color:#FF8A8A;">✕ Reject</div>
+              </div>
+            </div>
+          </div></sc-if>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- NARRATIVE INTELLIGENCE -->
+  <section style="background:var(--bg-elevated); padding:100px 40px;">
+    <div style="display:flex; max-width:1100px; margin:0 auto; gap:80px;">
+      <div data-reveal="1" style="flex:1; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">
+        <div style="font-size:12px; font-weight:700; letter-spacing:0.08em; color:var(--bright); text-transform:uppercase; margin-bottom:16px;">Why LumAI Is Different</div>
+        <h2 style="font-size:40px; font-weight:700; margin:0 0 20px; line-height:1.2;">Most AI tools summarize.<br>LumAI builds an argument.</h2>
+        <p style="font-size:16px; color:var(--text-secondary); line-height:1.8;">LumAI looks for the mechanism behind the information — not the main themes, but the specific claim that explains why things are the way they are and what follows from it.</p>
+        <div style="display:flex; flex-direction:column; gap:20px; margin-top:32px;">
+          <div style="display:flex; gap:16px;"><div style="width:36px; height:36px; border-radius:50%; background:rgba(9,76,178,0.12); border:1px solid rgba(9,76,178,0.2); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--bright);">◆</div><div style="font-weight:600; font-size:16px; padding-top:6px;">Contradictions, not consensus</div></div>
+          <div style="display:flex; gap:16px;"><div style="width:36px; height:36px; border-radius:50%; background:rgba(9,76,178,0.12); border:1px solid rgba(9,76,178,0.2); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--bright);">◆</div><div style="font-weight:600; font-size:16px; padding-top:6px;">Thesis before writing</div></div>
+          <div style="display:flex; gap:16px;"><div style="width:36px; height:36px; border-radius:50%; background:rgba(9,76,178,0.12); border:1px solid rgba(9,76,178,0.2); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--bright);">◆</div><div style="font-weight:600; font-size:16px; padding-top:6px;">Maps known vs. inferred</div></div>
+        </div>
+      </div>
+      <div data-reveal="1" style="flex:1; display:flex; gap:24px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">
+        <div style="flex:1; text-align:center;">
+          <div style="font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:16px;">Summary AI</div>
+          <div style="border:1px dashed rgba(96,104,128,0.4); border-radius:8px; padding:14px; width:120px; margin:0 auto 20px; font-size:11px; color:var(--text-muted);">Sources</div>
+          <div style="color:var(--text-muted); margin:8px 0;">↓</div>
+          <div style="border:1px dashed rgba(96,104,128,0.4); border-radius:8px; padding:14px; width:120px; margin:20px auto; font-size:11px; color:var(--text-muted);">Bullet Points</div>
+          <div style="color:var(--text-muted); margin:8px 0;">↓</div>
+          <div style="border:1px dashed rgba(96,104,128,0.4); border-radius:8px; padding:14px; width:120px; margin:20px auto 12px; font-size:11px; color:var(--text-muted);">Summary</div>
+          <div style="color:rgba(255,107,107,0.6); font-size:22px;">✗</div>
+        </div>
+        <div style="flex:1; text-align:center;">
+          <div style="font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--pale); margin-bottom:16px;">LumAI</div>
+          <div style="border:1px solid rgba(9,76,178,0.3); background:rgba(9,76,178,0.06); border-radius:8px; padding:14px; width:120px; margin:0 auto; font-size:11px; color:var(--pale);">Sources</div>
+          <div style="color:var(--bright); margin:6px 0; font-size:13px;">↓</div>
+          <div style="border:1px solid rgba(9,76,178,0.2); background:rgba(9,76,178,0.04); border-radius:8px; padding:10px; width:120px; margin:0 auto; font-size:10px; color:var(--text-secondary);">Contradictions</div>
+          <div style="color:var(--bright); margin:6px 0; font-size:13px;">↓</div>
+          <div style="display:flex; justify-content:center; gap:5px; margin:8px 0;"><sc-for list="{{ dots5 }}" as="d" hint-placeholder-count="5"><div style="width:6px; height:6px; border-radius:50%; background:#4D82E8; animation:float 2s ease-in-out infinite;"></div></sc-for></div>
+          <div style="color:var(--bright); margin:6px 0; font-size:13px;">↓</div>
+          <div style="border-radius:8px; padding:14px; width:120px; margin:0 auto; font-size:11px; color:var(--pale); background:rgba(9,76,178,0.15); box-shadow:0 0 20px rgba(9,76,178,0.4);">Thesis</div>
+          <div style="color:var(--bright); margin:6px 0; font-size:13px;">↓</div>
+          <div style="display:flex; justify-content:center; gap:8px; font-size:16px; margin-top:6px;"><span>💼</span><span>👥</span><span>✉️</span><span>🎙️</span></div>
+          <div style="color:#5EE38A; font-size:16px; margin-top:6px;">✓</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OUTPUTS -->
+  <section id="outputs" style="padding:100px 40px; text-align:center;">
+    <h2 data-reveal="1" style="font-size:44px; font-weight:700; margin:0 0 12px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">One thesis. Multiple formats.</h2>
+    <p data-reveal="1" style="font-size:18px; color:var(--text-secondary); margin:0 0 48px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">Same research. Same argument. Different register.</p>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; max-width:1080px; margin:0 auto; text-align:left;">
+      <div data-reveal="1" style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:16px; overflow:hidden; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease, border-color 0.2s ease;">
+        <div style="padding:18px 18px 0; height:196px; background:#1B1F2E; overflow:hidden;">
+          <div style="display:flex; gap:10px; align-items:flex-start; margin-bottom:10px;">
+            <div style="width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#4D82E8,#094CB2); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; color:white;">JK</div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:700; font-size:13px; color:var(--text-primary);">Jordan Kade</div>
+              <div style="font-size:11px; color:var(--text-muted);">Research &amp; Strategy · 2h · 🌐</div>
+            </div>
+            <span style="color:var(--text-muted); font-size:16px;">⋯</span>
+          </div>
+          <div style="font-size:13.5px; color:var(--text-primary); line-height:1.55;">Everyone is optimizing for reach.<br>The companies compounding an advantage are optimizing for a defensible point of view.<br><span style="color:var(--text-secondary);">Here's the pattern across 9 sources this quarter →</span></div>
+          <div style="display:flex; align-items:center; gap:16px; margin-top:14px; padding:10px 0; border-top:1px solid rgba(255,255,255,0.08); font-size:12px; color:var(--text-muted);"><span>👍 847</span><span>💬 23</span><span>🔁 12</span><span>↗ Send</span></div>
+        </div>
+        <div style="border-top:1px solid var(--border-subtle); padding:16px 20px;">
+          <div style="font-size:11px; color:var(--text-muted); font-weight:600; letter-spacing:0.05em; margin-bottom:6px;">💼 LINKEDIN POST</div>
+          <div style="font-weight:600; font-size:15px; margin-bottom:4px;">Sharp, argument-first.</div>
+          <div style="font-size:13px; color:var(--text-secondary);">The post makes a position, not a summary. Designed to stop the scroll.</div>
+        </div>
+      </div>
+      <div data-reveal="1" style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:16px; overflow:hidden; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">
+        <div style="padding:22px 24px 0; height:196px; background:#12151F; overflow:hidden;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:12px;">
+            <span style="font-family:'Noto Serif',serif; font-weight:700; font-size:19px; color:var(--text-primary);">The Signal</span>
+            <span style="font-size:11px; color:var(--text-muted);">Vol. 47 · Jul 2026</span>
+          </div>
+          <div style="font-weight:700; font-size:17px; color:var(--text-primary); line-height:1.35; margin-top:14px;">Who pays for knowledge when the click disappears?</div>
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <span style="font-family:'Noto Serif',serif; font-size:34px; line-height:1; color:var(--bright); float:left; margin-right:6px;">T</span>
+            <span style="font-size:13px; color:var(--text-secondary); line-height:1.6;">he loop that funded independent journalism for two decades is quietly breaking — and most publishers haven't noticed yet.</span>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border-subtle); padding:16px 20px;">
+          <div style="font-size:11px; color:var(--text-muted); font-weight:600; letter-spacing:0.05em; margin-bottom:6px;">✉️ NEWSLETTER</div>
+          <div style="font-weight:600; font-size:15px; margin-bottom:4px;">Dense, editorial.</div>
+          <div style="font-size:13px; color:var(--text-secondary);">Full analytical treatment — context, thesis, mechanism, implication.</div>
+        </div>
+      </div>
+      <div data-reveal="1" style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:16px; overflow:hidden; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">
+        <div style="padding:18px 18px 0; height:196px; background:#1B1F2E; overflow:hidden;">
+          <div style="display:flex; gap:10px; align-items:flex-start; margin-bottom:10px;">
+            <div style="width:40px; height:40px; border-radius:10px; background:linear-gradient(135deg,#4D82E8,#094CB2); flex-shrink:0;"></div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:700; font-size:13px; color:var(--text-primary);">Marketing Minds</div>
+              <div style="font-size:11px; color:var(--text-muted);">Public group · 3h</div>
+            </div>
+          </div>
+          <div style="font-size:13.5px; color:var(--text-primary); line-height:1.55; font-weight:600;">Why do two credible analysts read the same earnings call and reach opposite conclusions?</div>
+          <div style="font-size:12.5px; color:var(--text-secondary); line-height:1.5; margin-top:4px;">A structural answer, not a hot take. 🧵</div>
+          <div style="display:flex; align-items:center; gap:16px; margin-top:14px; padding:10px 0; border-top:1px solid rgba(255,255,255,0.08); font-size:12px; color:var(--text-muted);"><span>😮 156</span><span>💬 44</span><span>↗ Share</span></div>
+        </div>
+        <div style="border-top:1px solid var(--border-subtle); padding:16px 20px;">
+          <div style="font-size:11px; color:var(--text-muted); font-weight:600; letter-spacing:0.05em; margin-bottom:6px;">👥 FACEBOOK POST</div>
+          <div style="font-weight:600; font-size:15px; margin-bottom:4px;">Narrative-driven.</div>
+          <div style="font-size:13px; color:var(--text-secondary);">Opens a question. Draws readers in before making the argument.</div>
+        </div>
+      </div>
+      <div data-reveal="1" style="background:rgba(9,76,178,0.06); border:1.5px solid rgba(9,76,178,0.35); border-radius:16px; overflow:hidden; box-shadow:0 0 32px rgba(9,76,178,0.1); opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">
+        <div style="padding:18px 20px 0; height:196px; background:#0E1424; overflow:hidden; font-family:'Noto Serif',serif;">
+          <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:10px;">
+            <span style="font-size:11px; letter-spacing:0.08em; color:var(--text-muted); text-transform:uppercase; font-family:'Inter',sans-serif;">Episode 04 · Script</span>
+            <span style="font-size:11px; color:var(--text-muted); font-family:'Inter',sans-serif;">Page 3 / 11</span>
+          </div>
+          <div style="font-size:11px; letter-spacing:0.1em; color:var(--pale); text-transform:uppercase; margin-top:14px; font-family:'Inter',sans-serif; font-weight:600;">Segment 2 — Who Pays</div>
+          <div style="font-size:13px; color:var(--text-secondary); line-height:1.7; margin-top:8px; font-style:italic;">The search engine has been the primary on-ramp to the web's knowledge economy for twenty-five years. That loop is quietly breaking.</div>
+        </div>
+        <div style="border-top:1px solid var(--border-subtle); padding:16px 20px;">
+          <div style="display:flex; gap:6px; margin-bottom:6px;"><span style="font-size:11px; color:var(--bright); font-weight:600; letter-spacing:0.05em;">🎙️ PODCAST SCRIPT</span></div>
+          <div style="font-weight:600; font-size:15px; margin-bottom:4px;">Complete expert-style episode.</div>
+          <div style="font-size:13px; color:var(--text-secondary);">Full script, thesis, structure and research notes — written, not recorded.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- WATCH IT THINK -->
+  <section id="watch-think" data-screen-label="Watch it Think" ref="{{ setReasonRef }}" style="position:relative; height:320vh;">
+    <div style="position:sticky; top:0; height:100vh; display:flex; flex-direction:column;">
+      <div style="flex:1; display:flex; align-items:center; gap:56px; padding:0 40px; max-width:1320px; margin:0 auto; width:100%; min-height:0;">
+
+        <div style="flex:0 0 360px;">
+          <div style="font-size:12px; font-weight:700; letter-spacing:0.08em; color:var(--bright); text-transform:uppercase; margin-bottom:20px;">{{ reasonStageLabel }}</div>
+          <h2 style="font-size:40px; font-weight:700; line-height:1.2; margin:0 0 18px;">Every AI can write.<br>Very few can think.</h2>
+          <p style="font-size:15.5px; color:var(--text-secondary); line-height:1.75; margin:0;">LumAI doesn't begin by writing. It begins by discovering the single insight hidden inside dozens of conflicting sources.</p>
+
+          <div style="display:flex; flex-direction:column; gap:15px; margin-top:36px;">
+            <sc-for list="{{ reasonSteps }}" as="st" hint-placeholder-count="5">
+              <div style="display:flex; align-items:center; gap:12px; opacity:{{ st.opacity }}; transition:opacity 0.4s ease;">
+                <div style="width:22px; height:22px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; background:{{ st.badgeBg }}; color:{{ st.badgeColor }}; border:1px solid {{ st.badgeBorder }}; transition:all 0.35s ease;">{{ st.num }}</div>
+                <span style="font-size:13.5px; font-weight:600; color:{{ st.textColor }}; transition:color 0.35s ease;">{{ st.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="flex:1; position:relative; height:600px; max-width:720px;">
+          <div style="position:absolute; inset:0; background:radial-gradient(ellipse 480px 480px at 50% 50%, rgba(9,76,178,0.10) 0%, transparent 70%);"></div>
+
+          <div style="position:absolute; left:50%; top:44%; transform:translate(-50%,-50%); width:260px; height:260px; opacity:{{ convergenceOpacity }}; transition:opacity 0.8s ease; pointer-events:none;">
+            <div style="position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle, rgba(9,76,178,0.35) 0%, rgba(9,76,178,0.1) 45%, transparent 72%); animation:orbBreathe 4.2s ease-in-out infinite;"></div>
+            <div style="position:absolute; left:50%; top:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:radial-gradient(circle, rgba(180,210,255,0.95), rgba(77,130,232,0.5)); box-shadow:0 0 26px 8px rgba(77,130,232,0.5);"></div>
+            <div style="position:absolute; left:50%; top:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; border:1px solid rgba(77,130,232,0.5); animation:ringExpand 2.6s ease-out infinite;"></div>
+          </div>
+
+          <div style="position:absolute; left:50%; top:5%; transform:translateX(-50%); font-size:11.5px; font-family:'Noto Serif',serif; font-style:italic; color:var(--text-muted); white-space:nowrap; opacity:{{ reasonCaptionOpacity }}; transition:opacity 0.5s ease;">{{ reasonCaptionText }}</div>
+
+          <sc-if value="{{ reasonShowConnections }}" hint-placeholder-val="{{ false }}">
+            <svg style="position:absolute; inset:0; width:100%; height:100%; overflow:visible;" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <sc-for list="{{ reasonConnections }}" as="c" hint-placeholder-count="4">
+                <path d="{{ c.pathD }}" fill="none" stroke="{{ c.color }}" stroke-width="0.35" stroke-linecap="round" style="opacity:{{ c.pathOpacity }}; transition:opacity 0.4s ease;"></path>
+              </sc-for>
+            </svg>
+            <sc-for list="{{ reasonConnections }}" as="c" hint-placeholder-count="4">
+              <div style="position:absolute; left:{{ c.particleLeft }}%; top:{{ c.particleTop }}%; transform:translate(-50%,-50%); width:7px; height:7px; border-radius:50%; background:{{ c.color }}; box-shadow:0 0 10px 2px {{ c.color }}; opacity:{{ c.particleOpacity }}; transition:opacity 0.3s ease, left 0.1s linear, top 0.1s linear;"></div>
+            </sc-for>
+            <sc-for list="{{ reasonConnections }}" as="c" hint-placeholder-count="4">
+              <div style="position:absolute; left:{{ c.midLeft }}%; top:{{ c.midTop }}%; transform:translate(-50%,-50%); font-size:10px; font-weight:700; color:{{ c.color }}; background:rgba(15,18,32,0.72); border:1px solid {{ c.color }}; border-radius:100px; padding:3px 9px; white-space:nowrap; opacity:{{ c.labelOpacity }}; transition:opacity 0.7s ease;">{{ c.label }}</div>
+            </sc-for>
+          </sc-if>
+
+          <sc-for list="{{ reasonSources }}" as="src" hint-placeholder-count="18">
+            <div style="position:absolute; left:{{ src.left }}%; top:{{ src.top }}%; transform:{{ src.transform }}; width:124px; background:rgba(20,24,40,0.55); border:1px solid {{ src.borderColor }}; border-radius:11px; padding:8px 10px; display:flex; flex-direction:column; gap:5px; opacity:{{ src.opacity }}; transition:left 1.3s cubic-bezier(0.4,0,0.2,1), top 1.3s cubic-bezier(0.4,0,0.2,1), opacity 0.7s ease, transform 0.7s ease, border-color 0.4s ease; animation:float {{ src.floatDur }} ease-in-out infinite;">
+              <div style="display:flex; align-items:center; gap:7px;">
+                <div style="width:22px; height:22px; border-radius:6px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; color:white; background:{{ src.accent }};">{{ src.mono }}</div>
+                <div style="min-width:0;"><div style="font-size:10.5px; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ src.name }}</div><div style="font-size:8.5px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ src.kind }}</div></div>
+              </div>
+              <div style="font-size:8px; font-weight:600; letter-spacing:0.02em; color:{{ src.accent }}; background:rgba(255,255,255,0.06); border-radius:4px; padding:2px 6px; width:fit-content;">{{ src.tag }}</div>
+              <sc-if value="{{ src.showReject }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:4px; font-size:9px; font-weight:700; color:{{ src.tagColor }}; background:{{ src.tagBg }}; border:1px solid {{ src.tagBorder }}; border-radius:100px; padding:2px 8px; width:fit-content;">✕ {{ src.rejectLabel }}</div>
+              </sc-if>
+            </div>
+          </sc-for>
+
+          <sc-if value="{{ reasonShowInsight }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; left:50%; top:44%; transform:{{ reasonInsightTransform }}; width:420px; max-width:80vw; text-align:center; opacity:{{ reasonInsightOpacity }}; transition:transform 1.1s cubic-bezier(0.4,0,0.2,1), opacity 0.9s ease;">
+              <div style="background:rgba(9,76,178,0.1); border:1.5px solid rgba(9,76,178,0.4); border-radius:18px; padding:28px 32px; box-shadow:0 0 70px rgba(9,76,178,0.28);">
+                <div style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-muted); margin-bottom:13px;">The Insight</div>
+                <div style="font-family:'Noto Serif',serif; font-style:italic; font-size:20px; line-height:1.6; color:var(--pale);">
+                  <sc-for list="{{ reasonInsightWords }}" as="w" hint-placeholder-count="12"><span style="opacity:{{ w.opacity }}; transition:opacity 0.4s ease;">{{ w.text }} </span></sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ reasonShowOutcomes }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; left:50%; bottom:5%; transform:translateX(-50%); display:flex; gap:12px;">
+              <sc-for list="{{ reasonOutcomes }}" as="o" hint-placeholder-count="4">
+                <div style="width:148px; background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:12px; padding:11px 12px; opacity:{{ o.opacity }}; transform:{{ o.transform }}; transition:opacity 0.5s ease, transform 0.5s ease;">
+                  <div style="display:flex; align-items:center; gap:7px; margin-bottom:8px;">
+                    <div style="width:22px; height:22px; border-radius:6px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:white; background:{{ o.accent }};">{{ o.mono }}</div>
+                    <span style="font-size:11.5px; font-weight:700; color:var(--text-primary);">{{ o.name }}</span>
+                  </div>
+                  <div style="font-size:10.5px; color:var(--text-secondary); line-height:1.5;">{{ o.preview }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <div style="padding:0 0 32px; display:flex; flex-direction:column; align-items:center; gap:12px;">
+        <div style="display:flex; align-items:center; gap:14px; font-size:13px; font-weight:600; color:var(--text-secondary); background:rgba(13,17,33,0.7); backdrop-filter:blur(10px); border:1px solid var(--border-subtle); border-radius:100px; padding:10px 22px; opacity:{{ reasonStatsOpacity }}; transition:opacity 0.6s ease;">
+          <span>18 Sources</span><span style="color:var(--text-muted);">→</span><span>6 Survived</span><span style="color:var(--text-muted);">→</span><span style="color:var(--pale);">1 Insight</span><span style="color:var(--text-muted);">→</span><span>4 Outputs</span>
+        </div>
+        <div style="font-size:14px; color:var(--text-muted); text-align:center; max-width:520px; opacity:{{ reasonClosingOpacity }}; transition:opacity 0.7s ease;">Other tools generate text. <span style="color:var(--pale); font-weight:600;">LumAI develops original thinking — then turns it into content.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CAPTURE / COLLECTION -->
+  <section data-screen-label="Capture Ideas" ref="{{ setCaptureRef }}" style="padding:140px 40px;">
+    <div style="display:flex; align-items:center; gap:64px; max-width:1320px; margin:0 auto;">
+      <div style="flex:0 0 380px;">
+        <h2 data-reveal="1" style="font-size:42px; font-weight:700; line-height:1.2; margin:0 0 20px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">Capture ideas where they happen.</h2>
+        <p data-reveal="1" style="font-size:16px; color:var(--text-secondary); line-height:1.8; margin:0 0 24px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">Whether you're browsing the web, chatting in WhatsApp, sharing links in Telegram or working directly inside LumAI, every source flows into the same research case.</p>
+        <p data-reveal="1" style="font-size:16px; font-weight:600; color:var(--pale); margin:0; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">Stop collecting bookmarks.<br>Start building knowledge.</p>
+      </div>
+
+      <div style="flex:1; position:relative; height:560px; max-width:640px;">
+        <div style="position:absolute; inset:0; background:radial-gradient(ellipse 460px 460px at 50% 50%, rgba(9,76,178,0.10) 0%, transparent 70%);"></div>
+
+        <sc-for list="{{ captureOrigins }}" as="o" hint-placeholder-count="4">
+          <div style="position:absolute; left:{{ o.left }}%; top:{{ o.top }}%; transform:translate(-50%,-50%);">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px; animation:float {{ o.floatDur }} ease-in-out infinite; animation-delay:{{ o.floatDelay }};">
+              <div style="position:relative; width:52px; height:52px;">
+                <div style="position:absolute; inset:-6px; border-radius:18px; border:1px solid {{ o.accent }}; opacity:{{ o.ringOpacity }}; transition:opacity 0.4s ease;"></div>
+                <div style="position:absolute; inset:0; border-radius:14px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; color:var(--text-primary);">
+                  <sc-if value="{{ o.isApp }}" hint-placeholder-val="{{ false }}">
+                    <svg width="24" height="24" viewBox="0 0 56 56"><rect width="56" height="56" rx="14" fill="#094CB2"></rect><path d="M18 16 L18 38 L34 38" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  </sc-if>
+                  <sc-if value="{{ o.isExt }}" hint-placeholder-val="{{ false }}">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.6"></circle><circle cx="12" cy="12" r="3.4" stroke="currentColor" stroke-width="1.6"></circle><path d="M12 2.5V8.6M4.2 17.5L9.4 14.5M19.8 17.5L14.6 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+                  </sc-if>
+                  <sc-if value="{{ o.isWa }}" hint-placeholder-val="{{ false }}">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2.5C6.75 2.5 2.5 6.75 2.5 12c0 1.83.5 3.53 1.4 4.99L2.6 21.4l4.55-1.27A9.44 9.44 0 0 0 12 21.5c5.25 0 9.5-4.25 9.5-9.5S17.25 2.5 12 2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path><path d="M8.7 8.4c.2-.45.5-.4.8-.4.25 0 .45 0 .6.35.2.45.65 1.6.7 1.7.05.15.1.3-.02.5-.55.85-1.1.85-.8 1.35.9 1.5 1.75 2.15 3.1 2.8.25.1.4.1.55-.05.15-.15.6-.7.75-.95.15-.25.3-.2.5-.1.2.05 1.35.65 1.6.75.25.1.4.15.45.25.05.1.05.6-.15 1.15-.2.55-1.15 1.05-1.6 1.1-.4.05-.9.1-1.5-.1-.35-.1-.8-.25-1.35-.5-2.4-1.05-3.95-3.4-4.1-3.6-.15-.2-1.2-1.55-1.2-2.95 0-1.4.75-2.05.95-2.3Z" fill="currentColor"></path></svg>
+                  </sc-if>
+                  <sc-if value="{{ o.isTg }}" hint-placeholder-val="{{ false }}">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M2.7 11.5 20.4 4.6c.8-.3 1.5.2 1.2 1.4l-2.9 13.7c-.2 1-.85 1.25-1.7.8l-4.7-3.5-2.3 2.2c-.25.25-.45.45-.9.45l.3-4.5 8.2-7.4c.35-.3-.1-.5-.55-.2l-10.1 6.4-4.35-1.35c-.95-.3-.95-.95.2-1.4Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path></svg>
+                  </sc-if>
+                </div>
+              </div>
+              <span style="font-size:12px; font-weight:600; color:var(--text-secondary); white-space:nowrap;">{{ o.label }}</span>
+            </div>
+          </div>
+        </sc-for>
+
+        <sc-for list="{{ capturePositions }}" as="c" hint-placeholder-count="4">
+          <div style="position:absolute; left:{{ c.left }}%; top:{{ c.top }}%; transform:{{ c.transform }}; opacity:{{ c.opacity }}; width:158px; background:rgba(20,24,40,0.85); backdrop-filter:blur(10px); border:1px solid {{ c.accent }}; border-radius:12px; padding:10px 14px; box-shadow:0 0 18px rgba(77,130,232,0.25); pointer-events:none; transition:left 0.06s linear, top 0.06s linear, transform 0.06s linear, opacity 0.15s ease;">
+            <div style="display:flex; align-items:center; gap:7px;">
+              <div style="width:8px; height:8px; border-radius:50%; background:{{ c.accent }}; box-shadow:0 0 8px 2px {{ c.accent }}; flex-shrink:0;"></div>
+              <span style="font-size:12px; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.itemLabel }}</span>
+            </div>
+          </div>
+        </sc-for>
+
+        <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);">
+          <div style="transform:scale({{ captureCaseScale }}); transition:transform 0.5s cubic-bezier(0.16,1,0.3,1), box-shadow 0.5s ease; width:280px; background:rgba(20,24,40,0.7); backdrop-filter:blur(16px); border:1px solid rgba(77,130,232,0.35); border-radius:20px; padding:32px 28px; text-align:center; box-shadow:{{ captureCaseShadow }}; animation:orbBreathe 5s ease-in-out infinite;">
+            <div style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-muted); margin-bottom:10px;">Research Case</div>
+            <div style="font-size:17px; font-weight:600; color:var(--text-primary); margin-bottom:20px;">AI and the Knowledge Economy</div>
+            <div style="display:flex; align-items:baseline; justify-content:center; gap:8px;">
+              <span style="font-size:36px; font-weight:700; color:var(--pale); font-variant-numeric:tabular-nums; transition:opacity 0.2s ease;">{{ captureCount }}</span>
+              <span style="font-size:13px; color:var(--text-muted);">source{{ captureCountSuffix }} collected</span>
+            </div>
+            <div style="font-size:12.5px; font-weight:600; color:var(--bright); margin-top:12px; letter-spacing:0.02em;">{{ captureStatusText }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REAL EXAMPLE -->
+  <section ref="{{ setExampleRef }}" style="padding:120px 40px; text-align:center;">
+    <h2 style="font-size:44px; font-weight:700; margin:0 0 56px;">See how research becomes a thesis.</h2>
+    <div style="display:flex; align-items:center; justify-content:center; gap:40px; max-width:1000px; margin:0 auto; flex-wrap:wrap;">
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <sc-for list="{{ exampleSources }}" as="es" hint-placeholder-count="5"><div style="width:130px; background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:10px; padding:12px 14px; font-size:12px; color:var(--text-secondary);">📄 {{ es.name }}</div></sc-for>
+      </div>
+      <svg width="48" height="48" viewBox="0 0 56 56" style="box-shadow:0 0 32px rgba(9,76,178,0.4); border-radius:14px;"><rect width="56" height="56" rx="14" fill="#094CB2"></rect><path d="M18 16 L18 38 L34 38" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="38" cy="18" r="3.5" fill="white"></circle></svg>
+      <div style="max-width:340px; text-align:left;">
+        <div style="background:rgba(9,76,178,0.1); border:1.5px solid rgba(9,76,178,0.4); border-radius:14px; padding:20px 24px; box-shadow:0 0 40px rgba(9,76,178,0.2); min-height:110px;">
+          <span style="font-family:'Noto Serif',serif; font-style:italic; font-size:20px; color:var(--pale);">{{ typedThesis }}</span><span style="opacity:{{ cursorOpacity }}; font-family:'Noto Serif',serif; font-style:italic; font-size:20px; color:var(--pale);">|</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;">
+          <span style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:8px 14px; font-size:13px; color:var(--text-secondary);">💼 LinkedIn Post</span>
+          <span style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:8px 14px; font-size:13px; color:var(--text-secondary);">👥 Facebook Post</span>
+          <span style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:8px 14px; font-size:13px; color:var(--text-secondary);">✉️ Newsletter</span>
+          <span style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:8px 14px; font-size:13px; color:var(--text-secondary);">🎙️ Podcast Episode</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRUST -->
+  <section style="background:var(--bg-elevated); padding:100px 40px; text-align:center;">
+    <h2 data-reveal="1" style="font-size:44px; font-weight:700; margin:0 0 12px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">Built for serious thinking.</h2>
+    <p data-reveal="1" style="font-size:18px; color:var(--text-secondary); max-width:560px; margin:0 auto 48px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">LumAI is not trying to replace your judgment. It gives your judgment better material to work with.</p>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; max-width:840px; margin:0 auto; text-align:left;">
+      <div data-reveal="1" style="background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;"><div style="color:var(--bright); font-size:20px; margin-bottom:10px;">🔎</div><div style="font-weight:600; font-size:16px; margin-bottom:6px;">Source-aware</div><div style="font-size:14px; color:var(--text-secondary); line-height:1.6;">Every claim traces to a source. The system does not fill gaps with confident-sounding speculation — it marks them as inference.</div></div>
+      <div data-reveal="1" style="background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;"><div style="color:var(--bright); font-size:20px; margin-bottom:10px;">💡</div><div style="font-weight:600; font-size:16px; margin-bottom:6px;">Thesis-driven</div><div style="font-size:14px; color:var(--text-secondary); line-height:1.6;">The argument forms before the content is generated. Every paragraph serves the thesis. Nothing is filler.</div></div>
+      <div data-reveal="1" style="background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;"><div style="color:var(--bright); font-size:20px; margin-bottom:10px;">✓</div><div style="font-weight:600; font-size:16px; margin-bottom:6px;">Uncertainty-aware</div><div style="font-size:14px; color:var(--text-secondary); line-height:1.6;">LumAI distinguishes established claims from inference and analytical hypothesis. This honesty is a feature, not a limitation.</div></div>
+      <div data-reveal="1" style="background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;"><div style="color:var(--bright); font-size:20px; margin-bottom:10px;">👤</div><div style="font-weight:600; font-size:16px; margin-bottom:6px;">Human review built in</div><div style="font-size:14px; color:var(--text-secondary); line-height:1.6;">Every output goes through a review interface — approve, reject, iterate. LumAI gives you stronger material to review.</div></div>
+    </div>
+    <p style="font-style:italic; font-size:14px; color:var(--text-muted); margin-top:32px;">AI still requires review. LumAI gives you stronger material to review.</p>
+  </section>
+
+  <!-- USE CASES -->
+  <section style="padding:100px 40px; text-align:center;">
+    <h2 data-reveal="1" style="font-size:44px; font-weight:700; margin:0 0 48px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">Built for people who think in public.</h2>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; max-width:1200px; margin:0 auto; text-align:left;">
+      <sc-for list="{{ useCases }}" as="uc" hint-placeholder-count="8">
+        <div data-reveal="1" style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:12px; padding:20px 24px; opacity:0; transform:translateY(20px); transition:opacity 0.55s ease, transform 0.55s ease;">
+          <div style="color:var(--bright); font-size:20px; margin-bottom:10px;">{{ uc.icon }}</div>
+          <div style="font-weight:600; font-size:15px; margin-bottom:6px;">{{ uc.title }}</div>
+          <div style="font-size:13px; color:var(--text-muted); line-height:1.5;">{{ uc.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section id="pricing" style="background:var(--bg-elevated); padding:100px 40px; text-align:center;">
+    <h2 style="font-size:44px; font-weight:700; margin:0 0 16px; line-height:1.2;">Start free.<br>More is on the way.</h2>
+    <a href="#" onClick="{{ openDemo }}" style="display:inline-flex; align-items:center; gap:6px; font-size:14px; font-weight:600; color:var(--text-secondary); text-decoration:none; margin-bottom:40px;">Watch the demo →</a>
+    <div style="display:flex; gap:24px; max-width:720px; margin:0 auto; align-items:flex-start; justify-content:center;">
+      <div onMouseEnter="{{ onFreeEnter }}" onMouseLeave="{{ onFreeLeave }}" style="flex:1; background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:16px; padding:28px; text-align:left; transition:all 0.3s cubic-bezier(0.4,0,0.2,1); overflow:hidden;">
+        <span style="background:rgba(255,255,255,0.06); border-radius:100px; padding:4px 10px; font-size:11px; font-weight:700; letter-spacing:0.05em;">FREE</span>
+        <div style="font-size:32px; font-weight:700; margin-top:14px;">$0 <span style="font-size:14px; color:var(--text-muted); font-weight:400;">/ forever</span></div>
+        <div style="font-size:14px; color:var(--text-secondary); margin-top:8px;">Test the thinking engine before you commit.</div>
+        <a href="#" style="display:block; text-align:center; margin-top:20px; border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:10px; font-size:14px; font-weight:600; color:var(--text-primary); text-decoration:none;">Start Free</a>
+        <div style="max-height:{{ pricingHover0 }}; opacity:{{ pricingOpacity0 }}; transition:max-height 0.3s ease, opacity 0.3s ease; overflow:hidden; margin-top:16px; display:flex; flex-direction:column; gap:10px; font-size:13px; color:var(--text-secondary);">
+          <div>✓ 3 content cases</div><div>✓ 3 sources per case</div><div>✓ LinkedIn, Facebook, Newsletter &amp; Podcast outputs</div><div>✓ Basic review interface</div><div>✓ Full thinking engine access</div><div>✓ No credit card</div>
+        </div>
+      </div>
+      <div onMouseEnter="{{ onWaitlistEnter }}" onMouseLeave="{{ onWaitlistLeave }}" style="flex:1; position:relative; border:1.5px dashed rgba(9,76,178,0.4); border-radius:16px; padding:28px; text-align:left; background:linear-gradient(135deg, rgba(9,76,178,0.12) 0%, rgba(9,76,178,0.04) 100%); transition:all 0.3s cubic-bezier(0.4,0,0.2,1); overflow:hidden;">
+        <span style="background:rgba(9,76,178,0.15); color:var(--pale); border-radius:100px; padding:4px 10px; font-size:11px; font-weight:700; letter-spacing:0.05em;">COMING SOON</span>
+        <div style="font-size:22px; font-weight:700; margin-top:14px; color:var(--pale);">Early Access</div>
+        <div style="font-size:14px; color:var(--text-secondary); margin-top:8px;">For research that becomes a system. Higher limits, priority processing, and what's next.</div>
+        <a href="#" style="display:block; text-align:center; margin-top:20px; background:#1E54C8; border-radius:10px; padding:10px; font-size:14px; font-weight:700; color:white; text-decoration:none;">Join the Waitlist</a>
+        <div style="max-height:{{ pricingHover1 }}; opacity:{{ pricingOpacity1 }}; transition:max-height 0.3s ease, opacity 0.3s ease; overflow:hidden; margin-top:16px; display:flex; flex-direction:column; gap:10px; font-size:13px; color:var(--text-secondary);">
+          <div>→ Unlimited content cases</div><div>→ More sources per case</div><div>→ Advanced review workflow</div><div>→ Priority support</div><div>→ Upcoming format updates</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section style="position:relative; padding:160px 40px; text-align:center; background:radial-gradient(ellipse 900px 700px at 50% 50%, rgba(9,76,178,0.09) 0%, transparent 70%); overflow:hidden;">
+    <canvas ref="{{ setCtaCanvasRef }}" style="position:absolute; inset:0; z-index:0; width:100%; height:100%;"></canvas>
+    <div style="position:relative; z-index:1;">
+      <h2 style="font-size:56px; font-weight:700; line-height:1.1; margin:0;">You already have the research.<br>LumAI finds what it means.</h2>
+      <p style="font-size:18px; color:var(--text-secondary); margin-top:20px;">Turn scattered sources into thesis-driven content,<br>newsletters and podcast episodes.</p>
+      <div style="display:flex; gap:12px; justify-content:center; margin-top:44px;">
+        <a href="#" style="background:#1E54C8; color:white; font-weight:700; font-size:15px; padding:14px 32px; border-radius:12px; box-shadow:0 4px 16px rgba(30,84,200,0.4); text-decoration:none;">Start Free — No credit card required</a>
+        <a href="#" onClick="{{ openDemo }}" style="border:1px solid rgba(255,255,255,0.15); color:var(--text-primary); font-weight:600; font-size:15px; padding:14px 32px; border-radius:12px; text-decoration:none;">Watch the demo →</a>
+      </div>
+      <div style="font-size:13px; color:var(--text-muted); margin-top:16px;">No credit card required. Free plan available.</div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" style="background:var(--bg-elevated); padding:80px 40px;">
+    <h2 style="font-size:36px; font-weight:700; text-align:center; margin:0 0 40px;">Questions worth asking.</h2>
+    <div style="max-width:720px; margin:0 auto;">
+      <sc-for list="{{ faqItems }}" as="faq" hint-placeholder-count="8">
+        <div style="border-bottom:1px solid var(--border-subtle); padding:20px 0;">
+          <div onclick="{{ faq.toggle }}" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+            <span style="font-weight:600; font-size:17px; color:var(--text-primary);">{{ faq.q }}</span>
+            <span style="color:var(--text-muted); font-size:18px;">{{ faq.icon }}</span>
+          </div>
+          <sc-if value="{{ faq.isOpen }}">
+            <div style="border-left:4px solid; border-image:linear-gradient(to bottom, #094CB2 0%, #094CB2 {{ faq.fill }}, transparent {{ faq.fill }}) 1; padding-left:20px; margin-top:12px; transition:border-image 400ms ease;">
+              <div style="font-size:15px; color:var(--text-secondary); line-height:1.75;">{{ faq.a }}</div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer style="border-top:1px solid var(--border-subtle); background:var(--bg-elevated); padding:48px 40px;">
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:32px; max-width:1200px; margin:0 auto;">
+      <div>
+        <div style="display:flex; align-items:center; gap:8px;"><svg width="24" height="24" viewBox="0 0 56 56"><rect width="56" height="56" rx="14" fill="#094CB2"></rect><path d="M18 16 L18 38 L34 38" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="38" cy="18" r="3.5" fill="white"></circle></svg><span style="font-weight:700; font-size:16px;">LumAI</span></div>
+        <div style="font-size:14px; color:var(--text-muted); margin-top:10px;">Turn research into original thinking.</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:20px;">© 2026 LumAI</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:10px; font-size:14px;"><span style="color:var(--text-primary); font-weight:600; margin-bottom:4px;">Product</span><a href="#how" style="color:var(--text-muted); text-decoration:none;">How it Works</a><a href="#outputs" style="color:var(--text-muted); text-decoration:none;">Outputs</a><a href="#watch-think" style="color:var(--text-muted); text-decoration:none;">Watch it Think</a><a href="#pricing" style="color:var(--text-muted); text-decoration:none;">Pricing</a><a href="#faq" style="color:var(--text-muted); text-decoration:none;">FAQ</a></div>
+      <div style="display:flex; flex-direction:column; gap:10px; font-size:14px;"><span style="color:var(--text-primary); font-weight:600; margin-bottom:4px;">Company</span><a href="About.dc.html" style="color:var(--text-muted); text-decoration:none;">About</a><a href="Privacy Policy.dc.html" style="color:var(--text-muted); text-decoration:none;">Privacy Policy</a><a href="Terms of Service.dc.html" style="color:var(--text-muted); text-decoration:none;">Terms of Service</a><a href="Contact.dc.html" style="color:var(--text-muted); text-decoration:none;">Contact</a></div>
+      <div style="display:flex; align-items:flex-start; gap:6px; font-size:13px; color:var(--text-muted);"><div style="width:6px; height:6px; border-radius:50%; background:#5EE38A; margin-top:4px;"></div>All systems operational</div>
+    </div>
+  </footer>
+
+  <dc-import name="InteractiveProductDemo" open="{{ demoOpen }}" onClose="{{ closeDemo }}" hint-size="100%,100%"></dc-import>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const SOURCE_DEFS = [
+  { name: 'Reuters', x: '4%', y: '10%' },
+  { name: 'Gartner.pdf', x: '2%', y: '38%' },
+  { name: 'OpenAI Blog', x: '6%', y: '64%' },
+  { name: 'Bloomberg', x: '30%', y: '4%' },
+  { name: 'Cloudflare', x: '28%', y: '78%' },
+];
+const OUTPUT_DEFS = [
+  { name: 'LinkedIn', x: '76%', y: '10%' },
+  { name: 'Facebook', x: '84%', y: '36%' },
+  { name: 'Newsletter', x: '78%', y: '60%' },
+  { name: 'Podcast', x: '84%', y: '84%' },
+];
+const EVIDENCE_DEFS = [
+  { text: 'PATTERN', x: '38%', y: '20%' },
+  { text: 'TENSION', x: '58%', y: '24%' },
+  { text: 'GAP', x: '40%', y: '70%' },
+  { text: 'INSIGHT', x: '58%', y: '74%' },
+];
+const THESIS_TEXT = '"The real shift is not more content. It is clearer thinking from the same research."';
+const THINK_SOURCE_DEFS = [
+  { name: 'Reuters', type: 'Wire', mono: 'R', accent: '#FF8000', left: 10, top: 16, floatDur: '3.2s' },
+  { name: 'Bloomberg', type: 'Wire', mono: 'B', accent: '#8892A6', left: 78, top: 10, floatDur: '4.1s' },
+  { name: 'Gartner PDF', type: 'Research Report', mono: 'G', accent: '#4D82E8', left: 5, top: 55, floatDur: '3.7s' },
+  { name: 'OpenAI Blog', type: 'Blog', mono: 'AI', accent: '#3FCFA0', left: 85, top: 50, floatDur: '4.4s' },
+  { name: 'Cloudflare', type: 'Network', mono: '☁', accent: '#F6821F', left: 16, top: 82, floatDur: '3.5s' },
+  { name: 'YouTube', type: 'Video', mono: '▶', accent: '#FF4D4D', left: 70, top: 80, floatDur: '4.8s' },
+  { name: 'GitHub', type: 'Repo', mono: '</>', accent: '#B18CFF', left: 42, top: 8, floatDur: '3.9s' },
+  { name: 'Research Papers', type: 'PDF', mono: 'R', accent: '#7C8BA6', left: 55, top: 88, floatDur: '4.6s' },
+];
+const THINK_SIGNAL_DEFS = ['Searching contradictions...', 'Finding patterns...', 'Comparing evidence...', 'Building thesis...'];
+const REASON_SOURCES = [
+  { name: 'Reuters', mono: 'R', kind: 'Newswire', tag: 'Breaking News', accent: '#FF8000', survive: true, reject: null, base: { left: 6, top: 10 }, ring: { left: 22, top: 20 }, floatDur: '5.2s' },
+  { name: 'Bloomberg', mono: 'B', kind: 'Financial News', tag: 'Markets', accent: '#8892A6', survive: true, reject: null, base: { left: 68, top: 6 }, ring: { left: 74, top: 22 }, floatDur: '6.1s', caution: 'Needs Verification', cautionAt: 0.35 },
+  { name: 'OpenAI', mono: 'AI', kind: 'Research Lab', tag: 'Frontier AI', accent: '#3FCFA0', survive: true, reject: null, base: { left: 38, top: 4 }, ring: { left: 26, top: 64 }, floatDur: '5.7s' },
+  { name: 'Cloudflare', mono: 'CF', kind: 'Technical Blog', tag: 'Infrastructure', accent: '#F6821F', survive: false, reject: 'Vendor Claim', base: { left: 4, top: 42 }, ring: null, floatDur: '5.4s' },
+  { name: 'GitHub', mono: 'GH', kind: 'Repository', tag: 'Open Source', accent: '#B18CFF', survive: false, reject: 'Duplicate', base: { left: 82, top: 36 }, ring: null, floatDur: '5.9s' },
+  { name: 'Research Paper', mono: 'RP', kind: 'Academic · Nature', tag: 'Peer Reviewed', accent: '#7C8BA6', survive: true, reject: null, base: { left: 14, top: 70 }, ring: { left: 70, top: 66 }, floatDur: '6.4s' },
+  { name: 'YouTube', mono: 'YT', kind: 'Conference Talk', tag: 'Video', accent: '#FF4D4D', survive: false, reject: 'Opinion', base: { left: 58, top: 72 }, ring: null, floatDur: '5.6s' },
+  { name: 'Gartner', mono: 'G', kind: 'Analyst Report', tag: 'Market Research', accent: '#4D82E8', survive: true, reject: null, base: { left: 90, top: 64 }, ring: { left: 50, top: 16 }, floatDur: '6.6s', caution: 'Conflicting Claim', cautionAt: 0.6 },
+  { name: 'TechCrunch', mono: 'TC', kind: 'Tech News', tag: 'Commentary', accent: '#3FB950', survive: false, reject: 'Opinion', base: { left: 30, top: 88 }, ring: null, floatDur: '6.2s' },
+  { name: 'McKinsey', mono: 'M', kind: 'Consulting Report', tag: 'Strategy', accent: '#0B4F9C', survive: false, reject: 'Vendor Claim', base: { left: 74, top: 86 }, ring: null, floatDur: '5.8s' },
+  { name: 'Forrester', mono: 'F', kind: 'Analyst Report', tag: 'Market Research', accent: '#5B4EE0', survive: false, reject: 'Duplicate', base: { left: 4, top: 84 }, ring: null, floatDur: '6.3s' },
+  { name: 'Wikipedia', mono: 'W', kind: 'Reference', tag: 'General', accent: '#8892A6', survive: false, reject: 'Weak Evidence', base: { left: 92, top: 10 }, ring: null, floatDur: '5.5s' },
+  { name: 'Reddit Thread', mono: 'r/', kind: 'Forum', tag: 'Anecdotal', accent: '#FF6B4A', survive: false, reject: 'Opinion', base: { left: 20, top: 30 }, ring: null, floatDur: '5.9s' },
+  { name: 'MIT Review', mono: 'MR', kind: 'Academic', tag: 'Peer Reviewed', accent: '#7C8BA6', survive: true, reject: null, base: { left: 48, top: 88 }, ring: { left: 50, top: 82 }, floatDur: '6.5s' },
+  { name: 'Product Hunt', mono: 'PH', kind: 'Community', tag: 'Launch Buzz', accent: '#DA552F', survive: false, reject: 'Low Confidence', base: { left: 62, top: 20 }, ring: null, floatDur: '5.3s' },
+  { name: 'Newsletter', mono: 'NL', kind: 'Independent', tag: 'Opinion', accent: '#4D82E8', survive: false, reject: 'Opinion', base: { left: 8, top: 58 }, ring: null, floatDur: '6.0s' },
+  { name: 'Crunchbase', mono: 'CB', kind: 'Data Provider', tag: 'Company Data', accent: '#0288D1', survive: false, reject: 'Outdated', base: { left: 86, top: 50 }, ring: null, floatDur: '5.7s' },
+  { name: 'IEEE Paper', mono: 'IE', kind: 'Academic', tag: 'Peer Reviewed', accent: '#7C8BA6', survive: false, reject: 'Duplicate', base: { left: 42, top: 48 }, ring: null, floatDur: '6.1s' },
+];
+const REASON_CONNECTIONS = [
+  { from: 'Reuters', to: 'CENTER', label: 'Supports', color: '#4D82E8' },
+  { from: 'Bloomberg', to: 'CENTER', label: 'Consensus', color: '#3FCFA0' },
+  { from: 'OpenAI', to: 'CENTER', label: 'Emerging Pattern', color: '#F5C242' },
+  { from: 'Research Paper', to: 'CENTER', label: 'Contradicts', color: '#FF6B6B' },
+];
+const REASON_CAPTIONS = ['Comparing claims…', 'Evaluating evidence…', 'Cross-referencing…', 'Checking confidence…', 'Finding consensus…'];
+const SYNTHESIS_CENTER = { left: 50, top: 44 };
+
+const CAPTURE_CENTER = { left: 50, top: 50 };
+const CAPTURE_ORIGINS = [
+  { key: 'app', label: 'LumAI App', pos: { left: 50, top: 7 }, accent: '#4D82E8', items: ['Research Report', 'Gartner Report'] },
+  { key: 'ext', label: 'Chrome Extension', pos: { left: 87.5, top: 50 }, accent: '#8A97AD', items: ['Reuters Article', 'Cloudflare Blog'] },
+  { key: 'tg', label: 'Telegram', pos: { left: 50, top: 93 }, accent: '#4D82E8', items: ['AI News', 'Whitepaper PDF'] },
+  { key: 'wa', label: 'WhatsApp', pos: { left: 12.5, top: 50 }, accent: '#3FCFA0', items: ['URL', 'Market Analysis'] },
+];
+const CAPTURE_CYCLE_MS = 1400;
+const CAPTURE_STATUS_TIERS = [
+  { min: 0, text: 'Collecting Knowledge…' },
+  { min: 4, text: 'Preparing Analysis…' },
+  { min: 7, text: 'Ready for Synthesis' },
+];
+const CAPTURE_EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
+const REASON_INSIGHT_WORDS = 'The future of AI depends on preserving the economics of original knowledge.'.split(' ');
+const REASON_OUTCOMES = [
+  { name: 'LinkedIn Post', mono: 'in', accent: '#0A66C2', preview: "AI didn't just change search. It changed who pays for knowledge." },
+  { name: 'Newsletter', mono: '✉', accent: '#4D82E8', preview: "This week's biggest takeaway: the real bottleneck in AI isn't models." },
+  { name: 'Podcast Script', mono: '🎙', accent: '#3FCFA0', preview: 'Intro: everyone talks about intelligence. The real story is discernment.' },
+  { name: 'Facebook Post', mono: 'f', accent: '#1877F2', preview: 'Most people miss the real story behind AI — the pattern across 9 sources.' },
+];
+const REASON_STAGE_COPY = ['Collecting evidence', 'Removing noise', 'Finding patterns', 'Discovering the insight', 'One insight. Multiple outcomes'];
+const PROBLEM_SOURCE_POS = [
+  { left: 4, top: 12 }, { left: 74, top: 8 }, { left: 2, top: 58 }, { left: 80, top: 55 },
+  { left: 14, top: 84 }, { left: 66, top: 82 }, { left: 40, top: 4 }, { left: 88, top: 70 },
+];
+const PROBLEM_SIGNAL_DEFS = [
+  { text: 'Contradiction detected', left: 30, top: 20, delay: '0s' },
+  { text: 'Supporting evidence', left: 62, top: 30, delay: '0.3s' },
+  { text: 'Weak assumption', left: 18, top: 50, delay: '0.6s' },
+  { text: 'Consensus forming', left: 55, top: 62, delay: '0.9s' },
+  { text: 'Outlier found', left: 36, top: 78, delay: '1.2s' },
+  { text: 'Emerging pattern', left: 68, top: 12, delay: '1.5s' },
+];
+const THINK_OUTPUT_DEFS = [
+  { icon: '💼', name: 'LinkedIn' },
+  { icon: '👥', name: 'Facebook' },
+  { icon: '✉️', name: 'Newsletter' },
+  { icon: '🎙️', name: 'Podcast Script' },
+];
+const FAQ_DEFS = [
+  { q: 'Is LumAI just another AI writing tool?', a: 'No. LumAI does not start from a blank prompt. It starts from your sources and builds a thesis from them. The output is not generic because the analysis is not generic — it is grounded in your specific research.' },
+  { q: 'How is it different from ChatGPT?', a: "ChatGPT generates text from a prompt. LumAI reasons across your sources. ChatGPT doesn't know what your research says — it generates plausible-sounding content regardless. LumAI produces outputs specifically and defensibly grounded in the sources you provide." },
+  { q: 'Can I generate podcast episodes?', a: 'Yes. LumAI generates a complete single-narrator episode from your sources: research pack, thesis formation, full script, research notes, and an episode reading view with chapter navigation.' },
+  { q: 'Does LumAI create audio files?', a: 'Not yet. LumAI creates the episode script and research notes. The script is written to professional narration standards. Audio synthesis is planned for a future release.' },
+  { q: 'Does LumAI support Hebrew?', a: 'Yes. Hebrew-language sources and outputs are fully supported, including right-to-left formatting. This is a core capability.' },
+  { q: 'What sources can I add?', a: 'Web pages, articles, PDFs, reports, and raw URLs. The more diverse and independent your sources, the deeper the analysis.' },
+  { q: 'How long does generation take?', a: 'Research runs take 2–4 minutes. Podcast episodes take 5–10 minutes depending on source depth. Progress is visible throughout.' },
+  { q: 'Is there a free plan?', a: 'Yes. Start free without a credit card — full thinking engine access, LinkedIn, Facebook, Newsletter and Podcast outputs.' },
+];
+const USE_CASE_DEFS = [
+  { icon: '🛡', title: 'Cybersecurity commentary', body: 'A breach happens. You have 12 articles. LumAI finds the analytical angle, not just what happened.' },
+  { icon: '📊', title: 'Market analysis', body: 'Earnings calls, analyst notes, quarterly reports — synthesized into the thesis the data actually supports.' },
+  { icon: '👤', title: 'Executive thought leadership', body: 'Your opinions, your reading, given structure that builds authority rather than just presence.' },
+  { icon: '📣', title: 'Product marketing', body: 'Competitive intelligence turned into content that argues why the category is moving your way.' },
+  { icon: '✉️', title: 'Newsletter creation', body: 'From research dump to fully-argued issue, every week, without the four-hour synthesis session.' },
+  { icon: '🎙️', title: 'Podcast scripting', body: 'From topic to complete episode with thesis, structure and research notes. Without a production team.' },
+  { icon: '↗', title: 'Research-driven social', body: 'Academic papers and reports turned into LinkedIn posts that make the argument, not just cite the finding.' },
+  { icon: '📈', title: 'Analyst briefings', body: 'Dense source material transformed into structured arguments for stakeholder communication.' },
+];
+
+class NetworkCanvas {
+  constructor(el) {
+    this.canvas = el; this.ctx = el.getContext('2d'); this.nodes = []; this.mouse = { x: -999, y: -999 }; this.running = true;
+    const r = el.getBoundingClientRect();
+    el.width = r.width; el.height = r.height;
+    for (let i = 0; i < 140; i++) this.nodes.push({ x: Math.random() * el.width, y: Math.random() * el.height, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, r: Math.random() * 1.2 + 0.4, base: Math.random() * 0.35 + 0.08 });
+    const loop = () => {
+      if (!this.running) return;
+      const { ctx, canvas, nodes, mouse } = this;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      nodes.forEach(n => { n.x = (n.x + n.vx + canvas.width) % canvas.width; n.y = (n.y + n.vy + canvas.height) % canvas.height; });
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          const d = Math.hypot(a.x - b.x, a.y - b.y);
+          if (d > 80) continue;
+          const md = Math.min(Math.hypot(a.x - mouse.x, a.y - mouse.y), Math.hypot(b.x - mouse.x, b.y - mouse.y));
+          const boost = md < 120 ? (1 - md / 120) * 0.3 : 0;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+          ctx.strokeStyle = `rgba(77,130,232,${(1 - d / 80) * 0.06 + boost})`; ctx.lineWidth = 0.5; ctx.stroke();
+        }
+      }
+      nodes.forEach(n => {
+        const md = Math.hypot(n.x - mouse.x, n.y - mouse.y);
+        const boost = md < 100 ? (1 - md / 100) * 0.5 : 0;
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(77,130,232,${n.base + boost})`; ctx.fill();
+      });
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+    const c = this.canvas.parentElement;
+    this._move = e => { const rect = this.canvas.getBoundingClientRect(); this.mouse = { x: e.clientX - rect.left, y: e.clientY - rect.top }; };
+    this._leave = () => { this.mouse = { x: -999, y: -999 }; };
+    c.addEventListener('mousemove', this._move);
+    c.addEventListener('mouseleave', this._leave);
+  }
+  destroy() { this.running = false; }
+}
+
+class RiseCanvas {
+  constructor(el) {
+    this.canvas = el; this.ctx = el.getContext('2d'); this.running = true;
+    const r = el.getBoundingClientRect();
+    el.width = r.width; el.height = r.height;
+    this.particles = [];
+    for (let i = 0; i < 40; i++) this.particles.push({ x: Math.random() * el.width, y: Math.random() * el.height, r: Math.random() * 1.2 + 0.5, vy: 0.1 + Math.random() * 0.2, vx: (Math.random() - 0.5) * 0.05, o: 0.04 + Math.random() * 0.11 });
+    const loop = () => {
+      if (!this.running) return;
+      const { ctx, canvas, particles } = this;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles.forEach(p => {
+        p.y -= p.vy; p.x += p.vx;
+        if (p.y < 0) { p.y = canvas.height; p.x = Math.random() * canvas.width; }
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(77,130,232,${p.o})`; ctx.fill();
+      });
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+  destroy() { this.running = false; }
+}
+
+class Component extends DCLogic {
+  state = {
+    loadStage: 0,
+    heroAct: 0,
+    demoOpen: false,
+    problemPhase: 0,
+    reasoningPct: 0,
+    modalOpen: false,
+    modalPhase: 0,
+    flowStep: 1,
+    thinkPct: 0,
+    typedThesis: '',
+    cursorOn: true,
+    faqOpen: -1,
+    faqFill: 0,
+    pricingHoverIdx: null,
+    mouseX: -400, mouseY: -400,
+    scrolled: false,
+  };
+
+  componentDidMount() {
+    setTimeout(() => this.setState({ loadStage: 1 }), 20);
+    setTimeout(() => this.setState({ loadStage: 2 }), 500);
+    setTimeout(() => this.setState({ loadStage: 3 }), 700);
+    setTimeout(() => this.setState({ loadStage: 4 }), 900);
+    setTimeout(() => this.setState({ loadStage: 5 }), 1200);
+
+    setTimeout(() => this.setState({ heroAct: 1 }), 400);
+    setTimeout(() => this.setState({ heroAct: 2 }), 1900);
+    setTimeout(() => this.setState({ heroAct: 3 }), 4300);
+    setTimeout(() => this.setState({ heroAct: 4 }), 5600);
+    setTimeout(() => this.setState({ heroAct: 5 }), 7200);
+
+    if (this.heroCanvasEl) this._network = new NetworkCanvas(this.heroCanvasEl);
+    if (this.ctaCanvasEl) this._rise = new RiseCanvas(this.ctaCanvasEl);
+
+    const revealObs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.style.opacity = 1;
+          e.target.style.transform = 'translateY(0) translateX(0)';
+          revealObs.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+    if (this.rootEl) this.rootEl.querySelectorAll('[data-reveal]').forEach(el => revealObs.observe(el));
+
+    if (this.chaosEl) {
+      const chaosObs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting && !this._problemStarted) {
+            this._problemStarted = true;
+            this._problemTimer = setInterval(() => {
+              this.setState(s => ({ problemPhase: (s.problemPhase + 1) % 5 }));
+            }, 2800);
+            chaosObs.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.3 });
+      chaosObs.observe(this.chaosEl);
+    }
+
+    if (this.exampleEl) {
+      const exObs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting && !this._typingStarted) {
+            this._typingStarted = true;
+            const full = 'The AI companies saving the web may also be weakening the economics that keep the web alive.';
+            let i = 0;
+            const iv = setInterval(() => {
+              i++;
+              this.setState({ typedThesis: full.slice(0, i) });
+              if (i >= full.length) {
+                clearInterval(iv);
+                setTimeout(() => this.setState({ cursorOn: false }), 2000);
+              }
+            }, 28);
+            exObs.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.4 });
+      exObs.observe(this.exampleEl);
+    }
+
+    if (this.flowEl) {
+      const flowObs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          const ratio = e.intersectionRatio;
+          if (!e.isIntersecting) return;
+          const rect = e.target.getBoundingClientRect();
+          const total = rect.height - window.innerHeight;
+          const scrolled = Math.min(Math.max(-rect.top, 0), total);
+          const pct = total > 0 ? scrolled / total : 0;
+          const step = pct < 0.2 ? 1 : pct < 0.4 ? 2 : pct < 0.6 ? 3 : pct < 0.8 ? 4 : 5;
+          if (step !== this.state.flowStep) this.setState({ flowStep: step });
+        });
+      }, { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] });
+      flowObs.observe(this.flowEl);
+      this._flowScroll = () => {
+        if (!this.flowEl) return;
+        const rect = this.flowEl.getBoundingClientRect();
+        if (rect.top > window.innerHeight || rect.bottom < 0) return;
+        const total = rect.height - window.innerHeight;
+        const scrolled = Math.min(Math.max(-rect.top, 0), total);
+        const pct = total > 0 ? scrolled / total : 0;
+        const step = pct < 0.2 ? 1 : pct < 0.4 ? 2 : pct < 0.6 ? 3 : pct < 0.8 ? 4 : 5;
+        if (step !== this.state.flowStep) this.setState({ flowStep: step });
+      };
+      window.addEventListener('scroll', this._flowScroll, { passive: true });
+    }
+
+    {
+      this._sectionScroll = () => {
+        if (!this.reasonEl) return;
+        const rect = this.reasonEl.getBoundingClientRect();
+        if (rect.top > window.innerHeight || rect.bottom < 0) return;
+        const total = rect.height - window.innerHeight;
+        const scrolled = Math.min(Math.max(-rect.top, 0), total);
+        const pct = total > 0 ? scrolled / total : 0;
+        if (Math.abs(pct - this.state.reasoningPct) > 0.002) this.setState({ reasoningPct: pct });
+      };
+      window.addEventListener('scroll', this._sectionScroll, { passive: true });
+      window.addEventListener('resize', this._sectionScroll, { passive: true });
+      this._sectionScroll();
+    }
+    setTimeout(() => this.forceUpdate(), 1000);
+
+    if (this.captureEl) {
+      const captureObs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting && !this._captureStarted) {
+            this._captureStarted = true;
+            this._captureTimer = setInterval(() => {
+              this.setState(s => {
+                const nextSub = (s.captureSubT || 0) + (60 / CAPTURE_CYCLE_MS);
+                if (nextSub >= 1) return { captureSubT: 0, captureTick: (s.captureTick || 0) + 1 };
+                return { captureSubT: nextSub };
+              });
+            }, 60);
+            captureObs.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.2 });
+      captureObs.observe(this.captureEl);
+    }
+
+    let navTicking = false;
+    this._navScroll = () => {
+      if (navTicking) return;
+      navTicking = true;
+      requestAnimationFrame(() => {
+        const s = window.scrollY > 10;
+        if (s !== this.state.scrolled) this.setState({ scrolled: s });
+        navTicking = false;
+      });
+    };
+    window.addEventListener('scroll', this._navScroll, { passive: true });
+
+    let mouseTicking = false;
+    this._mouseMove = e => {
+      if (mouseTicking) return;
+      mouseTicking = true;
+      requestAnimationFrame(() => { this.setState({ mouseX: e.clientX, mouseY: e.clientY }); mouseTicking = false; });
+    };
+    window.addEventListener('mousemove', this._mouseMove, { passive: true });
+  }
+
+  componentWillUnmount() {
+    if (this._network) this._network.destroy();
+    if (this._rise) this._rise.destroy();
+    if (this._flowScroll) window.removeEventListener('scroll', this._flowScroll);
+    if (this._sectionScroll) { window.removeEventListener('scroll', this._sectionScroll); window.removeEventListener('resize', this._sectionScroll); }
+    if (this._modalTimer) clearInterval(this._modalTimer);
+    if (this._captureTimer) clearInterval(this._captureTimer);
+    if (this._modalNetwork) this._modalNetwork.destroy();
+    if (this._modalKeyHandler) window.removeEventListener('keydown', this._modalKeyHandler);
+    if (this._navScroll) window.removeEventListener('scroll', this._navScroll);
+    if (this._mouseMove) window.removeEventListener('mousemove', this._mouseMove);
+    if (this._problemTimer) clearInterval(this._problemTimer);
+  }
+
+  skipLoad = () => { if (this.state.loadStage < 5) this.setState({ loadStage: 5 }); };
+
+  openDemo = (e) => {
+    if (e) e.preventDefault();
+    this._demoScrollY = window.scrollY;
+    this._demoOpenerEl = e && e.currentTarget;
+    document.body.style.overflow = 'hidden';
+    this.setState({ demoOpen: true });
+  };
+
+  closeDemo = () => {
+    this.setState({ demoOpen: false });
+    document.body.style.overflow = '';
+    if (typeof this._demoScrollY === 'number') window.scrollTo(0, this._demoScrollY);
+    if (this._demoOpenerEl) this._demoOpenerEl.focus();
+  };
+
+  openThinkModal = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ modalOpen: true, modalPhase: 0 });
+    if (this._modalTimer) clearInterval(this._modalTimer);
+    this._modalTimer = setInterval(() => {
+      this.setState(s => ({ modalPhase: (s.modalPhase + 1) % 6 }));
+    }, 3200);
+    if (this._modalNetworkEl && !this._modalNetwork) this._modalNetwork = new NetworkCanvas(this._modalNetworkEl);
+    this._modalKeyHandler = (ev) => { if (ev.key === 'Escape') this.closeThinkModal(); };
+    window.addEventListener('keydown', this._modalKeyHandler);
+  };
+
+  closeThinkModal = () => {
+    this.setState({ modalOpen: false });
+    if (this._modalTimer) { clearInterval(this._modalTimer); this._modalTimer = null; }
+    if (this._modalNetwork) { this._modalNetwork.destroy(); this._modalNetwork = null; }
+    if (this._modalKeyHandler) { window.removeEventListener('keydown', this._modalKeyHandler); this._modalKeyHandler = null; }
+  };
+
+  stopPropagation = (e) => { e.stopPropagation(); };
+
+  setModalNetworkRef = (el) => {
+    this._modalNetworkEl = el;
+    if (el && !this._modalNetwork) this._modalNetwork = new NetworkCanvas(el);
+  };
+
+
+
+  toggleFaq = (idx) => {
+    if (this.state.faqOpen === idx) {
+      this.setState({ faqOpen: -1, faqFill: 0 });
+    } else {
+      this.setState({ faqOpen: idx, faqFill: 0 });
+      requestAnimationFrame(() => requestAnimationFrame(() => this.setState({ faqFill: 100 })));
+    }
+  };
+
+  setPricingHover = (idx, on) => {
+    this.setState({ pricingHoverIdx: on ? idx : (this.state.pricingHoverIdx === idx ? null : this.state.pricingHoverIdx) });
+  };
+
+  onHeroTilt = (e) => {
+    if (!this.heroForegroundEl) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const rx = ((e.clientY - cy) / rect.height) * -4;
+    const ry = ((e.clientX - cx) / rect.width) * 4;
+    this.heroForegroundEl.style.transform = `perspective(1200px) rotateX(${rx}deg) rotateY(${ry}deg)`;
+  };
+  onHeroTiltLeave = () => {
+    if (this.heroForegroundEl) this.heroForegroundEl.style.transform = 'perspective(1200px) rotateX(0) rotateY(0)';
+  };
+
+  renderVals() {
+    const s = this.state;
+    const loadOverlayOpacity = s.loadStage >= 5 ? 0 : 1;
+    const logoLoadSize = s.loadStage === 0 ? 48 : 48;
+    const logoLoadTransform = s.loadStage >= 3 ? 'translateY(-260px) scale(0.7)' : 'translateY(0) scale(1)';
+    const logoLoadGlow = s.loadStage === 2 ? '0 0 24px rgba(77,130,232,0.4)' : 'none';
+    const contentOpacity = s.loadStage >= 4 ? 1 : 0;
+    const contentScale = s.loadStage >= 4 ? 'scale(1)' : 'scale(1.02)';
+
+    const heroLine1 = s.heroAct >= 1 ? 1 : 0;
+    const heroLine2 = s.heroAct >= 2 ? 1 : 0;
+    const heroLine3 = s.heroAct >= 3 ? 1 : 0;
+    const heroSub = s.heroAct >= 4 ? 1 : 0;
+
+    const sourceCards = SOURCE_DEFS.map((d, i) => ({
+      name: d.name, x: d.x, y: d.y, floatDur: (3 + i * 0.4) + 's',
+      opacity: s.heroAct >= 1 ? 1 : 0, transform: s.heroAct >= 1 ? 'translateX(0)' : 'translateX(-20px)',
+    }));
+    const evidenceLabels = EVIDENCE_DEFS.map(d => ({ text: d.text, x: d.x, y: d.y, opacity: s.heroAct >= 2 ? 1 : 0 }));
+    const outputCards = OUTPUT_DEFS.map(d => ({ name: d.name, x: d.x, y: d.y, opacity: s.heroAct >= 4 ? 1 : 0, transform: s.heroAct >= 4 ? 'translate(0,0)' : 'translate(20px,-10px)' }));
+
+    const flowSteps = ['Add Sources', 'LumAI Researches', 'Thesis Formation', 'Generate Outputs', 'Review'].map((label, i) => {
+      const n = i + 1;
+      const active = s.flowStep === n;
+      const done = s.flowStep > n;
+      return { label, dotBg: active ? '#4D82E8' : done ? 'rgba(77,130,232,0.4)' : 'transparent', dotBorder: active || done ? '#4D82E8' : 'rgba(255,255,255,0.2)', textColor: active ? '#E9EBFF' : '#606880' };
+    });
+
+    const outputTabs = ['LinkedIn', 'Facebook', 'Newsletter', 'Podcast'].map((n, i) => ({ name: n, bg: i === 0 ? '#1E54C8' : 'transparent', color: i === 0 ? 'white' : '#A0A8C8', underline: i === 0 ? '2px solid #1E54C8' : '2px solid transparent' }));
+
+    const outlineItems = ['Introduction', 'The Search Shift', 'Who Pays', 'The Feedback Loop', 'Implications'].map((label, i) => ({ label, delay: (i * 0.25) + 's' }));
+
+    const faqItems = FAQ_DEFS.map((f, i) => ({ q: f.q, a: f.a, isOpen: s.faqOpen === i, fill: (s.faqOpen === i ? s.faqFill : 0) + '%', icon: s.faqOpen === i ? '\u2212' : '+', toggle: () => this.toggleFaq(i) }));
+
+    const flowIsStep1 = s.flowStep === 1;
+    const flowIsStep2 = s.flowStep === 2;
+    const flowIsStep3 = s.flowStep === 3;
+    const flowIsStep4 = s.flowStep === 4;
+    const flowIsStep5 = s.flowStep === 5;
+
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const pct = s.thinkPct;
+    const thinkScene = pct < 0.06 ? 0 : pct < 0.22 ? 1 : pct < 0.40 ? 2 : pct < 0.56 ? 3 : pct < 0.66 ? 4 : pct < 0.84 ? 5 : 6;
+    const thinkShowIntro = thinkScene === 0;
+    const thinkShowScene = thinkScene >= 1;
+    const thinkShowSources = thinkScene === 1 || thinkScene === 2;
+    const gravityT = Math.min(Math.max((pct - 0.22) / (0.40 - 0.22), 0), 1);
+    const thinkSources = THINK_SOURCE_DEFS.map(d => {
+      const scale = lerp(1, 0.25, gravityT);
+      const opacity = thinkShowSources ? (1 - gravityT * 0.9) : 0;
+      return {
+        name: d.name, type: d.type, mono: d.mono, accent: d.accent, floatDur: d.floatDur,
+        left: lerp(d.left, 50, gravityT) + '%', top: lerp(d.top, 50, gravityT) + '%',
+        opacity, transform: `translate(-50%,-50%) scale(${scale.toFixed(2)})`,
+        hoverShadow: `0 0 24px ${d.accent}55, 0 0 0 1px ${d.accent}66`,
+      };
+    });
+    const thinkShowThinking = thinkScene === 3;
+    const thinkSignals = THINK_SIGNAL_DEFS.map((text, i) => ({ text, delay: (i * 0.5) + 's' }));
+    const thinkShowThesis = thinkScene >= 4;
+    const thinkShowOutputs = thinkScene >= 5;
+    const thinkOutputs = THINK_OUTPUT_DEFS.map((o, i) => ({ ...o, delay: (i * 0.15) + 's' }));
+    const thinkThesisTransform = thinkScene >= 5 ? 'translate(-50%,-58%) scale(0.85)' : 'translate(-50%,-50%) scale(1)';
+    const thinkShowScript = thinkScene === 6;
+    const thinkScriptOpacity = thinkScene === 6 ? 1 : 0;
+
+    const pricingHover0 = s.pricingHoverIdx === 0 ? '260px' : '0px';
+    const pricingHover1 = s.pricingHoverIdx === 1 ? '220px' : '0px';
+
+    // ---- Reasoning visualization (scroll-driven, not time-driven) ----
+    const rpct = s.reasoningPct;
+    const clamp01 = (v) => Math.min(Math.max(v, 0), 1);
+    const RB0 = 0.14, RB1 = 0.34, RB2 = 0.62, RB3 = 0.84;
+    const reasonStageIndex = rpct < RB0 ? 0 : rpct < RB1 ? 1 : rpct < RB2 ? 2 : rpct < RB3 ? 3 : 4;
+    const rt1 = clamp01((rpct - RB0) / (RB1 - RB0));
+    const rt2 = clamp01((rpct - RB1) / (RB2 - RB1));
+    const rt3 = clamp01((rpct - RB2) / (RB3 - RB2));
+    const rt4 = clamp01((rpct - RB3) / (1 - RB3));
+
+    let rejectSeen = 0;
+    const totalRejects = REASON_SOURCES.filter(d => !d.survive).length;
+    const reasonSources = REASON_SOURCES.map((d) => {
+      let left = d.base.left, top = d.base.top, opacity = 1, scale = 1, showReject = false, borderColor = 'rgba(255,255,255,0.09)';
+      if (!d.survive) {
+        const idx = rejectSeen; rejectSeen++;
+        const start = 0.04 + idx * (0.8 / totalRejects);
+        const local = clamp01((rt1 - start) / 0.16);
+        opacity = 1 - local;
+        showReject = local > 0.04 && local < 0.97;
+        if (showReject) borderColor = 'rgba(200,60,60,0.4)';
+      } else {
+        const pos = d.ring;
+        left = lerp(d.base.left, pos.left, rt2);
+        top = lerp(d.base.top, pos.top, rt2);
+        opacity = 1 - rt3;
+        scale = lerp(1, 0.88, rt2) * (1 - rt3 * 0.3);
+        if (d.caution) {
+          const causeBump = Math.max(0, 1 - Math.abs(rt1 - d.cautionAt) / 0.16);
+          opacity *= (1 - causeBump * 0.55);
+          showReject = causeBump > 0.25;
+          borderColor = causeBump > 0.25 ? 'rgba(230,170,50,0.4)' : borderColor;
+        }
+      }
+      const tagStyle = d.survive
+        ? { bg: 'rgba(230,170,50,0.16)', border: 'rgba(230,170,50,0.4)', color: '#F5C97A' }
+        : { bg: 'rgba(180,40,40,0.16)', border: 'rgba(180,40,40,0.35)', color: '#FF9B9B' };
+      return { name: d.name, mono: d.mono, kind: d.kind, tag: d.tag, accent: d.accent, floatDur: d.floatDur, left, top, opacity, showReject, rejectLabel: d.survive ? d.caution : d.reject, tagBg: tagStyle.bg, tagBorder: tagStyle.border, tagColor: tagStyle.color, borderColor, transform: `translate(-50%,-50%) scale(${scale.toFixed(2)})` };
+    });
+
+    const survivorRing = {};
+    REASON_SOURCES.forEach(d => { if (d.survive) survivorRing[d.name] = d.ring; });
+    const reasonConnections = REASON_CONNECTIONS.map((c, i) => {
+      const a = survivorRing[c.from], b = c.to === 'CENTER' ? SYNTHESIS_CENTER : survivorRing[c.to];
+      const start = i * 0.2;
+      const local = clamp01((rt2 - start) / 0.35);
+      const dx = b.left - a.left, dy = b.top - a.top;
+      const dist = Math.hypot(dx, dy) || 1;
+      const nx = -dy / dist, ny = dx / dist;
+      const bulge = (i % 2 === 0 ? 1 : -1) * Math.min(dist * 0.3, 12);
+      const cx = (a.left + b.left) / 2 + nx * bulge;
+      const cy = (a.top + b.top) / 2 + ny * bulge;
+      const bez = (t) => ({
+        x: (1 - t) * (1 - t) * a.left + 2 * (1 - t) * t * cx + t * t * b.left,
+        y: (1 - t) * (1 - t) * a.top + 2 * (1 - t) * t * cy + t * t * b.top,
+      });
+      const particlePos = bez(local);
+      const labelPos = bez(0.82);
+      const fadeOut = 1 - rt3;
+      const pathOpacity = Math.min(local * 4, 1) * fadeOut;
+      const particleOpacity = (local > 0.02 && local < 0.99 ? 1 : 0) * fadeOut;
+      const arrival = start + 0.35;
+      const decay = clamp01((rt2 - arrival) / 0.3);
+      const labelOpacity = (local >= 0.9 ? 1 : 0) * lerp(1, 0.3, decay) * fadeOut;
+      const established = local >= 0.99;
+      return {
+        pathD: `M ${a.left},${a.top} Q ${cx},${cy} ${b.left},${b.top}`,
+        dashOffset: (100 * (1 - local)).toFixed(1),
+        pathOpacity, particleOpacity, labelOpacity, established,
+        particleLeft: particlePos.x, particleTop: particlePos.y,
+        midLeft: labelPos.x, midTop: labelPos.y,
+        label: c.label, color: c.color,
+      };
+    });
+    const convergenceOpacity = clamp01((rt2 - 0.2) / 0.6) * (1 - rt4 * 0.7);
+
+    const capSlice = 1 / REASON_CAPTIONS.length;
+    const rt12 = clamp01((rpct - RB0) / (RB2 - RB0));
+    let bestCapIdx = 0, bestCapBump = 0;
+    REASON_CAPTIONS.forEach((_, i) => {
+      const center = (i + 0.5) * capSlice;
+      const bump = Math.max(0, 1 - Math.abs(rt12 - center) / (capSlice * 0.6));
+      if (bump > bestCapBump) { bestCapBump = bump; bestCapIdx = i; }
+    });
+    const reasonCaptionText = REASON_CAPTIONS[bestCapIdx];
+    const reasonCaptionOpacity = reasonStageIndex <= 2 && rt12 > 0 && rt12 < 1 ? clamp01(bestCapBump) : 0;
+
+    const reasonInsightOpacity = rt3;
+    const revealCount = Math.floor(rt3 * REASON_INSIGHT_WORDS.length + 0.0001);
+    const reasonInsightWords = REASON_INSIGHT_WORDS.map((w, i) => ({ text: w, opacity: i < revealCount ? 1 : 0.12 }));
+    const reasonInsightTransform = `translate(-50%, ${lerp(-50, -172, rt4)}%) scale(${lerp(1, 0.76, rt4).toFixed(2)})`;
+
+    const reasonOutcomes = REASON_OUTCOMES.map((o, i) => {
+      const start = i * 0.15;
+      const local = clamp01((rt4 - start) / 0.2);
+      return { name: o.name, mono: o.mono, accent: o.accent, preview: o.preview, opacity: local, transform: `translateY(${lerp(14, 0, local).toFixed(1)}px)` };
+    });
+    const reasonStatsOpacity = clamp01((rt4 - 0.62) / 0.2);
+    const reasonClosingOpacity = clamp01((rt4 - 0.82) / 0.16);
+    const reasonStageLabel = REASON_STAGE_COPY[reasonStageIndex];
+
+    // ---- Capture / collection visualization (ambient looping) ----
+    const captureTick = s.captureTick || 0;
+    const captureLaneIdx = captureTick % CAPTURE_ORIGINS.length;
+    const captureLoop = Math.floor(captureTick / CAPTURE_ORIGINS.length);
+    const captureLaneT = clamp01((s.captureSubT || 0));
+    const easeOutExpo = (x) => x >= 1 ? 1 : 1 - Math.pow(2, -10 * x);
+    const capturePositions = CAPTURE_ORIGINS.map((o, i) => {
+      const isActive = i === captureLaneIdx;
+      let opacity = 0, left = o.pos.left, top = o.pos.top, scale = 0.7;
+      if (isActive) {
+        const te = easeOutExpo(Math.min(captureLaneT / 0.8, 1));
+        left = lerp(o.pos.left, CAPTURE_CENTER.left, te);
+        top = lerp(o.pos.top, CAPTURE_CENTER.top, te);
+        scale = lerp(0.82, 1, Math.min(captureLaneT / 0.25, 1)) * (1 - Math.max(0, captureLaneT - 0.85) / 0.15 * 0.3);
+        if (captureLaneT < 0.12) opacity = captureLaneT / 0.12;
+        else if (captureLaneT > 0.82) opacity = Math.max(0, 1 - (captureLaneT - 0.82) / 0.18);
+        else opacity = 1;
+      }
+      const itemIdx = Math.floor(captureLoop / CAPTURE_ORIGINS.length) % o.items.length;
+      return { key: o.key, active: isActive, left, top, opacity, accent: o.accent, itemLabel: o.items[itemIdx], transform: `translate(-50%,-50%) scale(${scale.toFixed(2)})` };
+    });
+    const captureOrigins = CAPTURE_ORIGINS.map((o, i) => {
+      const pulsing = i === captureLaneIdx && captureLaneT < 0.22;
+      const pulseT = pulsing ? 1 - captureLaneT / 0.22 : 0;
+      return {
+        key: o.key, label: o.label, left: o.pos.left, top: o.pos.top, accent: o.accent,
+        isApp: o.key === 'app', isExt: o.key === 'ext', isWa: o.key === 'wa', isTg: o.key === 'tg',
+        ringOpacity: (pulseT * 0.7).toFixed(2),
+        floatDur: (5.4 + i * 0.5) + 's', floatDelay: (i * -1.3) + 's',
+      };
+    });
+    const captureCount = 1 + (captureTick % 8);
+    const captureCountSuffix = captureCount === 1 ? '' : 's';
+    const captureFlashOn = captureLaneT > 0.8 && captureLaneT < 1;
+    const flashT = captureFlashOn ? 1 - Math.abs(captureLaneT - 0.87) / 0.13 : 0;
+    const captureCaseScale = (1 + Math.max(0, flashT) * 0.018).toFixed(3);
+    const captureGlowStrength = 0.2 + Math.max(0, flashT) * 0.32;
+    const captureCaseShadow = `0 0 ${Math.round(40 + Math.max(0,flashT) * 34)}px rgba(77,130,232,${captureGlowStrength.toFixed(2)})`;
+    let captureStatusText = CAPTURE_STATUS_TIERS[0].text;
+    for (const tier of CAPTURE_STATUS_TIERS) { if (captureCount >= tier.min) captureStatusText = tier.text; }
+    const reasonSteps = REASON_STAGE_COPY.map((label, i) => {
+      const active = i === reasonStageIndex;
+      const passed = i < reasonStageIndex;
+      return {
+        num: i + 1, label,
+        badgeBg: active ? 'rgba(9,76,178,0.28)' : (passed ? 'rgba(9,76,178,0.12)' : 'transparent'),
+        badgeColor: active ? 'var(--pale)' : (passed ? 'var(--bright)' : 'var(--text-muted)'),
+        badgeBorder: active ? 'rgba(9,76,178,0.55)' : 'var(--border-subtle)',
+        textColor: active ? 'var(--text-primary)' : 'var(--text-muted)',
+        opacity: active ? 1 : (passed ? 0.6 : 0.42),
+      };
+    });
+
+    const modalSourcesComputed = THINK_SOURCE_DEFS.map((d, i) => {
+      const pos = PROBLEM_SOURCE_POS[i] || { left: 50, top: 50 };
+      const gt = s.modalPhase >= 1 ? Math.min((s.modalPhase) / 3, 1) : 0;
+      const scale = lerp(1, 0.3, gt);
+      const opacity = s.modalPhase <= 3 ? (1 - gt * 0.85) : 0;
+      return {
+        name: d.name, type: d.type, mono: d.mono, accent: d.accent, floatDur: d.floatDur,
+        left: lerp(pos.left, 50, gt), top: lerp(pos.top, 50, gt),
+        opacity, transform: `translate(-50%,-50%) scale(${scale.toFixed(2)})`,
+      };
+    });
+
+    return {
+      setRootRef: (el) => { this.rootEl = el; },
+      setHeroCanvasRef: (el) => { this.heroCanvasEl = el; },
+      setHeroForegroundRef: (el) => { this.heroForegroundEl = el; },
+      setCtaCanvasRef: (el) => { this.ctaCanvasEl = el; },
+      setChaosRef: (el) => { this.chaosEl = el; },
+      setExampleRef: (el) => { this.exampleEl = el; },
+      setFlowRef: (el) => { this.flowEl = el; },
+      setReasonRef: (el) => { this.reasonEl = el; },
+
+      loadOverlayOpacity, loadOverlayPointer: s.loadStage >= 5 ? 'none' : 'auto',
+      logoLoadSize, logoLoadTransform, logoLoadGlow, skipLoad: this.skipLoad,
+      contentOpacity, contentScale,
+
+      ambientGlow: `radial-gradient(circle 200px at ${s.mouseX}px ${s.mouseY}px, rgba(9,76,178,0.05), transparent 70%)`,
+
+      navBlur: s.scrolled ? 'blur(20px) saturate(180%)' : 'none',
+      navBg: s.scrolled ? 'rgba(7,9,15,0.8)' : 'transparent',
+      navBorder: s.scrolled ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
+
+      heroLine1, heroLine2, heroLine3, heroSub,
+      sourceCards, evidenceLabels, outputCards,
+      centerGlowOpacity: s.heroAct >= 2 ? 1 : 0,
+      flashOpacity: s.heroAct === 3 ? 0.08 : 0,
+      thesisOpacity: s.heroAct >= 3 ? 1 : 0,
+      thesisTransform: s.heroAct >= 3 ? 'scale(1)' : 'scale(0.85)',
+      thesisPulseAnim: s.heroAct >= 3 ? 'thesisPulse 2.5s ease-in-out infinite' : 'none',
+      thesisText: THESIS_TEXT,
+
+      problemShowSources: s.problemPhase === 0 || s.problemPhase === 1,
+      problemSources: THINK_SOURCE_DEFS.map((d, i) => ({
+        name: d.name, type: d.type, mono: d.mono, accent: d.accent, floatDur: d.floatDur,
+        left: PROBLEM_SOURCE_POS[i].left, top: PROBLEM_SOURCE_POS[i].top,
+        opacity: s.problemPhase === 1 ? 0.55 : 1,
+      })),
+      problemShowSignals: s.problemPhase === 1,
+      problemSignals: PROBLEM_SIGNAL_DEFS,
+      problemShowThesis: s.problemPhase === 2,
+      problemShowOutputs: s.problemPhase === 3,
+      problemOutputs: THINK_OUTPUT_DEFS.map((o, i) => ({ ...o, delay: (i * 0.2) + 's' })),
+      problemShowQuestion: s.problemPhase === 4,
+
+      reasonStageIndex, reasonStageLabel,
+      reasonSources,
+      reasonConnections,
+      reasonShowConnections: reasonStageIndex >= 2,
+      convergenceOpacity,
+      reasonCaptionText, reasonCaptionOpacity,
+      reasonShowInsight: reasonStageIndex >= 3,
+      reasonInsightOpacity,
+      reasonInsightWords,
+      reasonInsightTransform,
+      reasonShowOutcomes: reasonStageIndex === 4,
+      reasonOutcomes,
+      reasonStatsOpacity,
+      reasonClosingOpacity,
+      reasonSteps,
+      setCaptureRef: (el) => { this.captureEl = el; },
+      capturePositions, captureOrigins, captureCount, captureCountSuffix, captureCaseScale, captureCaseShadow, captureStatusText,
+
+      demoOpen: s.demoOpen, openDemo: this.openDemo, closeDemo: this.closeDemo,
+      openThinkModal: this.openThinkModal, closeThinkModal: this.closeThinkModal, stopPropagation: this.stopPropagation,
+      setModalNetworkRef: this.setModalNetworkRef,
+      modalOpen: s.modalOpen,
+      modalIsSources: s.modalPhase === 0,
+      modalIsResearch: s.modalPhase === 1,
+      modalIsCrossref: s.modalPhase === 2,
+      modalIsContradictions: s.modalPhase === 3,
+      modalIsThesis: s.modalPhase === 4,
+      modalIsOutputs: s.modalPhase === 5,
+      modalSources: modalSourcesComputed,
+      modalSignals: PROBLEM_SIGNAL_DEFS,
+      modalOutputs: THINK_OUTPUT_DEFS.map((o, i) => ({ ...o, delay: (i * 0.2) + 's' })),
+      modalDots: Array.from({ length: 6 }, (_, i) => ({ color: i === s.modalPhase ? '#4D82E8' : 'rgba(255,255,255,0.15)' })),
+
+      flowStep: s.flowStep, flowSteps, flowProgressHeight: ((s.flowStep - 1) / 4 * 100) + '%',
+      flowIsStep1, flowIsStep2, flowIsStep3, flowIsStep4, flowIsStep5,
+      sourceMockups: [
+        { name: 'Reuters', domain: 'reuters.com', icon: '📰' },
+        { name: 'Gartner.pdf', domain: 'gartner.com', icon: '📄' },
+        { name: 'OpenAI Blog', domain: 'openai.com', icon: '🔗' },
+        { name: 'Bloomberg', domain: 'bloomberg.com', icon: '📰' },
+        { name: 'Cloudflare', domain: 'cloudflare.com', icon: '📄' },
+      ],
+      outputTabs,
+
+      dots5: [0, 1, 2, 3, 4],
+
+      thinkShowIntro, thinkShowScene, thinkShowSources, thinkSources,
+      thinkShowThinking, thinkSignals, thinkShowThesis, thinkThesisTransform,
+      thinkShowOutputs, thinkOutputs, thinkShowScript, thinkScriptOpacity, outlineItems,
+
+      exampleSources: [{ name: 'OpenAI' }, { name: 'Google' }, { name: 'Cloudflare' }, { name: 'Reuters' }, { name: 'Gartner' }],
+      typedThesis: s.typedThesis, cursorOpacity: s.cursorOn ? 1 : 0,
+
+      useCases: USE_CASE_DEFS,
+
+      pricingHover0, pricingHover1,
+      pricingOpacity0: s.pricingHoverIdx === 0 ? 1 : 0,
+      pricingOpacity1: s.pricingHoverIdx === 1 ? 1 : 0,
+      onFreeEnter: () => this.setPricingHover(0, true),
+      onFreeLeave: () => this.setPricingHover(0, false),
+      onWaitlistEnter: () => this.setPricingHover(1, true),
+      onWaitlistLeave: () => this.setPricingHover(1, false),
+
+      faqItems, toggleFaq: (i) => this.toggleFaq(i),
+      onHeroTilt: this.onHeroTilt, onHeroTiltLeave: this.onHeroTiltLeave,
+    };
+  }
+}
+</script>
+</body>
+</html>

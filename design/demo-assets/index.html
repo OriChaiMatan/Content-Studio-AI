@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LumAI — Demo Product UI Asset Pack</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07090F;
+      --surface: #0D1121;
+      --elevated: #141828;
+      --raised: #1B2238;
+      --primary: #4D82E8;
+      --primary-dim: rgba(77,130,232,0.13);
+      --primary-border: rgba(77,130,232,0.26);
+      --text-hi: rgba(255,255,255,0.92);
+      --text-md: rgba(255,255,255,0.58);
+      --text-lo: rgba(255,255,255,0.34);
+      --border: rgba(255,255,255,0.09);
+      --green: #4ADE80;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text-hi);
+      min-height: 100vh;
+      padding: 48px 32px 80px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
+    .logo-row svg { width: 32px; height: 32px; }
+    .logo-name { font-size: 16px; font-weight: 700; }
+
+    h1 { font-size: 28px; font-weight: 700; line-height: 1.25; margin-bottom: 8px; }
+    .subtitle { font-size: 14px; color: var(--text-md); margin-bottom: 40px; line-height: 1.6; max-width: 560px; }
+
+    .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+
+    .asset-card {
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color 0.2s, transform 0.15s;
+      display: flex;
+      flex-direction: column;
+    }
+    .asset-card:hover { border-color: var(--primary-border); transform: translateY(-2px); }
+
+    .card-preview {
+      height: 180px;
+      background: var(--raised);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .preview-frame {
+      width: 90%;
+      height: 90%;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.07);
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .preview-frame iframe {
+      width: 200%;
+      height: 200%;
+      transform: scale(0.5);
+      transform-origin: 0 0;
+      border: none;
+      pointer-events: none;
+    }
+
+    .card-body { padding: 18px 20px 20px; flex: 1; }
+    .card-number {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 6px;
+    }
+    .card-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .card-desc { font-size: 12.5px; color: var(--text-md); line-height: 1.6; margin-bottom: 14px; }
+
+    .spec-list { display: flex; flex-direction: column; gap: 6px; }
+    .spec-item { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
+    .spec-label {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--text-lo);
+      white-space: nowrap;
+      padding-top: 1px;
+      min-width: 72px;
+    }
+    .spec-val { color: var(--text-md); line-height: 1.5; flex: 1; }
+    .spec-val strong { color: var(--text-hi); font-weight: 600; }
+
+    .open-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 16px;
+      padding: 8px 16px;
+      background: var(--primary-dim);
+      color: var(--primary);
+      border: 1px solid var(--primary-border);
+      border-radius: 9px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .open-btn:hover { background: rgba(77,130,232,0.20); }
+
+    .constraints {
+      margin-top: 48px;
+      padding: 20px 24px;
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+    .constraints h2 { font-size: 13px; font-weight: 700; color: var(--text-hi); margin-bottom: 14px; }
+    .constraint-list { display: flex; flex-direction: column; gap: 8px; }
+    .constraint {
+      display: flex;
+      gap: 10px;
+      font-size: 12.5px;
+      color: var(--text-md);
+      line-height: 1.55;
+    }
+    .constraint::before {
+      content: '→';
+      color: var(--primary);
+      flex-shrink: 0;
+      font-weight: 600;
+    }
+    .constraint strong { color: var(--text-hi); }
+  </style>
+</head>
+<body>
+
+  <div class="logo-row">
+    <svg viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="128" height="128" rx="24" fill="#094CB2"/>
+      <path d="M24 36V104H92" stroke="white" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M92 10L99 27L112 34L99 41L92 58L85 41L72 34L85 27Z" fill="white"/>
+    </svg>
+    <span class="logo-name">LumAI</span>
+  </div>
+
+  <h1>Demo Product UI Asset Pack</h1>
+  <p class="subtitle">
+    Standalone, animated HTML recreations of the 4 core product screens. Built from the real app source code and adapted to dark-premium styling for use in the InteractiveProductDemo. Each file is self-contained with embedded CSS and JavaScript.
+  </p>
+
+  <div class="asset-grid">
+
+    <!-- Screen 1: Pipeline -->
+    <div class="asset-card">
+      <div class="card-preview">
+        <div class="preview-frame">
+          <iframe src="pipeline.html" loading="lazy" scrolling="no" tabindex="-1"></iframe>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-number">Screen 01</div>
+        <div class="card-title">Research Pipeline</div>
+        <div class="card-desc">3-step live pipeline showing LumAI's research and content creation process. Auto-animates through all states on load.</div>
+        <div class="spec-list">
+          <div class="spec-item">
+            <div class="spec-label">Purpose</div>
+            <div class="spec-val">Show the AI working — transforms a topic into structured outputs in real time</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Steps</div>
+            <div class="spec-val"><strong>Research</strong> → <strong>Fact Check</strong> → <strong>Content Creation</strong></div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">States</div>
+            <div class="spec-val">Idle · Running (spinner + progress) · Done (summary + confidence bar) · Completion banner</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Animation</div>
+            <div class="spec-val">~9 second auto-play. Reset + replay controls. Progress bar fills organically.</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Remove</div>
+            <div class="spec-val">Edit, delete, settings — keep it read-only</div>
+          </div>
+        </div>
+        <a class="open-btn" href="pipeline.html" target="_blank">Open screen ↗</a>
+      </div>
+    </div>
+
+    <!-- Screen 2: Review -->
+    <div class="asset-card">
+      <div class="card-preview">
+        <div class="preview-frame">
+          <iframe src="review.html" loading="lazy" scrolling="no" tabindex="-1"></iframe>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-number">Screen 02</div>
+        <div class="card-title">Review &amp; Approve</div>
+        <div class="card-desc">4-tab output view showing LinkedIn, Facebook, Newsletter, and Podcast drafts. Action bar with Approve/Reject. Full-length editorial content.</div>
+        <div class="spec-list">
+          <div class="spec-item">
+            <div class="spec-label">Purpose</div>
+            <div class="spec-val">Show the output quality — each platform gets a tailored, fully written draft</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Tabs</div>
+            <div class="spec-val"><strong>LinkedIn</strong> · <strong>Facebook</strong> · <strong>Newsletter</strong> · <strong>Podcast</strong></div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Actions</div>
+            <div class="spec-val">Copy · Share · Edit · Regenerate · Visual (LinkedIn/Facebook only) · Approve · Reject</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Editorial</div>
+            <div class="spec-val">"How this draft was built" breakdown on each platform tab</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Podcast tab</div>
+            <div class="spec-val">No waveform, no audio player. Section outline, duration chips, executive summary only.</div>
+          </div>
+        </div>
+        <a class="open-btn" href="review.html" target="_blank">Open screen ↗</a>
+      </div>
+    </div>
+
+    <!-- Screen 3: Image Generation -->
+    <div class="asset-card">
+      <div class="card-preview">
+        <div class="preview-frame">
+          <iframe src="image-generation.html" loading="lazy" scrolling="no" tabindex="-1"></iframe>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-number">Screen 03</div>
+        <div class="card-title">Visual Generation</div>
+        <div class="card-desc">Micro-flow for the LinkedIn/Facebook visual. Animates through idle → generating (4 stage labels + progress) → reveal. Simulates the real 30–50 second generation.</div>
+        <div class="spec-list">
+          <div class="spec-item">
+            <div class="spec-label">Purpose</div>
+            <div class="spec-val">Show the premium visual output — AI image + LumAI-branded overlay with the post headline</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">States</div>
+            <div class="spec-val"><strong>Idle</strong>: CTA · <strong>Generating</strong>: 4 status labels + progress · <strong>Ready</strong>: simulated image with overlay</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Animation</div>
+            <div class="spec-val">~10 second generation sequence. Accelerated from real 30–50 seconds for demo purposes.</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Image format</div>
+            <div class="spec-val">1200 × 627px frame (LinkedIn OG ratio 1.91:1). Simulated with gradient + grid + brand overlay.</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Post-gen</div>
+            <div class="spec-val">Regenerate Background · Download buttons appear on ready</div>
+          </div>
+        </div>
+        <a class="open-btn" href="image-generation.html" target="_blank">Open screen ↗</a>
+      </div>
+    </div>
+
+    <!-- Screen 4: Library -->
+    <div class="asset-card">
+      <div class="card-preview">
+        <div class="preview-frame">
+          <iframe src="library.html" loading="lazy" scrolling="no" tabindex="-1"></iframe>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-number">Screen 04</div>
+        <div class="card-title">Library</div>
+        <div class="card-desc">Full case library with search, platform filter chips, completed RunCards (with stats, platform badges, preview text), in-progress card, and Podcast section.</div>
+        <div class="spec-list">
+          <div class="spec-item">
+            <div class="spec-label">Purpose</div>
+            <div class="spec-val">Show the accumulated intelligence — a library of approved, research-backed content across all platforms</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Cards</div>
+            <div class="spec-val">4 completed · 1 in-progress · 3 podcast episodes (2 ready, 1 generating)</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Stats</div>
+            <div class="spec-val">Approved count + source count per card</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Podcast</div>
+            <div class="spec-val">Separate Podcast section with episode type chip (Deep Dive / Standard / Short Briefing), duration, section count. <strong>No audio UI.</strong></div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Interactions</div>
+            <div class="spec-val">Filter chips toggle · Search input · Cards hover state</div>
+          </div>
+        </div>
+        <a class="open-btn" href="library.html" target="_blank">Open screen ↗</a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Product constraints -->
+  <div class="constraints">
+    <h2>Product Constraints for Claude Design</h2>
+    <div class="constraint-list">
+      <div class="constraint"><strong>Podcast label:</strong> Always "Podcast" — never "Podcast Script", "Audio", "Episode Script" or any audio-implying label.</div>
+      <div class="constraint"><strong>No audio UI:</strong> No waveform, no play button, no audio player, no recording mic, no headphone icon. The Podcast output is a written narrative document.</div>
+      <div class="constraint"><strong>LumAI is the engine:</strong> The reasoning and content is attributed to LumAI, not ChatGPT, OpenAI, or any external model branding.</div>
+      <div class="constraint"><strong>Visual button scope:</strong> The "Visual" action button in the Review screen appears only on LinkedIn and Facebook tabs — not Newsletter or Podcast.</div>
+      <div class="constraint"><strong>Demo pacing:</strong> The full product flow (Pipeline → Review → Visual) should teach itself in 35–45 seconds with no narration.</div>
+      <div class="constraint"><strong>No annotation overlays:</strong> No highlight boxes, callout bubbles, tooltip arrows, or screenshot callouts inside the demo screens. Let the UI speak.</div>
+      <div class="constraint"><strong>Dark premium only:</strong> Background <code style="font-size:11px;color:#7AA7FF;">#0D1121</code>, primary blue <code style="font-size:11px;color:#7AA7FF;">#4D82E8</code> on dark, Inter font, Noto Serif for draft titles.</div>
+      <div class="constraint"><strong>Completion state matters:</strong> The Library screen should feel like the payoff — established authority, not work in progress.</div>
+    </div>
+  </div>
+
+</body>
+</html>

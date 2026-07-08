@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@1,600;1,700&display=swap" rel="stylesheet">
+  <style>
+    @keyframes idleFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes softGlow { 0%,100% { opacity: 0.75; } 50% { opacity: 1; } }
+    @keyframes stepPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(77,130,232,0.5); } 50% { box-shadow: 0 0 0 6px rgba(77,130,232,0); } }
+    @keyframes popScale { 0% { transform: scale(0.7); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+  </style>
+</helmet>
+
+<div style="position:fixed; inset:0; z-index:9999; background:#07090F; opacity:{{ overlayOpacity }}; pointer-events:{{ overlayPointerEvents }}; display:{{ overlayDisplay }}; transition:opacity 0.5s ease; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; overflow:hidden;">
+
+  <div onClick="{{ close }}" style="position:absolute; top:28px; right:32px; z-index:20; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); display:flex; align-items:center; justify-content:center; cursor:pointer; color:#B1C5FF; font-size:16px;">✕</div>
+
+  <div style="position:absolute; inset:0; background:radial-gradient(ellipse 900px 700px at 50% 40%, rgba(9,76,178,0.16) 0%, transparent 70%);"></div>
+
+  <!-- SCENE 1: COLLECT -->
+  <div style="position:absolute; inset:0; opacity:{{ s1Opacity }}; pointer-events:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;">
+    <div style="text-align:center;">
+      <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#B1C5FF; margin-bottom:10px;">Scene 01 — Collect</div>
+      <div style="font-size:36px; font-weight:700; color:#E9EBFF;">Every source, in one place.</div>
+    </div>
+
+    <div style="position:relative; width:min(820px,90vw); height:min(440px,50vh);">
+      <div style="position:absolute; left:0; top:6%; width:44%; height:88%; border-radius:18px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.09);">
+        <div style="position:absolute; top:14px; left:18px; font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#7C87A8;">Inbox</div>
+      </div>
+
+      <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); width:210px; background:rgba(20,24,40,0.96); border:1px solid rgba(77,130,232,0.4); border-radius:18px; padding:22px 20px; text-align:center; box-shadow:0 0 50px rgba(9,76,178,0.3), 0 0 0 10px rgba(7,9,15,0.9); animation:softGlow 3.5s ease-in-out infinite;">
+        <div style="font-size:9.5px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#7C87A8; margin-bottom:8px;">LumAI Research Case</div>
+        <div style="font-size:32px; font-weight:700; color:#B1C5FF; font-variant-numeric:tabular-nums;">{{ s1Count }}</div>
+        <div style="font-size:12px; color:#7C87A8; margin-top:2px;">source{{ s1CountSuffix }} added</div>
+      </div>
+
+      <sc-for list="{{ s1Items }}" as="it" hint-placeholder-count="6">
+        <div style="position:absolute; left:{{ it.left }}%; top:{{ it.top }}%; transform:translate(0,-50%) scale({{ it.scale }}); opacity:{{ it.opacity }}; width:230px; background:rgba(20,24,40,0.92); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+          <div style="width:26px; height:26px; border-radius:7px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:white; background:{{ it.accent }};">{{ it.mono }}</div>
+          <div style="min-width:0;">
+            <div style="font-size:12.5px; font-weight:600; color:#E9EBFF; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ it.name }}</div>
+            <div style="font-size:10px; color:#8A94B8;">{{ it.type }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- SCENE 2: ORGANIZE -->
+  <div style="position:absolute; inset:0; opacity:{{ s2Opacity }}; pointer-events:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;">
+    <div style="text-align:center;">
+      <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#B1C5FF; margin-bottom:10px;">Scene 02 — Organize</div>
+      <div style="font-size:36px; font-weight:700; color:#E9EBFF;">A clean list, ready to reason over.</div>
+    </div>
+
+    <div style="position:relative; width:min(560px,88vw); background:rgba(20,24,40,0.85); border:1px solid rgba(255,255,255,0.1); border-radius:18px; padding:14px 18px; box-shadow:0 30px 80px rgba(0,0,0,0.5);">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 6px 14px; border-bottom:1px solid rgba(255,255,255,0.08); margin-bottom:6px;">
+        <span style="font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#7C87A8;">Research Case — Sources</span>
+        <span style="font-size:12px; font-weight:700; color:#B1C5FF;">{{ s2Count }}/6</span>
+      </div>
+      <sc-for list="{{ s2Items }}" as="it" hint-placeholder-count="6">
+        <div style="display:flex; align-items:center; gap:12px; padding:9px 6px; opacity:{{ it.opacity }}; transform:{{ it.transform }}; transition:opacity 0.45s ease, transform 0.45s ease;">
+          <div style="width:26px; height:26px; border-radius:7px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:white; background:{{ it.accent }};">{{ it.mono }}</div>
+          <div style="min-width:0; flex:1;">
+            <div style="font-size:13.5px; font-weight:600; color:#E9EBFF;">{{ it.name }}</div>
+            <div style="font-size:10.5px; color:#8A94B8;">{{ it.type }}</div>
+          </div>
+          <div style="width:18px; height:18px; border-radius:50%; background:rgba(63,207,160,0.18); border:1px solid #3FCFA0; display:flex; align-items:center; justify-content:center; font-size:9.5px; color:#3FCFA0; flex-shrink:0; opacity:{{ it.checkOpacity }}; transition:opacity 0.3s ease;">✓</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="font-size:13px; font-weight:600; color:#7C87A8; opacity:{{ s2StatusOpacity }}; transition:opacity 0.5s ease;">6 sources organized.</div>
+  </div>
+
+  <!-- SCENE 3: ANALYZE -->
+  <div style="position:absolute; inset:0; opacity:{{ s3Opacity }}; pointer-events:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;">
+    <div style="text-align:center;">
+      <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#B1C5FF; margin-bottom:10px;">Scene 03 — Analyze</div>
+      <div style="font-size:36px; font-weight:700; color:#E9EBFF;">LumAI does the reasoning.</div>
+    </div>
+
+    <div style="position:relative; width:min(600px,88vw); display:flex; flex-direction:column;">
+      <sc-for list="{{ s3Steps }}" as="st" hint-placeholder-count="5">
+        <div style="display:flex; gap:16px;">
+          <div style="display:flex; flex-direction:column; align-items:center;">
+            <div style="width:32px; height:32px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; background:{{ st.badgeBg }}; color:{{ st.badgeColor }}; border:1.5px solid {{ st.badgeBorder }}; transition:all 0.35s ease; animation:{{ st.pulseAnim }};">
+              <sc-if value="{{ st.showCheck }}" hint-placeholder-val="{{ false }}"><span>✓</span></sc-if>
+              <sc-if value="{{ st.showSpinner }}" hint-placeholder-val="{{ false }}"><span style="display:inline-block; width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,0.25); border-top-color:#4D82E8; animation:spin 0.8s linear infinite;"></span></sc-if>
+              <sc-if value="{{ st.showNum }}" hint-placeholder-val="{{ false }}"><span>{{ st.num }}</span></sc-if>
+            </div>
+            <sc-if value="{{ st.showLine }}" hint-placeholder-val="{{ false }}"><div style="width:2px; flex:1; min-height:26px; background:{{ st.lineColor }}; transition:background 0.4s ease;"></div></sc-if>
+          </div>
+          <div style="padding-bottom:26px; flex:1;">
+            <div style="font-size:16.5px; font-weight:700; color:{{ st.textColor }}; transition:color 0.35s ease;">{{ st.label }}</div>
+            <div style="font-size:12.5px; color:#8A94B8; margin-top:4px; opacity:{{ st.detailOpacity }}; transition:opacity 0.4s ease;">{{ st.detail }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- SCENE 4: THESIS -->
+  <div style="position:absolute; inset:0; opacity:{{ s4Opacity }}; pointer-events:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;">
+    <div style="text-align:center;">
+      <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#B1C5FF; margin-bottom:10px;">Scene 04 — Thesis</div>
+      <div style="font-size:36px; font-weight:700; color:#E9EBFF;">One clear point of view.</div>
+    </div>
+    <div style="width:560px; max-width:86vw; transform:scale({{ s4Scale }}); opacity:{{ s4CardOpacity }}; transition:opacity 0.6s ease;">
+      <div style="background:rgba(9,76,178,0.12); border:1.5px solid rgba(77,130,232,0.5); border-radius:22px; padding:40px 44px; box-shadow:0 0 90px rgba(9,76,178,0.35);">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#7C87A8; margin-bottom:18px;">Thesis</div>
+        <div style="font-family:'Noto Serif',serif; font-style:italic; font-weight:600; font-size:25px; line-height:1.6; color:#B1C5FF; min-height:120px;">{{ s4TypedText }}<span style="opacity:{{ s4CursorOpacity }};">|</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCENE 5: OUTPUTS -->
+  <div style="position:absolute; inset:0; opacity:{{ s5Opacity }}; pointer-events:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:44px;">
+    <div style="text-align:center;">
+      <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#B1C5FF; margin-bottom:10px;">Scene 05 — Create Outputs</div>
+      <div style="font-size:36px; font-weight:700; color:#E9EBFF;">From one thesis, every channel.</div>
+    </div>
+    <div style="display:flex; gap:22px;">
+      <sc-for list="{{ s5Outputs }}" as="o" hint-placeholder-count="4">
+        <div style="width:210px; background:rgba(20,24,40,0.92); border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:18px; opacity:{{ o.opacity }}; transform:{{ o.transform }}; transition:opacity 0.55s ease, transform 0.55s ease;">
+          <div style="display:flex; align-items:center; gap:9px; margin-bottom:10px;">
+            <div style="width:28px; height:28px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:white; background:{{ o.accent }};">{{ o.mono }}</div>
+            <span style="font-size:14.5px; font-weight:700; color:#E9EBFF;">{{ o.name }}</span>
+          </div>
+          <div style="font-size:11.5px; color:#9AA3C0; line-height:1.55;">{{ o.preview }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- SCENE 6: PIPELINE -->
+  <div style="position:absolute; inset:0; opacity:{{ s6Opacity }}; pointer-events:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;">
+    <div style="text-align:center;">
+      <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#B1C5FF; margin-bottom:8px;">Scene 06 — Pipeline</div>
+      <div style="font-size:28px; font-weight:700; color:#E9EBFF;">Research, fact-checked, in real time.</div>
+    </div>
+    <div style="width:525px; max-width:90vw; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.14); box-shadow:0 30px 90px rgba(0,0,0,0.6); background:#0D1121;">
+      <div style="display:flex; align-items:center; gap:6px; padding:10px 14px; background:#141828; border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div style="width:9px; height:9px; border-radius:50%; background:#FF5F57;"></div>
+        <div style="width:9px; height:9px; border-radius:50%; background:#FEBC2E;"></div>
+        <div style="width:9px; height:9px; border-radius:50%; background:#28C840;"></div>
+        <span style="margin-left:8px; font-size:11px; color:#7C87A8; font-weight:600;">LumAI — Research Pipeline</span>
+      </div>
+      <div style="width:525px; height:675px; max-height:74vh; overflow:hidden;">
+        <sc-if value="{{ s6Mounted }}" hint-placeholder-val="{{ false }}">
+          <div style="width:700px; height:900px; transform:scale(0.75); transform-origin:top left;">
+            <iframe src="demo-assets/pipeline.html" style="width:700px; height:900px; border:none; display:block;" scrolling="no" tabindex="-1"></iframe>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCENE 7: REVIEW -->
+  <div style="position:absolute; inset:0; opacity:{{ s7Opacity }}; pointer-events:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;">
+    <div style="text-align:center;">
+      <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#B1C5FF; margin-bottom:8px;">Scene 07 — Review</div>
+      <div style="font-size:28px; font-weight:700; color:#E9EBFF;">Four channels. One approval flow.</div>
+    </div>
+    <div style="width:min(920px,92vw); border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.14); box-shadow:0 30px 90px rgba(0,0,0,0.6); background:#0D1121;">
+      <div style="display:flex; align-items:center; gap:6px; padding:10px 14px; background:#141828; border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div style="width:9px; height:9px; border-radius:50%; background:#FF5F57;"></div>
+        <div style="width:9px; height:9px; border-radius:50%; background:#FEBC2E;"></div>
+        <div style="width:9px; height:9px; border-radius:50%; background:#28C840;"></div>
+        <span style="margin-left:8px; font-size:11px; color:#7C87A8; font-weight:600;">LumAI — Review &amp; Approve</span>
+      </div>
+      <div style="width:100%; height:534px; max-height:58vh; overflow:hidden;">
+        <sc-if value="{{ s7Mounted }}" hint-placeholder-val="{{ false }}">
+          <iframe src="demo-assets/review.html" style="width:100%; height:100%; border:none; display:block;" scrolling="no" tabindex="-1"></iframe>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCENE 8: IMAGE GENERATION -->
+  <div style="position:absolute; inset:0; opacity:{{ s8Opacity }}; pointer-events:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;">
+    <div style="text-align:center;">
+      <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#B1C5FF; margin-bottom:8px;">Scene 08 — Image Generation</div>
+      <div style="font-size:28px; font-weight:700; color:#E9EBFF;">A visual for LinkedIn and Facebook.</div>
+    </div>
+    <div style="width:700px; max-width:90vw; height:600px; max-height:64vh; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.14); box-shadow:0 30px 90px rgba(0,0,0,0.6); background:#0D1121;">
+      <div style="display:flex; align-items:center; gap:6px; padding:10px 14px; background:#141828; border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div style="width:9px; height:9px; border-radius:50%; background:#FF5F57;"></div>
+        <div style="width:9px; height:9px; border-radius:50%; background:#FEBC2E;"></div>
+        <div style="width:9px; height:9px; border-radius:50%; background:#28C840;"></div>
+        <span style="margin-left:8px; font-size:11px; color:#7C87A8; font-weight:600;">LumAI — Visual</span>
+      </div>
+      <div style="width:100%; height:calc(100% - 37px); overflow:hidden;">
+        <sc-if value="{{ s8Mounted }}" hint-placeholder-val="{{ false }}">
+          <iframe src="demo-assets/image-generation.html" style="width:100%; height:100%; border:none; display:block;" scrolling="no" tabindex="-1"></iframe>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCENE 9: LIBRARY -->
+  <div style="position:absolute; inset:0; opacity:{{ s9Opacity }}; pointer-events:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;">
+    <div style="text-align:center;">
+      <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#B1C5FF; margin-bottom:8px;">Scene 09 — Library</div>
+      <div style="font-size:28px; font-weight:700; color:#E9EBFF;">Every case, saved and organized.</div>
+    </div>
+    <div style="width:min(920px,92vw); border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.14); box-shadow:0 30px 90px rgba(0,0,0,0.6); background:#0D1121;">
+      <div style="display:flex; align-items:center; gap:6px; padding:10px 14px; background:#141828; border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div style="width:9px; height:9px; border-radius:50%; background:#FF5F57;"></div>
+        <div style="width:9px; height:9px; border-radius:50%; background:#FEBC2E;"></div>
+        <div style="width:9px; height:9px; border-radius:50%; background:#28C840;"></div>
+        <span style="margin-left:8px; font-size:11px; color:#7C87A8; font-weight:600;">LumAI — Library</span>
+      </div>
+      <div style="width:100%; height:534px; max-height:58vh; overflow:hidden;">
+        <sc-if value="{{ s9Mounted }}" hint-placeholder-val="{{ false }}">
+          <div style="width:1100px; height:700px; transform:scale({{ s9Scale }}); transform-origin:top left;">
+            <iframe src="demo-assets/library.html" style="width:1100px; height:700px; border:none; display:block;" scrolling="no" tabindex="-1"></iframe>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <!-- FINAL FRAME -->
+  <div style="position:absolute; inset:0; opacity:{{ finalOpacity }}; pointer-events:{{ finalPointerEvents }}; background:#07090F; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px;">
+    <svg width="56" height="56" viewBox="0 0 56 56"><rect width="56" height="56" rx="14" fill="#094CB2"></rect><path d="M18 16 L18 38 L34 38" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    <div style="text-align:center;">
+      <div style="font-size:44px; font-weight:700; line-height:1.2; color:#E9EBFF;">One thesis.<br>Every channel.</div>
+    </div>
+    <div onClick="{{ close }}" style="background:#1E54C8; color:white; font-weight:700; font-size:16px; padding:16px 40px; border-radius:12px; box-shadow:0 4px 20px rgba(30,84,200,0.45); cursor:pointer;">Start with your sources</div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;open&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onOpen&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onClose&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp01 = (v) => Math.min(Math.max(v, 0), 1);
+const easeOutExpo = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
+
+function sceneCut(t, start, end) {
+  return (t >= start && t < end) ? 1 : 0;
+}
+
+const T = {
+  s1: [0, 4000], s2: [4000, 7500], s3: [7500, 12500], s4: [12500, 16500],
+  s5: [16500, 20000], s6: [20000, 29500], s7: [29500, 37000], s8: [37000, 46500],
+  s9: [46500, 50500], final: [50500, Infinity],
+};
+
+const ITEMS6 = [
+  { name: 'Reuters article', type: 'URL', accent: '#FF8000', mono: 'R' },
+  { name: 'OpenAI blog', type: 'Article', accent: '#3FCFA0', mono: 'AI' },
+  { name: 'Gartner report', type: 'Report', accent: '#4D82E8', mono: 'G' },
+  { name: 'PDF research paper', type: 'PDF', accent: '#B18CFF', mono: 'PDF' },
+  { name: 'WhatsApp note', type: 'Note', accent: '#25D366', mono: 'W' },
+  { name: 'Chrome-saved page', type: 'Saved page', accent: '#8892A6', mono: 'C' },
+];
+const ROW_TOPS = [16, 32, 48, 64, 80, 96].map((v) => 6 + v * 0.86);
+
+const STEPS5 = [
+  { label: 'Reading sources', detail: 'Scanning every source for claims and evidence.' },
+  { label: 'Filtering noise', detail: 'Removing opinion, duplicates and weak claims.' },
+  { label: 'Finding conflicts', detail: 'Surfacing where sources disagree.' },
+  { label: 'Identifying patterns', detail: 'Connecting recurring signals across sources.' },
+  { label: 'Building thesis', detail: 'Forming one clear point of view.' },
+];
+
+const THESIS_TEXT = 'The future of AI depends on preserving the economics of original knowledge.';
+
+const OUTPUTS4 = [
+  { name: 'LinkedIn', mono: 'in', accent: '#0A66C2', preview: "AI didn't just change search. It changed who pays for knowledge." },
+  { name: 'Facebook', mono: 'f', accent: '#1877F2', preview: 'Most people miss the real story behind AI.' },
+  { name: 'Newsletter', mono: '✉', accent: '#4D82E8', preview: "This week's biggest takeaway on AI economics." },
+  { name: 'Podcast', mono: '🎙', accent: '#3FCFA0', preview: 'Intro: everyone talks about intelligence.' },
+];
+
+
+
+class Component extends DCLogic {
+  state = { elapsed: 0 };
+
+  startTimeline() {
+    if (this._timer) clearInterval(this._timer);
+    this.setState({ elapsed: 0 });
+    const startedAt = performance.now();
+    this._timer = setInterval(() => {
+      const e = performance.now() - startedAt;
+      if (e >= T.final[0] + 3000) {
+        this.setState({ elapsed: T.final[0] + 3000 });
+        clearInterval(this._timer);
+        this._timer = null;
+      } else {
+        this.setState({ elapsed: e });
+      }
+    }, 50);
+  }
+
+  stopTimeline() {
+    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+  }
+
+  componentDidMount() {
+    if (this.props.open) this.startTimeline();
+    this._keyHandler = (e) => { if (e.key === 'Escape' && this.props.open) this.close(); };
+    window.addEventListener('keydown', this._keyHandler);
+  }
+
+  componentDidUpdate(prevProps) {
+    if (this.props.open && !prevProps.open) this.startTimeline();
+    if (!this.props.open && prevProps.open) this.stopTimeline();
+  }
+
+  componentWillUnmount() {
+    this.stopTimeline();
+    if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler);
+  }
+
+  close = () => {
+    this.stopTimeline();
+    if (this.props.onClose) this.props.onClose();
+  };
+
+  renderVals() {
+    const isOpen = !!this.props.open;
+    const t = this.state.elapsed;
+
+    // ---- Scene 1: Collect ----
+    const s1Opacity = sceneCut(t, T.s1[0], T.s1[1]);
+    const s1Len = T.s1[1] - T.s1[0];
+    const s1Items = ITEMS6.map((it, i) => {
+      const t0 = i * 620;
+      const p = clamp01((t - T.s1[0] - t0) / 900);
+      const startLeft = 5, endLeft = 84, startTop = ROW_TOPS[i], endTop = 50;
+      let opacity = 0, left = startLeft, top = startTop, scale = 1;
+      if (p > 0) {
+        if (p < 0.18) { opacity = p / 0.18; left = startLeft; top = startTop; }
+        else if (p < 0.55) { opacity = 1; left = startLeft; top = startTop; }
+        else {
+          const fp = clamp01((p - 0.55) / 0.45);
+          const te = easeOutExpo(fp);
+          left = lerp(startLeft, endLeft, te);
+          top = lerp(startTop, endTop, te);
+          opacity = fp > 0.55 ? Math.max(0, 1 - (fp - 0.55) / 0.45) : 1;
+          scale = lerp(1, 0.55, te);
+        }
+      }
+      return { name: it.name, type: it.type, accent: it.accent, mono: it.mono, left, top, opacity: opacity.toFixed(2), scale: scale.toFixed(2) };
+    });
+    let s1Count = 0;
+    ITEMS6.forEach((it, i) => { const p = clamp01((t - T.s1[0] - i * 620) / 900); if (p >= 0.92) s1Count++; });
+    const s1CountSuffix = s1Count === 1 ? '' : 's';
+
+    // ---- Scene 2: Organize ----
+    const s2Opacity = sceneCut(t, T.s2[0], T.s2[1]);
+    const p2 = clamp01((t - T.s2[0]) / (T.s2[1] - T.s2[0]));
+    const s2Items = ITEMS6.map((it, i) => {
+      const local = clamp01((p2 - i * 0.11) / 0.32);
+      const checkLocal = clamp01((p2 - i * 0.11 - 0.15) / 0.2);
+      return {
+        name: it.name, type: it.type, accent: it.accent, mono: it.mono,
+        opacity: local.toFixed(2),
+        transform: `translateY(${lerp(-10, 0, local).toFixed(1)}px)`,
+        checkOpacity: checkLocal.toFixed(2),
+      };
+    });
+    let s2Count = 0;
+    ITEMS6.forEach((it, i) => { if (clamp01((p2 - i * 0.11) / 0.32) >= 0.99) s2Count++; });
+    const s2StatusOpacity = clamp01((p2 - 0.82) / 0.15);
+
+    // ---- Scene 3: Analyze ----
+    const s3Opacity = sceneCut(t, T.s3[0], T.s3[1]);
+    const p3 = clamp01((t - T.s3[0]) / (T.s3[1] - T.s3[0]));
+    const stepShare = 1 / STEPS5.length;
+    const s3Steps = STEPS5.map((st, i) => {
+      const stepStart = i * stepShare, stepEnd = (i + 1) * stepShare;
+      let state = 'pending';
+      if (p3 >= stepEnd) state = 'done';
+      else if (p3 >= stepStart) state = 'active';
+      const isLast = i === STEPS5.length - 1;
+      let badgeBg = 'rgba(255,255,255,0.05)', badgeColor = '#7C87A8', badgeBorder = 'rgba(255,255,255,0.14)', textColor = '#7C87A8', pulseAnim = 'none', lineColor = 'rgba(255,255,255,0.1)';
+      if (state === 'active') { badgeBg = 'rgba(77,130,232,0.16)'; badgeColor = '#B1C5FF'; badgeBorder = 'rgba(77,130,232,0.55)'; textColor = '#E9EBFF'; pulseAnim = 'stepPulse 1.6s ease-in-out infinite'; }
+      if (state === 'done') { badgeBg = 'rgba(63,207,160,0.16)'; badgeColor = '#3FCFA0'; badgeBorder = 'rgba(63,207,160,0.5)'; textColor = '#E9EBFF'; lineColor = 'rgba(63,207,160,0.5)'; }
+      return {
+        label: st.label, detail: st.detail,
+        badgeBg, badgeColor, badgeBorder, textColor, pulseAnim,
+        showCheck: state === 'done', showSpinner: state === 'active', showNum: state === 'pending', num: i + 1,
+        showLine: !isLast, lineColor,
+        detailOpacity: state === 'pending' ? 0.45 : 1,
+      };
+    });
+
+    // ---- Scene 4: Thesis ----
+    const s4Opacity = sceneCut(t, T.s4[0], T.s4[1]);
+    const p4 = clamp01((t - T.s4[0]) / (T.s4[1] - T.s4[0]));
+    const s4CardOpacity = clamp01(p4 / 0.12);
+    const s4Scale = (0.92 + Math.min(p4 / 0.12, 1) * 0.08).toFixed(2);
+    const typeProgress = clamp01((p4 - 0.16) / 0.62);
+    const charCount = Math.floor(typeProgress * THESIS_TEXT.length);
+    const s4TypedText = THESIS_TEXT.slice(0, charCount);
+    const s4CursorOpacity = typeProgress < 1 ? (Math.floor(t / 400) % 2 === 0 ? 1 : 0) : 0;
+
+    // ---- Scene 5: Outputs ----
+    const s5Opacity = sceneCut(t, T.s5[0], T.s5[1]);
+    const p5 = clamp01((t - T.s5[0]) / (T.s5[1] - T.s5[0]));
+    const s5Outputs = OUTPUTS4.map((o, i) => {
+      const local = clamp01((p5 - 0.12 - i * 0.14) / 0.28);
+      return { name: o.name, mono: o.mono, accent: o.accent, preview: o.preview, opacity: local.toFixed(2), transform: `translateY(${lerp(18, 0, local).toFixed(1)}px)` };
+    });
+
+    // ---- Scene 6: Pipeline (live product UI) ----
+    const s6Opacity = sceneCut(t, T.s6[0], T.s6[1]);
+    const s6Mounted = t >= T.s6[0];
+
+    // ---- Scene 7: Review (live product UI) ----
+    const s7Opacity = sceneCut(t, T.s7[0], T.s7[1]);
+    const s7Mounted = t >= T.s7[0];
+
+    // ---- Scene 8: Image Generation (live product UI) ----
+    const s8Opacity = sceneCut(t, T.s8[0], T.s8[1]);
+    const s8Mounted = t >= T.s8[0];
+
+    // ---- Scene 9: Library (live product UI) ----
+    const s9Opacity = sceneCut(t, T.s9[0], T.s9[1]);
+    const s9Scale = (900 / 1100).toFixed(3);
+    const s9Mounted = t >= T.s9[0];
+
+    // ---- Final ----
+    const finalOpacity = sceneCut(t, T.final[0], T.final[1]);
+    const finalPointerEvents = t >= T.final[0] ? 'auto' : 'none';
+
+    return {
+      overlayOpacity: isOpen ? 1 : 0,
+      overlayPointerEvents: isOpen ? 'auto' : 'none',
+      overlayDisplay: isOpen || t > 0 ? 'block' : 'none',
+      close: this.close,
+
+      s1Opacity, s1Items, s1Count, s1CountSuffix,
+      s2Opacity, s2Items, s2Count, s2StatusOpacity,
+      s3Opacity, s3Steps,
+      s4Opacity, s4CardOpacity, s4Scale, s4TypedText, s4CursorOpacity,
+      s5Opacity, s5Outputs,
+      s6Opacity, s6Mounted,
+      s7Opacity, s7Mounted,
+      s8Opacity, s8Mounted,
+      s9Opacity, s9Scale, s9Mounted,
+      finalOpacity, finalPointerEvents,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

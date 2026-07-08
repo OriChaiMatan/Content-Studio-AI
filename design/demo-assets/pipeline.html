@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LumAI — Pipeline Screen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0D1121;
+      --bg-elevated: #141828;
+      --bg-raised: #1B2238;
+      --primary: #4D82E8;
+      --primary-dim: rgba(77,130,232,0.14);
+      --primary-border: rgba(77,130,232,0.28);
+      --text-hi: rgba(255,255,255,0.92);
+      --text-md: rgba(255,255,255,0.60);
+      --text-lo: rgba(255,255,255,0.38);
+      --border: rgba(255,255,255,0.09);
+      --green: #4ADE80;
+      --green-dim: rgba(74,222,128,0.10);
+      --green-border: rgba(74,222,128,0.28);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-base);
+      color: var(--text-hi);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 24px 64px;
+    }
+    .material-symbols-outlined {
+      font-size: 20px;
+      line-height: 1;
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      display: inline-block;
+      vertical-align: middle;
+      user-select: none;
+    }
+    .material-symbols-outlined.lg { font-size: 24px; }
+
+    /* ─── Header ─── */
+    .header {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .logo {
+      width: 36px;
+      height: 36px;
+      flex-shrink: 0;
+    }
+    .case-meta { flex: 1; min-width: 0; }
+    .case-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-md);
+      margin-bottom: 2px;
+    }
+    .case-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-hi);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .case-status {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: var(--primary-dim);
+      color: var(--primary);
+      border: 1px solid var(--primary-border);
+      flex-shrink: 0;
+    }
+
+    /* ─── Pipeline card ─── */
+    .pipeline-card {
+      width: 100%;
+      max-width: 640px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* ─── Step ─── */
+    .step {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      transition: border-color 0.3s, background 0.3s;
+    }
+    .step.idle { background: transparent; border-color: var(--border); }
+    .step.running { background: var(--primary-dim); border-color: var(--primary-border); }
+    .step.done { background: var(--green-dim); border-color: var(--green-border); }
+
+    .step-header { display: flex; align-items: center; gap: 14px; }
+
+    .step-icon-wrap {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .idle .step-icon-wrap { background: rgba(255,255,255,0.05); }
+    .running .step-icon-wrap { background: var(--primary-dim); }
+    .done .step-icon-wrap { background: var(--green-dim); }
+
+    .idle .step-icon-wrap .material-symbols-outlined { color: var(--text-md); }
+    .running .step-icon-wrap .material-symbols-outlined { color: var(--primary); }
+    .done .step-icon-wrap .material-symbols-outlined { color: var(--green); }
+
+    .step-text { flex: 1; min-width: 0; }
+    .step-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-hi);
+      margin-bottom: 2px;
+    }
+    .idle .step-name { color: var(--text-md); }
+    .step-sub {
+      font-size: 12px;
+      color: var(--text-md);
+    }
+
+    .step-badge {
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .idle .step-badge { background: rgba(255,255,255,0.06); color: var(--text-lo); }
+    .running .step-badge { background: var(--primary-dim); color: var(--primary); border: 1px solid var(--primary-border); }
+    .done .step-badge { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+
+    /* ─── Progress bar ─── */
+    .progress-wrap {
+      margin-top: 14px;
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--primary), #7AA7FF);
+      transition: width 0.6s ease;
+    }
+
+    /* ─── Running spinner ─── */
+    .spin-icon {
+      animation: spin 1.2s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Step result (shown when done) ─── */
+    .step-result {
+      margin-top: 12px;
+      font-size: 12.5px;
+      color: var(--text-md);
+      line-height: 1.6;
+    }
+    .confidence-row {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .confidence-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-md);
+      white-space: nowrap;
+    }
+    .confidence-bar {
+      flex: 1;
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .confidence-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--primary), #7AA7FF);
+    }
+    .confidence-val {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    /* ─── Connector ─── */
+    .connector {
+      width: 2px;
+      height: 20px;
+      border-radius: 2px;
+      margin: 6px auto;
+      transition: background 0.3s;
+    }
+    .connector.done { background: var(--green); }
+    .connector.idle { background: rgba(255,255,255,0.12); }
+
+    /* ─── Completion banner ─── */
+    .complete-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 20px;
+      padding: 16px 18px;
+      background: var(--green-dim);
+      border: 1px solid var(--green-border);
+      border-radius: 14px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.4s, transform 0.4s;
+    }
+    .complete-banner.visible { opacity: 1; transform: translateY(0); }
+    .complete-banner .material-symbols-outlined { color: var(--green); font-size: 22px; }
+    .banner-text { flex: 1; }
+    .banner-title { font-size: 14px; font-weight: 600; color: var(--text-hi); }
+    .banner-sub { font-size: 12px; color: var(--text-md); margin-top: 1px; }
+    .review-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: var(--primary);
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: opacity 0.2s;
+    }
+    .review-btn:hover { opacity: 0.88; }
+
+    /* ─── Playback controls (demo only) ─── */
+    .demo-controls {
+      margin-top: 28px;
+      display: flex;
+      gap: 10px;
+    }
+    .ctrl-btn {
+      padding: 8px 18px;
+      border-radius: 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-md);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .ctrl-btn:hover { background: var(--bg-raised); color: var(--text-hi); }
+    .ctrl-btn.primary { background: var(--primary-dim); color: var(--primary); border-color: var(--primary-border); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <svg class="logo" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="128" height="128" rx="28" fill="#094CB2"/>
+      <path d="M24 36V104H92" stroke="white" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M92 10L99 27L112 34L99 41L92 58L85 41L72 34L85 27Z" fill="white"/>
+    </svg>
+    <div class="case-meta">
+      <div class="case-label">Research Pipeline</div>
+      <div class="case-title">How AI is reshaping enterprise decision-making</div>
+    </div>
+    <div class="case-status" id="caseStatus">In Progress</div>
+  </div>
+
+  <!-- Pipeline card -->
+  <div class="pipeline-card">
+
+    <!-- Step 1: Research -->
+    <div class="step done" id="step1">
+      <div class="step-header">
+        <div class="step-icon-wrap">
+          <span class="material-symbols-outlined lg">check_circle</span>
+        </div>
+        <div class="step-text">
+          <div class="step-name">Research</div>
+          <div class="step-sub">18 sources · 94% relevance</div>
+        </div>
+        <div class="step-badge">Done</div>
+      </div>
+      <div class="step-result">
+        Mapped 18 peer-reviewed sources across enterprise AI adoption, decision-making frameworks, and organizational change. Identified 3 dominant argument clusters.
+      </div>
+      <div class="confidence-row">
+        <div class="confidence-label">Source confidence</div>
+        <div class="confidence-bar"><div class="confidence-fill" style="width:94%"></div></div>
+        <div class="confidence-val">94%</div>
+      </div>
+    </div>
+
+    <div class="connector done"></div>
+
+    <!-- Step 2: Fact Check -->
+    <div class="step running" id="step2">
+      <div class="step-header">
+        <div class="step-icon-wrap">
+          <span class="material-symbols-outlined lg spin-icon" id="step2icon">fact_check</span>
+        </div>
+        <div class="step-text">
+          <div class="step-name">Fact Check</div>
+          <div class="step-sub" id="step2sub">Cross-referencing 18 claims…</div>
+        </div>
+        <div class="step-badge" id="step2badge">Running</div>
+      </div>
+      <div class="progress-wrap" id="step2progress">
+        <div class="progress-fill" id="step2fill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="connector idle" id="connector2"></div>
+
+    <!-- Step 3: Content Creation -->
+    <div class="step idle" id="step3">
+      <div class="step-header">
+        <div class="step-icon-wrap">
+          <span class="material-symbols-outlined lg">auto_awesome</span>
+        </div>
+        <div class="step-text">
+          <div class="step-name">Content Creation</div>
+          <div class="step-sub">Waiting for fact check…</div>
+        </div>
+        <div class="step-badge">Pending</div>
+      </div>
+    </div>
+
+    <!-- Completion banner (hidden until step 3 done) -->
+    <div class="complete-banner" id="completeBanner">
+      <span class="material-symbols-outlined">check_circle</span>
+      <div class="banner-text">
+        <div class="banner-title">All outputs ready</div>
+        <div class="banner-sub">LinkedIn · Facebook · Newsletter · Podcast</div>
+      </div>
+      <button class="review-btn">
+        Review Outputs
+        <span class="material-symbols-outlined" style="font-size:16px">arrow_forward</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Demo playback controls -->
+  <div class="demo-controls">
+    <button class="ctrl-btn" onclick="resetDemo()">Reset</button>
+    <button class="ctrl-btn primary" onclick="runDemo()">▶ Play animation</button>
+  </div>
+
+  <script>
+    let demoTimer = null;
+
+    function resetDemo() {
+      clearAllTimers();
+      // Reset step 2
+      const s2 = document.getElementById('step2');
+      s2.className = 'step running';
+      document.getElementById('step2icon').textContent = 'fact_check';
+      document.getElementById('step2icon').classList.add('spin-icon');
+      document.getElementById('step2sub').textContent = 'Cross-referencing 18 claims…';
+      document.getElementById('step2badge').textContent = 'Running';
+      document.getElementById('step2progress').style.display = 'block';
+      document.getElementById('step2fill').style.width = '0%';
+      // Reset step 3
+      const s3 = document.getElementById('step3');
+      s3.className = 'step idle';
+      s3.querySelector('.step-name').textContent = 'Content Creation';
+      s3.querySelector('.step-sub').textContent = 'Waiting for fact check…';
+      s3.querySelector('.step-badge').textContent = 'Pending';
+      const resultEl = s3.querySelector('.step-result');
+      if (resultEl) resultEl.remove();
+      const confEl = s3.querySelector('.confidence-row');
+      if (confEl) confEl.remove();
+      // Reset connector
+      document.getElementById('connector2').className = 'connector idle';
+      // Reset banner
+      document.getElementById('completeBanner').classList.remove('visible');
+      // Reset case status
+      document.getElementById('caseStatus').textContent = 'In Progress';
+    }
+
+    let timers = [];
+    function clearAllTimers() { timers.forEach(t => clearTimeout(t)); timers = []; }
+    function delay(fn, ms) { const t = setTimeout(fn, ms); timers.push(t); }
+
+    function runDemo() {
+      resetDemo();
+
+      // Step 2 progress fill
+      let pct = 0;
+      const fillInterval = setInterval(() => {
+        pct = Math.min(pct + 2.5, 78);
+        document.getElementById('step2fill').style.width = pct + '%';
+        if (pct >= 78) clearInterval(fillInterval);
+      }, 80);
+      timers.push(fillInterval);
+
+      // Step 2 complete at 3.5s
+      delay(() => {
+        clearInterval(fillInterval);
+        document.getElementById('step2fill').style.width = '100%';
+        delay(() => {
+          const s2 = document.getElementById('step2');
+          s2.className = 'step done';
+          document.getElementById('step2icon').textContent = 'check_circle';
+          document.getElementById('step2icon').classList.remove('spin-icon');
+          document.getElementById('step2sub').textContent = '18 claims verified · 0 disputed';
+          document.getElementById('step2badge').textContent = 'Done';
+          document.getElementById('step2progress').style.display = 'none';
+          // Add result text
+          const result = document.createElement('div');
+          result.className = 'step-result';
+          result.textContent = 'All sourced claims confirmed. 2 data points strengthened with primary citations. No disputed facts found.';
+          s2.appendChild(result);
+          const conf = document.createElement('div');
+          conf.className = 'confidence-row';
+          conf.innerHTML = '<div class="confidence-label">Accuracy</div><div class="confidence-bar"><div class="confidence-fill" style="width:98%"></div></div><div class="confidence-val">98%</div>';
+          s2.appendChild(conf);
+          // Connector
+          document.getElementById('connector2').className = 'connector done';
+        }, 300);
+      }, 3500);
+
+      // Step 3 starts at 4.2s
+      delay(() => {
+        const s3 = document.getElementById('step3');
+        s3.className = 'step running';
+        s3.querySelector('.step-name').textContent = 'Content Creation';
+        s3.querySelector('.step-sub').textContent = 'Writing 4 platform outputs…';
+        s3.querySelector('.step-badge').textContent = 'Running';
+        const pw = document.createElement('div');
+        pw.className = 'progress-wrap';
+        pw.id = 'step3progress';
+        pw.innerHTML = '<div class="progress-fill" id="step3fill" style="width:0%"></div>';
+        s3.appendChild(pw);
+
+        let p3 = 0;
+        const f3 = setInterval(() => {
+          p3 = Math.min(p3 + 1.8, 90);
+          const el = document.getElementById('step3fill');
+          if (el) el.style.width = p3 + '%';
+          if (p3 >= 90) clearInterval(f3);
+        }, 70);
+        timers.push(f3);
+      }, 4200);
+
+      // Step 3 complete at 8.5s
+      delay(() => {
+        const s3 = document.getElementById('step3');
+        s3.className = 'step done';
+        s3.querySelector('.step-name').textContent = 'Content Creation';
+        s3.querySelector('.step-sub').textContent = '4 outputs generated';
+        s3.querySelector('.step-badge').textContent = 'Done';
+        const pw = document.getElementById('step3progress');
+        if (pw) pw.remove();
+        const result = document.createElement('div');
+        result.className = 'step-result';
+        result.textContent = 'LinkedIn post, Facebook post, newsletter draft, and Podcast episode written and structured. Tone and angle adapted per platform.';
+        s3.appendChild(result);
+        const conf = document.createElement('div');
+        conf.className = 'confidence-row';
+        conf.innerHTML = '<div class="confidence-label">Narrative coherence</div><div class="confidence-bar"><div class="confidence-fill" style="width:91%"></div></div><div class="confidence-val">91%</div>';
+        s3.appendChild(conf);
+
+        // Show banner
+        delay(() => {
+          document.getElementById('completeBanner').classList.add('visible');
+          document.getElementById('caseStatus').textContent = 'Complete';
+          document.getElementById('caseStatus').style.background = 'rgba(74,222,128,0.12)';
+          document.getElementById('caseStatus').style.color = '#4ADE80';
+          document.getElementById('caseStatus').style.borderColor = 'rgba(74,222,128,0.28)';
+        }, 500);
+      }, 8500);
+    }
+
+    // Auto-play on load
+    window.addEventListener('load', () => setTimeout(runDemo, 600));
+  </script>
+</body>
+</html>
