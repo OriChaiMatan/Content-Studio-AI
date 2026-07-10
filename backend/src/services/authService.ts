@@ -4,8 +4,20 @@ import { prisma } from '../lib/prisma';
 import type { RegisterInput, LoginInput } from '../schemas/authSchemas';
 import { generateCode, codeExpiry, maskPhone } from '../lib/whatsappVerification';
 import { generateResetToken, hashToken, resetExpiry } from '../lib/passwordReset';
+import { resolveSystemRole } from '../lib/masterEmails';
 
 const BCRYPT_ROUNDS = 10;
+
+// Self-healing MASTER assignment: called on every register/login/getById so
+// DB state always matches the current MASTER_EMAILS env var, with no manual
+// migration needed when that list changes. A plain object spread (not a
+// second query) keeps this cheap on the hot path.
+async function syncSystemRole<T extends User>(user: T): Promise<T> {
+  const resolved = resolveSystemRole(user.email);
+  if (resolved === user.systemRole) return user;
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { systemRole: resolved } });
+  return { ...user, systemRole: updated.systemRole };
+}
 
 // Password-reset outcomes. The RAW token is returned ONLY when a user exists, and only
 // so the route can email it — it is never persisted or logged.
@@ -24,12 +36,20 @@ export type UserWithIdentity = Prisma.UserGetPayload<{ include: typeof userInclu
 // Public-safe user shape — NEVER includes passwordHash or the WhatsApp verifyCode.
 export function serializeUser(u: User, identity?: WhatsAppIdentity | null) {
   return {
-    id:        u.id,
-    name:      u.name,
-    email:     u.email,
-    role:      u.role,
-    avatarUrl: u.avatarUrl,
-    language:  u.language,
+    id:         u.id,
+    name:       u.name,
+    email:      u.email,
+    role:       u.role,
+    systemRole: u.systemRole,
+    plan:       u.plan,
+    planStatus: u.planStatus,
+    usage: {
+      currentPeriodStart: u.currentUsagePeriodStart.toISOString(),
+      currentPeriodEnd:   u.currentUsagePeriodEnd.toISOString(),
+      nextResetAt:        u.nextUsageResetAt.toISOString(),
+    },
+    avatarUrl:  u.avatarUrl,
+    language:   u.language,
     notifications: {
       generationComplete: u.notifGenerationComplete,
       factCheckConflict:  u.notifFactCheckConflict,
@@ -92,7 +112,7 @@ export const authService = {
         },
         include: userInclude,
       });
-      return { ok: true, user };
+      return { ok: true, user: await syncSystemRole(user) };
     } catch (err) {
       // Unique violation on email or phone under a race → typed error, no partial row.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -113,11 +133,12 @@ export const authService = {
 
     // Touch lastActiveAt on successful login (best-effort, non-blocking semantics).
     await prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
-    return { ok: true, user };
+    return { ok: true, user: await syncSystemRole(user) };
   },
 
   async getById(id: string): Promise<UserWithIdentity | null> {
-    return prisma.user.findUnique({ where: { id }, include: userInclude });
+    const user = await prisma.user.findUnique({ where: { id }, include: userInclude });
+    return user ? syncSystemRole(user) : null;
   },
 
   // ── Password recovery ────────────────────────────────────────────────────────

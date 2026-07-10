@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { requireCaseOwnership } from '../middleware/auth';
+import { requireCaseOwnership, requireActiveCase } from '../middleware/auth';
 import { imageGenLimiter } from '../middleware/rateLimit';
 import { visualAssetService } from '../../services/visual/visualAssetService';
 import { visualStorage } from '../../lib/visualStorage';
 import { prisma } from '../../lib/prisma';
+import { isQuotaError, sendQuotaError } from '../../lib/quotaErrors';
 
 const router = Router();
 
@@ -26,7 +27,7 @@ async function outputInCase(caseId: string, outputId: string): Promise<boolean> 
 }
 
 // POST /api/cases/:caseId/outputs/:outputId/visual  — start (or return in-flight) generation.
-router.post('/:caseId/outputs/:outputId/visual', imageGenLimiter, async (req: Request, res: Response) => {
+router.post('/:caseId/outputs/:outputId/visual', requireActiveCase, imageGenLimiter, async (req: Request, res: Response) => {
   try {
     const platform = platformFrom(req);
     if (!platform) { res.status(400).json({ error: 'Unsupported platform (linkedin or facebook).' }); return; }
@@ -34,6 +35,7 @@ router.post('/:caseId/outputs/:outputId/visual', imageGenLimiter, async (req: Re
     const asset = await visualAssetService.start(req.params.caseId, req.params.outputId, platform);
     res.status(202).json(visualAssetService.serializeVisualAsset(asset));
   } catch (err) {
+    if (isQuotaError(err)) { sendQuotaError(res, err); return; }
     console.error('[POST visual]', err);
     res.status(500).json({ error: 'Failed to start visual generation' });
   }
@@ -54,7 +56,7 @@ router.get('/:caseId/outputs/:outputId/visual', async (req: Request, res: Respon
 });
 
 // POST .../visual/regenerate — new version (reuses the concept, rerolls the image).
-router.post('/:caseId/outputs/:outputId/visual/regenerate', imageGenLimiter, async (req: Request, res: Response) => {
+router.post('/:caseId/outputs/:outputId/visual/regenerate', requireActiveCase, imageGenLimiter, async (req: Request, res: Response) => {
   try {
     const platform = platformFrom(req);
     if (!platform) { res.status(400).json({ error: 'Unsupported platform (linkedin or facebook).' }); return; }
@@ -62,6 +64,7 @@ router.post('/:caseId/outputs/:outputId/visual/regenerate', imageGenLimiter, asy
     const asset = await visualAssetService.regenerate(req.params.caseId, req.params.outputId, platform);
     res.status(202).json(visualAssetService.serializeVisualAsset(asset));
   } catch (err) {
+    if (isQuotaError(err)) { sendQuotaError(res, err); return; }
     console.error('[POST visual/regenerate]', err);
     res.status(500).json({ error: 'Failed to regenerate visual' });
   }

@@ -50,10 +50,11 @@ interface CaseOption {
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 
-// Active = not completed (draft, research, fact_check, generating, in_review).
+// Active = lifecycle-ACTIVE (never archived). A source forwarded via chat must
+// never land on a read-only archived case.
 async function findActiveCases(userId: string) {
   return prisma.contentCase.findMany({
-    where:   { userId, status: { not: 'completed' } },
+    where:   { userId, lifecycleStatus: 'ACTIVE' },
     orderBy: { updatedAt: 'desc' },
     select:  { id: true, title: true },
   });
@@ -378,10 +379,10 @@ async function resolveSelection(
   const selected = options[n - 1];
 
   // Re-check LIVE: the chosen case must still belong to this user, exist, and be
-  // active (not completed). Guards against deletion/completion/reassignment between
+  // lifecycle-ACTIVE. Guards against deletion/archival/reassignment between
   // showing the list and the reply.
   const liveCase = await prisma.contentCase.findFirst({
-    where:  { id: selected.caseId, userId: actor.userId, status: { not: 'completed' } },
+    where:  { id: selected.caseId, userId: actor.userId, lifecycleStatus: 'ACTIVE' },
     select: { id: true, title: true },
   });
   if (!liveCase) {

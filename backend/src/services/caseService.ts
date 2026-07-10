@@ -1,6 +1,7 @@
-import type { Prisma, ContentSource, ContentOutput, PipelineStep, PipelineRun } from '@prisma/client';
+import type { Prisma, ContentSource, ContentOutput, PipelineStep, PipelineRun, Plan, SystemRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import type { CreateCaseInput, UpdateCaseInput } from '../schemas/caseSchemas';
+import { getCaseSourceUsage, assertCaseLimit } from './usageService';
 
 // Canonical pipeline step order — matches the frontend's PipelineStep[] expectation.
 const PIPELINE_STEP_ORDER = ['research', 'fact_check', 'content_creation'] as const;
@@ -14,6 +15,9 @@ const caseInclude = {
   pipelineSteps: true,
   // Include only the most recent run for the currentRun summary
   pipelineRuns:  { orderBy: { startedAt: 'desc' as const }, take: 1 },
+  // Cheap aggregate count (not the full run list) — powers the ActiveCaseLimitModal's
+  // "N pipeline runs" stat on the cases-list response, no extra fetch needed.
+  _count: { select: { pipelineRuns: true } },
 } satisfies Prisma.ContentCaseInclude;
 
 type FullCase = Prisma.ContentCaseGetPayload<{ include: typeof caseInclude }>;
@@ -165,6 +169,9 @@ export function serializeCase(c: FullCase, runHistory: ReturnType<typeof seriali
     id:              c.id,
     title:           c.title,
     status:          c.status,
+    lifecycleStatus: c.lifecycleStatus,
+    archivedAt:      c.archivedAt ? c.archivedAt.toISOString() : null,
+    pipelineRunCount: c._count.pipelineRuns,
     language:        c.language,
     // Legacy fields — present on old cases; empty string on new ones
     targetAudience:  c.targetAudience,
@@ -230,7 +237,11 @@ export const caseService = {
         startedAt: true, completedAt: true, errorMessage: true, researchContext: true,
       },
     });
-    return serializeCase(c, runs.map(serializeRunSummary));
+    // Phase 3 — true per-case SOURCE_ADDED usage (not the Settings-level
+    // cross-case aggregate) so the Sources panel's disabled-state check is
+    // meaningful even for Pro users with several cases.
+    const sourceUsage = await getCaseSourceUsage(userId, id);
+    return { ...serializeCase(c, runs.map(serializeRunSummary)), sourceUsage };
   },
 
   async createCase(data: CreateCaseInput, userId: string) {
@@ -317,5 +328,65 @@ export const caseService = {
 
   async deleteCase(id: string) {
     await prisma.contentCase.delete({ where: { id } });
+  },
+
+  // Archiving is a one-way (for now — see Reopen in the approved plan), explicit
+  // user action. Never touches sources/outputs/runs/podcast/library — they hang
+  // off contentCaseId with no lifecycle concept of their own, so everything the
+  // user created stays exactly as-is, just no longer counted against the
+  // active-case quota and no longer mutable (enforced by requireActiveCase).
+  async archiveCase(id: string) {
+    const c = await prisma.contentCase.update({
+      where: { id },
+      data:  { lifecycleStatus: 'ARCHIVED', archivedAt: new Date() },
+      include: caseInclude,
+    });
+    return serializeCase(c);
+  },
+
+  // Reactivate an ARCHIVED case back to ACTIVE. `archiveCaseId`, when given, is
+  // the user's CURRENTLY active case to archive first — the Free-plan "archive
+  // current case and reactivate this one" conflict-resolution flow. Both writes
+  // (archiving the other case + reactivating this one) happen in ONE transaction
+  // so a mid-flight limit failure rolls back everything: the user is never left
+  // with both cases archived, or a partially-applied swap. Idempotent — already
+  // ACTIVE is a no-op success, ignoring any archiveCaseId (nothing to make room for).
+  async reactivateCase(
+    id: string, userId: string, systemRole: SystemRole, plan: Plan,
+    archiveCaseId?: string,
+    // Mirrors quotaConfig.enforceQuotas — the caller (route) decides whether the
+    // limit check runs at all, same as every other quota-gated action in this app.
+    enforceLimit = true,
+  ) {
+    return prisma.$transaction(async tx => {
+      const current = await tx.contentCase.findUniqueOrThrow({ where: { id }, select: { lifecycleStatus: true } });
+      if (current.lifecycleStatus === 'ACTIVE') {
+        const c = await tx.contentCase.findUniqueOrThrow({ where: { id }, include: caseInclude });
+        return serializeCase(c);
+      }
+
+      if (archiveCaseId) {
+        // updateMany (not update) so userId is enforced as part of the filter —
+        // archiveCaseId arrives in the request body, not a route param, so it
+        // was never checked by requireCaseOwnership. A count of 0 means it
+        // doesn't exist or isn't this user's case; abort (rolls back the tx).
+        const { count } = await tx.contentCase.updateMany({
+          where: { id: archiveCaseId, userId },
+          data:  { lifecycleStatus: 'ARCHIVED', archivedAt: new Date() },
+        });
+        if (count === 0) throw new Error('archive_case_not_found');
+      }
+
+      // Runs inside the same tx — counts the just-applied archive (if any),
+      // and a thrown CaseLimitError rolls back that archive too (all-or-nothing).
+      if (enforceLimit) await assertCaseLimit(userId, systemRole, plan, tx);
+
+      const c = await tx.contentCase.update({
+        where: { id },
+        data:  { lifecycleStatus: 'ACTIVE', archivedAt: null },
+        include: caseInclude,
+      });
+      return serializeCase(c);
+    });
   },
 };

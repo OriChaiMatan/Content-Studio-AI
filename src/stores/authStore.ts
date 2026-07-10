@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
 import { useSettingsStore } from './settingsStore';
+import { useUsageStore, METRIC_LABELS, type UsageMetricKey } from './usageStore';
+import { useQuotaModalStore, type QuotaModalKind } from './quotaModalStore';
 
 // Phase 12 — authenticated user shape returned by the backend (/api/auth/*).
 // Mirrors authService.serializeUser. NEVER contains a password.
@@ -9,6 +11,16 @@ export interface AuthUser {
   name: string;
   email: string;
   role: string;
+  // Roles/Plans/Usage (Phase 1/3) — authorization + entitlement, separate from
+  // the cosmetic `role` display title above. See backend systemRole/plan/planStatus.
+  systemRole: 'USER' | 'MASTER';
+  plan: 'FREE' | 'PRO';
+  planStatus: 'ACTIVE' | 'CANCELED' | 'PAST_DUE' | 'SUSPENDED' | 'TRIAL';
+  usage: {
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+    nextResetAt: string;
+  };
   avatarUrl: string | null;
   language: 'en' | 'he';
   notifications: {
@@ -82,6 +94,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (authenticated && user) {
         syncSettingsUser(user);
         set({ user, status: 'authenticated' });
+        void useUsageStore.getState().fetch();
       } else {
         set({ user: null, status: 'unauthenticated' });
       }
@@ -95,6 +108,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     const { user } = await api.post<{ user: AuthUser }>('/auth/login', { email, password });
     syncSettingsUser(user);
     set({ user, status: 'authenticated' });
+    void useUsageStore.getState().fetch();
   },
 
   register: async (name, email, password, whatsappPhone) => {
@@ -103,11 +117,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     );
     syncSettingsUser(user);
     set({ user, status: 'authenticated', whatsappVerification });
+    void useUsageStore.getState().fetch();
   },
 
   logout: async () => {
     try { await api.post('/auth/logout', {}); } catch { /* idempotent */ }
     set({ user: null, status: 'unauthenticated', whatsappVerification: null });
+    useUsageStore.getState().clear();
   },
 
   resendWhatsappCode: async () => {
@@ -143,5 +159,45 @@ export const useAuthStore = create<AuthState>((set) => ({
 if (typeof window !== 'undefined') {
   window.addEventListener('auth:unauthorized', () => {
     useAuthStore.getState().handleUnauthorized();
+  });
+
+  // Roles/Plans/Usage — bridge the global quota-rejection signal (see lib/api.ts)
+  // into the quota-limit MODAL (not a toast — see quotaModalStore.ts for why a
+  // modal has no "duplicate stacking" risk). This is the REACTIVE half: it
+  // covers any call site whose usage was stale and got rejected by the backend
+  // anyway. The PROACTIVE half (checking known-fresh usage before sending the
+  // request at all) lives per-component via hooks/useQuotaGate.ts. Both target
+  // the same modal, so a request that hits both paths just shows it once.
+  window.addEventListener('quota:exceeded', (e) => {
+    const detail = (e as CustomEvent<{ error?: string; code?: string; metric?: string; resetAt?: string; limit?: number }>).detail;
+    if (!detail || detail.code === 'scheduling_not_allowed') return; // handled by the wizard's own lock UI
+    void (async () => {
+      // Refresh so the modal shows the current used/limit, not a stale snapshot.
+      await useUsageStore.getState().fetch();
+      const summary = useUsageStore.getState().summary;
+
+      if (detail.code === 'plan_not_usable') {
+        useQuotaModalStore.getState().show({ kind: 'PLAN_NOT_USABLE', label: 'Account status', message: detail.error });
+        return;
+      }
+      if (detail.code === 'case_limit_reached') {
+        useQuotaModalStore.getState().show({
+          kind: 'CASE_LIMIT', label: 'Active content cases',
+          used: summary?.cases.used ?? detail.limit, limit: summary?.cases.limit ?? detail.limit,
+          message: detail.error,
+        });
+        return;
+      }
+      if (detail.code === 'quota_exceeded' && detail.metric) {
+        const key = detail.metric as UsageMetricKey;
+        const m = summary?.metrics[key];
+        useQuotaModalStore.getState().show({
+          kind: key as QuotaModalKind, label: METRIC_LABELS[key]?.label ?? key,
+          used: m?.used ?? detail.limit, limit: m?.limit ?? detail.limit,
+          resetAt: detail.resetAt ?? summary?.nextUsageResetAt,
+          message: detail.error,
+        });
+      }
+    })();
   });
 }

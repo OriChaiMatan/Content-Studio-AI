@@ -11,6 +11,7 @@ interface Props {
   caseId: string;
   pipelineRunId: string | null;
   autoStart?: boolean;
+  isArchived?: boolean;
 }
 
 // Returns true when the episode has enough data to render PodcastEpisodeView.
@@ -27,7 +28,7 @@ function countSources(full: PodcastEpisodeFull): number {
   return 0;
 }
 
-export function PodcastPanel({ caseId, pipelineRunId, autoStart = false }: Props) {
+export function PodcastPanel({ caseId, pipelineRunId, autoStart = false, isArchived = false }: Props) {
   const { t } = useT();
   const {
     episode,
@@ -97,7 +98,7 @@ export function PodcastPanel({ caseId, pipelineRunId, autoStart = false }: Props
             {t('podcast.wizSubtitle')}
           </p>
           {pipelineRunId ? (
-            <Button onClick={startGeneration} loading={generating} disabled={generating}>
+            <Button onClick={startGeneration} loading={generating} disabled={generating || isArchived}>
               <Icon name="play_arrow" size="sm" />
               {t('podcast.notStarted.generate')}
             </Button>
@@ -137,7 +138,7 @@ export function PodcastPanel({ caseId, pipelineRunId, autoStart = false }: Props
           <p className="text-[13px] text-on-surface-variant mb-6 max-w-[380px]">
             {t('podcast.failed.hint')}
           </p>
-          <Button onClick={regenerate} loading={regenerating} disabled={regenerating}>
+          <Button onClick={regenerate} loading={regenerating} disabled={regenerating || isArchived}>
             <Icon name="refresh" size="sm" />
             {t('podcast.failed.retry')}
           </Button>
@@ -173,7 +174,7 @@ export function PodcastPanel({ caseId, pipelineRunId, autoStart = false }: Props
           <p className="text-[13px] text-on-surface-variant mb-6 max-w-[380px]">
             Please regenerate the episode to rebuild the narration sections.
           </p>
-          <Button onClick={regenerate} loading={regenerating} disabled={regenerating}>
+          <Button onClick={regenerate} loading={regenerating} disabled={regenerating || isArchived}>
             <Icon name="refresh" size="sm" />
             {t('podcast.action.regenerate')}
           </Button>
@@ -187,7 +188,10 @@ export function PodcastPanel({ caseId, pipelineRunId, autoStart = false }: Props
     <PodcastErrorBoundary>
       <PodcastEpisodeView
         full={fullEpisode}
-        onRegenerate={regenerate}
+        // Archived cases are read-only — this view's regenerate button has no
+        // disabled state of its own, so swap the handler for a no-op (the
+        // backend would reject the call anyway; this just avoids a dead request).
+        onRegenerate={isArchived ? () => {} : regenerate}
         regenerating={regenerating}
         sourceCount={countSources(fullEpisode)}
       />

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { api, ApiError } from '../../lib/api';
+import { api, ApiError, isQuotaApiError } from '../../lib/api';
+import { useUsageStore } from '../../stores/usageStore';
+import { useMetricLimitContent } from '../../hooks/useQuotaGate';
+import { useQuotaModalStore } from '../../stores/quotaModalStore';
 
 // Shared Visual Engine state for one output+platform. Owns the fetch + poll +
 // generate/regenerate so BOTH the header action button and the VisualPanel render
@@ -25,6 +28,8 @@ export function useVisual(caseId: string, outputId: string, platform: 'linkedin'
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const imageGenLimitContent = useMetricLimitContent('IMAGE_GENERATION');
+  const showQuotaModal = useQuotaModalStore(s => s.show);
 
   const stop = useCallback(() => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } }, []);
 
@@ -60,17 +65,24 @@ export function useVisual(caseId: string, outputId: string, platform: 'linkedin'
 
   const trigger = useCallback(async (path: string) => {
     if (busy || !enabled) return;
+    // Proactive: known-fresh usage says the limit is reached — open the modal
+    // instead of sending a request we already know will be rejected.
+    if (imageGenLimitContent) { showQuotaModal(imageGenLimitContent); return; }
     setBusy(true); setError(null);
     try {
       const a = await api.post<VisualAsset>(path, { platform });
       setAsset(a);
       startPoll();
+      void useUsageStore.getState().fetch();
     } catch (e) {
+      // Reactive: usage was stale and the backend rejected anyway — the global
+      // 'quota:exceeded' bridge already opened the same modal; skip the banner.
+      if (isQuotaApiError(e)) return;
       setError(e instanceof Error ? e.message : 'Could not start visual generation.');
     } finally {
       setBusy(false);
     }
-  }, [busy, enabled, platform, startPoll]);
+  }, [busy, enabled, platform, startPoll, imageGenLimitContent, showQuotaModal]);
 
   const generate = useCallback(() => trigger(base), [trigger, base]);
   const regenerate = useCallback(() => trigger(`${base}/regenerate`), [trigger, base]);

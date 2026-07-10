@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { podcastApi } from './api';
+import { isQuotaApiError } from '../../lib/api';
+import { useMetricLimitContent } from '../../hooks/useQuotaGate';
+import { useQuotaModalStore } from '../../stores/quotaModalStore';
 import type { PodcastEpisodeSummary, PodcastEpisodeFull } from './types';
 
 const TERMINAL: PodcastEpisodeStatus[] = ['completed', 'failed'];
@@ -13,6 +16,11 @@ export function usePodcastEpisode(caseId: string, pipelineRunId: string | null, 
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const didAutoStart = useRef(false);
+  // Only /regenerate still charges a PIPELINE_RUN unit — the initial episode
+  // is generated as part of the pipeline run that already paid for it (see
+  // backend/src/services/pipelineService.ts's content_creation branch).
+  const regenerateLimitContent = useMetricLimitContent('PIPELINE_RUN');
+  const showQuotaModal = useQuotaModalStore(s => s.show);
 
   // Most recent episode for this pipeline run (highest version wins)
   const episodeForRun = pipelineRunId
@@ -82,6 +90,9 @@ export function usePodcastEpisode(caseId: string, pipelineRunId: string | null, 
 
   async function regenerate() {
     if (!episodeForRun || regenerating) return;
+    // Proactive: known-fresh usage says the limit is reached — open the modal
+    // instead of sending a request we already know will be rejected.
+    if (regenerateLimitContent) { showQuotaModal(regenerateLimitContent); return; }
     setRegenerating(true);
     setError(null);
     setFullEpisode(null);
@@ -89,6 +100,9 @@ export function usePodcastEpisode(caseId: string, pipelineRunId: string | null, 
       await podcastApi.regenerate(caseId, episodeForRun.id);
       await refresh();
     } catch (err) {
+      // Reactive: usage was stale and the backend rejected anyway — the global
+      // 'quota:exceeded' bridge already opened the same modal; skip the banner.
+      if (isQuotaApiError(err)) return;
       setError(err instanceof Error ? err.message : 'Failed to regenerate');
     } finally {
       setRegenerating(false);

@@ -18,6 +18,7 @@ import { VerifyWhatsAppPage } from './features/auth/VerifyWhatsAppPage';
 import { useAuthStore } from './stores/authStore';
 import { useContentCasesStore } from './stores/contentCasesStore';
 import { useLibraryStore } from './stores/libraryStore';
+import { ComingSoonModal } from './components/ui/ComingSoonModal';
 
 // Lazy-loaded: the marketing site is an animation-heavy bundle (canvas particles,
 // scroll choreography) with its own CSS that logged-in users never need to fetch.
@@ -101,6 +102,9 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       )}
+      {/* Global — the one shared "LumAI Pro is coming soon" modal, reachable from
+          every Upgrade/Waitlist CTA regardless of auth state. */}
+      <ComingSoonModal />
     </BrowserRouter>
   );
 }

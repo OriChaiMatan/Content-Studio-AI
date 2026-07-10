@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
 import { Card, SectionCard } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
@@ -9,6 +8,8 @@ import { api, ApiError } from '../../lib/api';
 import { useT } from '../../i18n/useT';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useUsageStore, METRIC_LABELS } from '../../stores/usageStore';
+import { useComingSoonModalStore } from '../../stores/comingSoonModalStore';
 import type { Language } from '../../types';
 
 // ── Language segmented control (instant-save) ─────────────────────────────────
@@ -79,51 +80,35 @@ function DetailRow({ label, value, accent }: { label: string; value: string; acc
 }
 
 function WhatsAppCard() {
-  const authUser = useAuthStore(s => s.user);
-  const navigate = useNavigate();
-  const wa = authUser?.whatsapp;
-  const verified = !!wa?.verified;
-  const linked = !!wa?.linked;
-  const notificationsOn = !!wa && !wa.optOut && !!authUser?.notifications.generationComplete;
-
+  // WhatsApp source capture is not production-ready yet — the backend flow
+  // (verification, ingestion) is untouched and stays in place, but the Settings
+  // UI shows it as Coming Soon rather than offering a setup flow that isn't
+  // ready for real use. Telegram and the Chrome Extension remain fully available.
   return (
     <div className="rounded-2xl border border-outline-variant/40 overflow-hidden shadow-sm">
-      <div className="flex items-start gap-4 p-5 bg-gradient-to-br from-green-50 to-surface-container-lowest">
+      <div className="flex items-start gap-4 p-5 bg-surface-container-low">
         {/* Channel mark */}
-        <div className="w-12 h-12 rounded-xl bg-green-600 flex items-center justify-center shrink-0 shadow-sm">
-          <Icon name="chat" className="text-white" />
+        <div className="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center shrink-0">
+          <Icon name="chat" className="text-outline" />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h4 className="text-[16px] font-semibold text-on-surface">WhatsApp</h4>
-            <StatusPill connected={verified} />
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[11px] font-semibold uppercase tracking-wide">
+              Coming Soon
+            </span>
           </div>
           <p className="text-[13px] text-on-surface-variant mt-1 max-w-md">
-            Send articles and sources directly to your AI workspace.
+            WhatsApp source capture is still being finished and isn't available yet. Use Telegram or the Chrome Extension to send sources in the meantime.
           </p>
 
-          {verified ? (
-            <div className="mt-4 space-y-2 rounded-xl bg-surface-container-lowest/70 border border-outline-variant/30 p-4">
-              <DetailRow label="Phone" value={wa?.phoneE164 ?? '—'} />
-              <DetailRow label="Verification" value="Verified" accent />
-              <DetailRow label="Notifications" value={notificationsOn ? 'On' : 'Off'} />
-            </div>
-          ) : (
-            <div className="mt-4 rounded-xl bg-surface-container-lowest/70 border border-outline-variant/30 p-4">
-              <p className="text-[13px] text-on-surface-variant mb-3">
-                {linked ? (
-                  <>Your number{wa?.phoneE164 ? <> <span className="font-medium text-on-surface">{wa.phoneE164}</span></> : ''} is added but not verified yet. Verify it to enable WhatsApp.</>
-                ) : (
-                  'Connect WhatsApp to forward articles and notes to your workspace from your phone.'
-                )}
-              </p>
-              <Button size="sm" onClick={() => navigate('/verify-whatsapp')}>
-                <Icon name="link" size="sm" />
-                Connect WhatsApp
-              </Button>
-            </div>
-          )}
+          <div className="mt-4 rounded-xl bg-surface-container-lowest/70 border border-outline-variant/30 p-4">
+            <Button size="sm" disabled title="Coming soon">
+              <Icon name="link" size="sm" />
+              Connect WhatsApp
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -265,6 +250,114 @@ function BrowserExtensionCard() {
   );
 }
 
+// ── Plan & Usage (Phase 3) ─────────────────────────────────────────────────────
+const PLAN_STATUS_STYLE: Record<string, string> = {
+  ACTIVE: 'bg-green-100 text-green-700',
+  CANCELED: 'bg-surface-container text-on-surface-variant',
+  PAST_DUE: 'bg-amber-100 text-amber-800',
+  SUSPENDED: 'bg-error-container text-on-error-container',
+  TRIAL: 'bg-secondary-container text-on-secondary-container',
+};
+
+function UsageRow({ icon, label, used, limit, note }: { icon: string; label: string; used: number; limit: number; note?: string }) {
+  const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  // Reaching the limit isn't an error — it's just the plan's allocation fully
+  // used for this cycle. Emphasize it with the same primary blue used for
+  // buttons/links/progress elsewhere, not the error/red treatment.
+  const atLimit = limit > 0 && used >= limit;
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[13px] mb-1.5">
+        <span className="flex items-center gap-1.5 text-on-surface-variant">
+          <Icon name={icon} size="sm" className="text-outline" />
+          {label}
+        </span>
+        <span className={`font-medium ${atLimit ? 'text-primary' : 'text-on-surface'}`}>{used} / {limit}</span>
+      </div>
+      <div className="h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      {note && <p className="text-[11px] text-outline mt-1">{note}</p>}
+    </div>
+  );
+}
+
+function PlanUsageSection() {
+  const authUser = useAuthStore(s => s.user);
+  const { summary, loading, fetch } = useUsageStore();
+  const showComingSoon = useComingSoonModalStore(s => s.show);
+  const { formatDateTime } = useT();
+  const isMaster = authUser?.systemRole === 'MASTER';
+
+  useEffect(() => { void fetch(); }, [fetch]);
+
+  if (!authUser) return null;
+
+  const statusStyle = PLAN_STATUS_STYLE[authUser.planStatus] ?? PLAN_STATUS_STYLE.ACTIVE;
+
+  return (
+    <SectionCard title="Plan & Usage" icon="workspace_premium">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary text-on-primary text-[13px] font-bold">
+            <Icon name={authUser.plan === 'PRO' ? 'workspace_premium' : 'toll'} size="sm" />
+            {authUser.plan === 'PRO' ? 'Pro' : 'Free'} plan
+          </span>
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${statusStyle}`}>
+            {authUser.planStatus.replace('_', ' ')}
+          </span>
+          {isMaster && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide bg-tertiary text-on-tertiary">
+              <Icon name="verified" size="sm" /> Master — unlimited
+            </span>
+          )}
+        </div>
+        {authUser.plan === 'FREE' && !isMaster && (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={showComingSoon}
+          >
+            <Icon name="rocket_launch" size="sm" />
+            Upgrade to Pro
+          </Button>
+        )}
+      </div>
+
+      {isMaster ? (
+        <p className="text-[13px] text-on-surface-variant">
+          Master accounts bypass all plan limits — no usage tracked against you.
+        </p>
+      ) : loading && !summary ? (
+        <div className="flex items-center gap-2 text-on-surface-variant text-[13px]">
+          <span className="material-symbols-outlined animate-spin text-base">refresh</span>
+          Loading usage…
+        </div>
+      ) : summary ? (
+        <div className="space-y-5">
+          <UsageRow icon="folder_open" label="Active content cases" used={summary.cases.used} limit={summary.cases.limit} />
+          <UsageRow
+            icon={METRIC_LABELS.SOURCE_ADDED.icon}
+            label={METRIC_LABELS.SOURCE_ADDED.label}
+            used={summary.metrics.SOURCE_ADDED.used}
+            limit={summary.metrics.SOURCE_ADDED.limit}
+            note="Limit applies per case. Total shown is added across all your cases."
+          />
+          <UsageRow icon={METRIC_LABELS.PIPELINE_RUN.icon} label={METRIC_LABELS.PIPELINE_RUN.label} used={summary.metrics.PIPELINE_RUN.used} limit={summary.metrics.PIPELINE_RUN.limit} />
+          <UsageRow icon={METRIC_LABELS.IMAGE_GENERATION.icon} label={METRIC_LABELS.IMAGE_GENERATION.label} used={summary.metrics.IMAGE_GENERATION.used} limit={summary.metrics.IMAGE_GENERATION.limit} />
+
+          <div className="pt-2 border-t border-outline-variant/30 flex items-center gap-2 text-[12px] text-on-surface-variant">
+            <Icon name="event_repeat" size="sm" className="text-outline" />
+            Usage resets {formatDateTime(summary.nextUsageResetAt)}
+          </div>
+        </div>
+      ) : (
+        <p className="text-[13px] text-error">Could not load usage. Please refresh the page.</p>
+      )}
+    </SectionCard>
+  );
+}
+
 // ── Notifications (Coming Soon) — static, non-interactive row ─────────────────
 // Mirrors the real Toggle row layout but is purely presentational: no onChange,
 // no state, no API. Off + muted so users don't think notifications already work.
@@ -366,6 +459,9 @@ export function SettingsPage() {
                 </div>
               </div>
             </SectionCard>
+
+            {/* ── Plan & Usage (Phase 3) ─────────────────────── */}
+            <PlanUsageSection />
 
             {/* ── 2. Integrations (WhatsApp prominent) ─────────── */}
             <SectionCard title={t('settings.integrations')} icon="hub">

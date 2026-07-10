@@ -3,8 +3,9 @@ import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { sourceService } from '../../services/sourceService';
 import { addSourceSchema, addSourcesBatchSchema, updateSourceSchema } from '../../schemas/sourceSchemas';
-import { requireCaseOwnership } from '../middleware/auth';
+import { requireCaseOwnership, requireActiveCase } from '../middleware/auth';
 import { ingestionLimiter } from '../middleware/rateLimit';
+import { isQuotaError, sendQuotaError } from '../../lib/quotaErrors';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.param('id', requireCaseOwnership);
 // Add several sources in ONE request; their analysis runs concurrently (bounded
 // by SOURCE_ANALYSIS_BATCH_CONCURRENCY). Per-source behaviour is identical to the
 // single POST. Returns 201 if all succeeded, 207 (multi-status) if any failed.
-router.post('/:id/sources/batch', ingestionLimiter, async (req: Request, res: Response) => {
+router.post('/:id/sources/batch', requireActiveCase, ingestionLimiter, async (req: Request, res: Response) => {
   try {
     const { sources } = addSourcesBatchSchema.parse(req.body);
     const results = await sourceService.addSourcesBatch(req.params.id, sources);
@@ -40,7 +41,7 @@ router.post('/:id/sources/batch', ingestionLimiter, async (req: Request, res: Re
 // Add a new source to an existing Content Case.
 // Works for text notes, URL references, and PDF filename placeholders.
 
-router.post('/:id/sources', ingestionLimiter, async (req: Request, res: Response) => {
+router.post('/:id/sources', requireActiveCase, ingestionLimiter, async (req: Request, res: Response) => {
   try {
     const input  = addSourceSchema.parse(req.body);
     const source = await sourceService.addSource(req.params.id, input);
@@ -56,6 +57,10 @@ router.post('/:id/sources', ingestionLimiter, async (req: Request, res: Response
       res.status(400).json({ error: 'Validation failed', details: err.errors });
       return;
     }
+    if (isQuotaError(err)) {
+      sendQuotaError(res, err);
+      return;
+    }
     console.error('[POST /api/cases/:id/sources]', err);
     res.status(500).json({ error: 'Failed to add source' });
   }
@@ -65,7 +70,7 @@ router.post('/:id/sources', ingestionLimiter, async (req: Request, res: Response
 // Edit a source's label or content.
 // Only text sources are editable in the UI, but the API accepts any type.
 
-router.patch('/:id/sources/:sourceId', async (req: Request, res: Response) => {
+router.patch('/:id/sources/:sourceId', requireActiveCase, async (req: Request, res: Response) => {
   try {
     const input  = updateSourceSchema.parse(req.body);
     const source = await sourceService.updateSource(req.params.id, req.params.sourceId, input);
@@ -89,7 +94,7 @@ router.patch('/:id/sources/:sourceId', async (req: Request, res: Response) => {
 // ── DELETE /api/cases/:id/sources/:sourceId ───────────────────────────────────
 // Remove a source from a Content Case.
 
-router.delete('/:id/sources/:sourceId', async (req: Request, res: Response) => {
+router.delete('/:id/sources/:sourceId', requireActiveCase, async (req: Request, res: Response) => {
   try {
     const deleted = await sourceService.deleteSource(req.params.id, req.params.sourceId);
 

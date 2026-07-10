@@ -48,5 +48,13 @@ export function useLiveCase(id: string | undefined): ContentCase | undefined {
     return () => { active = false; clearInterval(t); };
   }, [id, upsertCase]);
 
-  return liveCase ?? caseItem;
+  // Prefer whichever copy is actually newer rather than always favoring the
+  // poll-derived `liveCase` — a store update from OUTSIDE this hook's own poll
+  // (e.g. archiveCase/reactivateCase mutating the store directly) must win
+  // immediately, not sit stale until the next 5s tick. Prisma's @updatedAt
+  // guarantees updatedAt advances on every write, so a plain comparison (no
+  // extra effect/setState) is enough to resolve which copy is current.
+  if (!liveCase) return caseItem;
+  if (!caseItem) return liveCase;
+  return new Date(caseItem.updatedAt) > new Date(liveCase.updatedAt) ? caseItem : liveCase;
 }

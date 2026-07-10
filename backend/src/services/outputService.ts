@@ -5,6 +5,8 @@ import { contentGenerationConfig } from '../lib/anthropic';
 import { buildGeneratorInput } from './generatorInput';
 import { generateContent } from './contentGeneratorService';
 import { CONTENT_PLATFORMS, type ContentPlatform } from '../schemas/aiContractSchemas';
+import { quotaConfig } from '../lib/quotaConfig';
+import { checkAndIncrementUsage } from './usageService';
 
 // ── Serializer ────────────────────────────────────────────────────────────────
 
@@ -164,6 +166,13 @@ export const outputService = {
     }
     if (!existing.pipelineRunId) {
       throw new Error('This output is not linked to a pipeline run and cannot be regenerated.');
+    }
+
+    // Text regeneration draws from the same PIPELINE_RUN bucket as a fresh run
+    // (approved plan §8) — no separate regeneration-credit pool.
+    if (quotaConfig.enforceQuotas) {
+      const { userId } = await prisma.contentCase.findUniqueOrThrow({ where: { id: caseId }, select: { userId: true } });
+      await checkAndIncrementUsage(userId, 'PIPELINE_RUN');
     }
 
     const [run, caseItem] = await Promise.all([

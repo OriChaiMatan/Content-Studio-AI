@@ -9,26 +9,101 @@ datasource db {
 }
 
 model User {
-  id                      String                  @id @default(cuid())
+  id                      String   @id @default(cuid())
   name                    String
-  email                   String                  @unique
-  role                    String                  @default("Editor")
+  email                   String   @unique
+  // Business/display title only (e.g. "Editor", "Lead Researcher") — cosmetic,
+  // never consulted for authorization. See systemRole for actual permissions.
+  role                    String   @default("Editor")
   avatarUrl               String?
-  language                Language                @default(en)
-  notifGenerationComplete Boolean                 @default(true)
-  notifFactCheckConflict  Boolean                 @default(true)
-  notifDraftReady         Boolean                 @default(false)
-  lastActiveAt            DateTime                @default(now())
-  createdAt               DateTime                @default(now())
-  updatedAt               DateTime                @updatedAt
+  language                Language @default(en)
+  notifGenerationComplete Boolean  @default(true)
+  notifFactCheckConflict  Boolean  @default(true)
+  notifDraftReady         Boolean  @default(false)
+  lastActiveAt            DateTime @default(now())
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
   passwordHash            String?
-  cases                   ContentCase[]
-  passwordResetTokens     PasswordResetToken[]
-  telegramIdentity        TelegramIdentity?
-  whatsappIdentity        WhatsAppIdentity?
-  whatsappPendingSource   WhatsAppPendingSource[]
+
+  // ── Roles / Plans / Usage ────────────────────────────────────────────────
+  // systemRole: authorization only. Derived from MASTER_EMAILS at auth time,
+  // never set by the user. MASTER bypasses all plan/usage checks.
+  systemRole              SystemRole @default(USER)
+  plan                    Plan       @default(FREE)
+  planStatus              PlanStatus @default(ACTIVE)
+  // When the CURRENT plan tier began (resets on upgrade/downgrade) — distinct
+  // from createdAt, which is the account's original signup date.
+  planStartedAt           DateTime   @default(now())
+  // User-specific usage cycle (NOT calendar week/month — see UsageCounter).
+  currentUsagePeriodStart DateTime   @default(now())
+  currentUsagePeriodEnd   DateTime   @default(dbgenerated("now() + interval '7 days'"))
+  nextUsageResetAt        DateTime   @default(dbgenerated("now() + interval '7 days'"))
+  // Set once Stripe billing lands; unset (null) until then.
+  nextBillingAt           DateTime?
+
+  cases                 ContentCase[]
+  passwordResetTokens   PasswordResetToken[]
+  telegramIdentity      TelegramIdentity?
+  whatsappIdentity      WhatsAppIdentity?
+  whatsappPendingSource WhatsAppPendingSource[]
+  usageCounters         UsageCounter[]
 
   @@map("users")
+}
+
+// System-level authorization role — separate from the cosmetic `role` display
+// title above. MASTER is granted automatically via the MASTER_EMAILS env var,
+// never set directly by a user action.
+enum SystemRole {
+  USER
+  MASTER
+}
+
+enum Plan {
+  FREE
+  PRO
+}
+
+// Whether the plan is currently usable, independent of which plan it is.
+enum PlanStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  SUSPENDED
+  TRIAL
+}
+
+enum UsageMetric {
+  PIPELINE_RUN
+  SOURCE_ADDED
+  IMAGE_GENERATION
+}
+
+// Persistent usage ledger. All three metrics share one usage cycle per user
+// (User.currentUsagePeriodStart/End) — this table only tracks how much of
+// each metric has been consumed within that shared cycle, not when it resets.
+// SOURCE_ADDED is scoped per-case (contentCaseId set); the other two metrics
+// are user-scoped (contentCaseId null).
+model UsageCounter {
+  id            String      @id @default(cuid())
+  userId        String
+  contentCaseId String?
+  // Non-null uniqueness key: mirrors contentCaseId when set, otherwise the
+  // constant "user". Postgres treats NULL as distinct from NULL in unique
+  // constraints, so (userId, contentCaseId, metric) alone would NOT prevent
+  // duplicate rows for the two user-scoped metrics (contentCaseId null) —
+  // scopeKey exists purely to make that uniqueness enforceable.
+  scopeKey      String
+  metric        UsageMetric
+  count         Int         @default(0)
+  updatedAt     DateTime    @updatedAt
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  case ContentCase? @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scopeKey, metric])
+  @@index([userId, metric])
+  @@map("usage_counters")
 }
 
 model PasswordResetToken {
@@ -68,6 +143,8 @@ model ContentCase {
   goalCustom           String?
   styleCustom          String?
   lastScheduledSlotKey String?
+  lifecycleStatus      CaseLifecycleStatus @default(ACTIVE)
+  archivedAt           DateTime?
   user                 User              @relation(fields: [userId], references: [id])
   outputs              ContentOutput[]
   sources              ContentSource[]
@@ -75,8 +152,10 @@ model ContentCase {
   pipelineRuns         PipelineRun[]
   pipelineSteps        PipelineStep[]
   podcastEpisodes      PodcastEpisode[]
+  usageCounters        UsageCounter[]
 
   @@index([userId, status])
+  @@index([userId, lifecycleStatus])
   @@index([updatedAt(sort: Desc)])
   @@map("content_cases")
 }
@@ -178,16 +257,16 @@ model PipelineStep {
 }
 
 model PipelineRun {
-  id               String          @id @default(cuid())
+  id               String           @id @default(cuid())
   contentCaseId    String
-  triggeredBy      String          @default("manual")
-  status           JobStatus       @default(running)
-  sourceCount      Int             @default(0)
-  startedAt        DateTime        @default(now())
+  triggeredBy      String           @default("manual")
+  status           JobStatus        @default(running)
+  sourceCount      Int              @default(0)
+  startedAt        DateTime         @default(now())
   completedAt      DateTime?
   errorMessage     String?
-  contextSourceIds String[]        @default([])
-  primarySourceIds String[]        @default([])
+  contextSourceIds String[]         @default([])
+  primarySourceIds String[]         @default([])
   contentPackage   Json?
   factCheckReport  Json?
   researchContext  Json?
@@ -196,7 +275,7 @@ model PipelineRun {
   libraryItems     LibraryItem[]
   jobs             PipelineJob[]
   podcastEpisodes  PodcastEpisode[]
-  contentCase      ContentCase     @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
+  contentCase      ContentCase      @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
 
   @@index([contentCaseId, startedAt(sort: Desc)])
   @@map("pipeline_runs")
@@ -380,6 +459,15 @@ enum CaseStatus {
   completed
 }
 
+// Product lifecycle — independent of CaseStatus (pipeline progress). A case can
+// cycle through the CaseStatus stages many times over months while remaining
+// lifecycle-ACTIVE the whole time; archiving is the only user-initiated,
+// explicit "I'm done with this case" action, never automatic.
+enum CaseLifecycleStatus {
+  ACTIVE
+  ARCHIVED
+}
+
 enum OutputStatus {
   draft
   approved
@@ -431,55 +519,55 @@ enum JobStatus {
 // ── Podcast Engine ────────────────────────────────────────────────────────────
 
 enum PodcastEpisodeStatus {
-  pending          // row created, runner not yet started
-  generating       // runner active (Stage 1 in progress)
-  pack_ready       // Stage 1 complete: researchPack stored
-  blueprint_ready  // Stage 2 complete: blueprint stored; Stage 3 starts immediately
-  critique_ready   // Stage 4 complete: critique stored
-  completed        // Stage 5 complete: full episode ready
-  failed           // terminal error; see errorMessage
+  pending // row created, runner not yet started
+  generating // runner active (Stage 1 in progress)
+  pack_ready // Stage 1 complete: researchPack stored
+  blueprint_ready // Stage 2 complete: blueprint stored; Stage 3 starts immediately
+  critique_ready // Stage 4 complete: critique stored
+  completed // Stage 5 complete: full episode ready
+  failed // terminal error; see errorMessage
 }
 
 model PodcastEpisode {
-  id                   String               @id @default(cuid())
-  contentCaseId        String
-  pipelineRunId        String
-  version              Int                  @default(1)
+  id            String @id @default(cuid())
+  contentCaseId String
+  pipelineRunId String
+  version       Int    @default(1)
 
-  status               PodcastEpisodeStatus @default(pending)
-  errorMessage         String?
+  status       PodcastEpisodeStatus @default(pending)
+  errorMessage String?
 
   // Stage 1 artifact
-  researchPack         Json?
+  researchPack      Json?
   // Stage 2 artifact
-  blueprint            Json?
+  blueprint         Json?
   // Stage 3 artifacts — sections array grows as each section completes
-  sections             Json?
-  sectionsCompleted    Int                  @default(0)
+  sections          Json?
+  sectionsCompleted Int   @default(0)
   // Stage 4 artifact
-  critique             Json?
+  critique          Json?
   // Stage 5 artifact
-  podcastPackage       Json?
+  podcastPackage    Json?
 
   // Denormalized summary fields — set at completion (Stage 5)
-  title                String               @default("")
-  subtitle             String               @default("")
-  language             String               @default("en")
-  wordCount            Int                  @default(0)
-  estimatedDurationMin Int                  @default(0)
-  researchDensity      String               @default("limited")
-  qualityStatus        String?              // pass | needs_review | blocked
+  title                String  @default("")
+  subtitle             String  @default("")
+  language             String  @default("en")
+  wordCount            Int     @default(0)
+  estimatedDurationMin Int     @default(0)
+  researchDensity      String  @default("limited")
+  qualityStatus        String? // pass | needs_review | blocked
   approximateCostUsd   Float?
 
   // Per-stage timing — set at completion
-  telemetry            Json?
+  telemetry Json?
 
-  startedAt            DateTime             @default(now())
-  completedAt          DateTime?
-  updatedAt            DateTime             @updatedAt
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
 
-  contentCase          ContentCase          @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
-  pipelineRun          PipelineRun          @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
+  contentCase ContentCase @relation(fields: [contentCaseId], references: [id], onDelete: Cascade)
+  pipelineRun PipelineRun @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
 
   @@index([contentCaseId, startedAt(sort: Desc)])
   @@index([pipelineRunId, startedAt(sort: Desc)])

@@ -35,6 +35,28 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   next();
 }
 
+// Roles/Plans/Usage (Phase 2) — gate for MASTER-only endpoints (e.g. changing
+// another user's plan). systemRole isn't in the JWT (see lib/auth.ts — the
+// token carries only the userId), so this always does a fresh DB read rather
+// than trust a claim that could go stale the moment MASTER_EMAILS changes.
+export async function requireMaster(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.userId) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { systemRole: true } });
+    if (!user || user.systemRole !== 'MASTER') {
+      res.status(403).json({ error: 'Master access required' });
+      return;
+    }
+    next();
+  } catch (err) {
+    console.error('[requireMaster]', err);
+    res.status(500).json({ error: 'Authorization check failed' });
+  }
+}
+
 // Phase 12 — STRICT ownership for any /api/cases/:id|:caseId route. Used as an
 // Express router.param handler so it runs before the route's own handler. A missing
 // case OR a case owned by another user both return 404 (no existence leak, never 403).
@@ -53,15 +75,29 @@ export async function requireCaseOwnership(
     }
     const found = await prisma.contentCase.findUnique({
       where: { id: caseId },
-      select: { userId: true },
+      select: { userId: true, lifecycleStatus: true },
     });
     if (!found || found.userId !== req.userId) {
       res.status(404).json({ error: 'Case not found' });
       return;
     }
+    req.caseLifecycleStatus = found.lifecycleStatus;
     next();
   } catch (err) {
     console.error('[requireCaseOwnership]', err);
     res.status(500).json({ error: 'Ownership check failed' });
   }
+}
+
+// Archived cases are read-only (browse/search/read/copy/download/view-history
+// only — see the approved Content Case Lifecycle plan). Applied AFTER
+// requireCaseOwnership (which populates req.caseLifecycleStatus) to every
+// mutating route on a case-scoped router. 409 (not 403): the request is
+// authorized, just rejected because of the resource's current state.
+export function requireActiveCase(req: Request, res: Response, next: NextFunction): void {
+  if (req.caseLifecycleStatus === 'ARCHIVED') {
+    res.status(409).json({ error: 'This case is archived and read-only.', code: 'case_archived' });
+    return;
+  }
+  next();
 }

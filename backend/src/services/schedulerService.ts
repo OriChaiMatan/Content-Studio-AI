@@ -109,7 +109,7 @@ async function findCandidates() {
   return prisma.contentCase.findMany({
     where: {
       scheduleFrequency: { not: 'manual' },
-      status:            { not: 'completed' },
+      lifecycleStatus:   'ACTIVE',
       scheduleTime:      { not: null },
     },
     select: {

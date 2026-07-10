@@ -57,6 +57,10 @@ declare global {
   namespace Express {
     interface Request {
       userId?: string;
+      // Set by requireCaseOwnership (api/middleware/auth.ts) for any case-scoped
+      // route (:id / :caseId param) — read by requireActiveCase to reject
+      // mutations on archived cases.
+      caseLifecycleStatus?: 'ACTIVE' | 'ARCHIVED';
     }
   }
 }

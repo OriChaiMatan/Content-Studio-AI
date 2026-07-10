@@ -4,6 +4,13 @@ import type {
 } from '../types';
 import { mockContentCases } from '../data/mockContentCases';
 import { api, ApiError } from '../lib/api';
+import { useUsageStore } from './usageStore';
+
+// Roles/Plans/Usage (Phase 3) — best-effort refresh after any action that could
+// have consumed a metered quota, so Settings/disabled-state UI stays current.
+// Fire-and-forget: a failed refresh just means slightly stale numbers, never a
+// blocked action (the backend call itself already succeeded by this point).
+function refreshUsage() { void useUsageStore.getState().fetch(); }
 
 type NewSourceInput = { type: SourceType; label: string; content: string; fileData?: string };
 
@@ -21,6 +28,14 @@ interface ContentCasesState {
   createCase: (data: WizardFormData) => Promise<ContentCase>;
   updateCase: (id: string, partial: Partial<ContentCase>) => void;
   deleteCase: (id: string) => Promise<void>;  // calls DELETE /api/cases/:id
+  // Explicit, user-initiated lifecycle transition — calls POST /api/cases/:id/archive.
+  // Frees the case's active-case quota slot; never deletes anything.
+  archiveCase: (id: string) => Promise<ContentCase>;
+  // Reverses archiveCase — calls POST /api/cases/:id/reactivate. `archiveCaseId`
+  // (Free-plan conflict flow) archives that other active case and reactivates
+  // this one in one atomic backend transaction. Throws ApiError (e.g. 403
+  // case_limit_reached) on failure — the caller decides how to handle it.
+  reactivateCase: (id: string, archiveCaseId?: string) => Promise<ContentCase>;
   getCaseById: (id: string) => ContentCase | undefined;
   // Replace (or add) a case in the store from an already-fetched object — used by
   // useLiveCase to keep the global store fresh alongside its local copy.
@@ -133,6 +148,7 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
         scheduleDayOfMonth: data.scheduleFrequency === 'monthly' ? data.scheduleDayOfMonth : null,
       });
       set(state => ({ cases: [newCase, ...state.cases] }));
+      refreshUsage();
       return newCase;
     } catch (err) {
       // Only fall back to a local mock case when the backend is genuinely
@@ -148,6 +164,9 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
         id: caseId,
         title:          data.title,
         status:         'draft',
+        lifecycleStatus: 'ACTIVE',
+        archivedAt:     null,
+        pipelineRunCount: 0,
         language:       data.language,
         contentGoal:    data.contentGoal,
         goalCustom:     data.goalCustom || null,
@@ -193,6 +212,33 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
     set(state => ({ cases: state.cases.filter(c => c.id !== id) }));
   },
 
+  archiveCase: async (id) => {
+    const updated = await api.post<ContentCase>(`/cases/${id}/archive`, {});
+    set(state => ({ cases: state.cases.map(c => c.id === id ? updated : c) }));
+    // Archiving frees an active-case quota slot — refresh so Settings/the
+    // Sidebar's cached usage numbers don't stay stale.
+    refreshUsage();
+    return updated;
+  },
+
+  reactivateCase: async (id, archiveCaseId) => {
+    // Re-throws ApiError on failure (e.g. 403 case_limit_reached) — no catch
+    // here, since the caller (Case Detail's Reactivate button) needs to branch
+    // on that to open the Free-plan conflict modal instead of a generic error.
+    const updated = await api.post<ContentCase>(`/cases/${id}/reactivate`, archiveCaseId ? { archiveCaseId } : {});
+    set(state => ({
+      cases: state.cases.map(c => {
+        if (c.id === id) return updated;
+        // The atomic swap archives the other case server-side too — reflect
+        // that locally without waiting for a separate re-fetch.
+        if (archiveCaseId && c.id === archiveCaseId) return { ...c, lifecycleStatus: 'ARCHIVED', archivedAt: new Date().toISOString() };
+        return c;
+      }),
+    }));
+    refreshUsage();
+    return updated;
+  },
+
   // ── Source management ────────────────────────────────────────────────────────
 
   addSource: async (caseId, sourceInput) => {
@@ -211,10 +257,15 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
           c.id !== caseId ? c : {
             ...c,
             sources: [...c.sources, newSource],
+            // Optimistic bump so the Sources panel's per-case disabled-state
+            // check reflects the new count immediately (the field only comes
+            // from a full case re-fetch otherwise).
+            sourceUsage: c.sourceUsage ? { ...c.sourceUsage, used: c.sourceUsage.used + 1 } : c.sourceUsage,
             updatedAt: new Date().toISOString(),
           },
         ),
       }));
+      refreshUsage();
       return newSource;
     } catch (err) {
       if (err instanceof ApiError) throw err;
@@ -258,9 +309,15 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
     if (added.length) {
       set(state => ({
         cases: state.cases.map(c =>
-          c.id !== caseId ? c : { ...c, sources: [...c.sources, ...added], updatedAt: new Date().toISOString() },
+          c.id !== caseId ? c : {
+            ...c,
+            sources: [...c.sources, ...added],
+            sourceUsage: c.sourceUsage ? { ...c.sourceUsage, used: c.sourceUsage.used + added.length } : c.sourceUsage,
+            updatedAt: new Date().toISOString(),
+          },
         ),
       }));
+      refreshUsage();
     }
     return { added, failed };
   },
@@ -383,6 +440,7 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
         },
       ),
     }));
+    refreshUsage();
     return updated;
   },
 
@@ -407,6 +465,7 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
       set(state => ({
         cases: state.cases.map(c => c.id !== caseId ? c : updatedCase),
       }));
+      refreshUsage();
     } catch (err) {
       // Re-throw ApiError so the Pipeline page can surface the message (e.g. no_new_sources).
       if (err instanceof ApiError) throw err;
@@ -437,6 +496,7 @@ export const useContentCasesStore = create<ContentCasesState>()((set, get) => ({
     );
     // Reflect "research running" immediately; polling (refreshCase) takes over from here.
     await get().refreshCase(caseId);
+    refreshUsage();
   },
 
   openWizard:  () => set({ wizardOpen: true }),

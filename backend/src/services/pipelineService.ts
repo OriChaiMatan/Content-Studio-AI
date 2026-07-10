@@ -1,14 +1,22 @@
+import type { UsageMetric } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { serializeCase } from './caseService';
 import { PIPELINE_STEP_ORDER } from '../schemas/pipelineSchemas';
+import { quotaConfig } from '../lib/quotaConfig';
+import { checkAndIncrementUsage, ensureCurrentPeriod, assertPlanUsable, peekUsage } from './usageService';
+import { isQuotaError, PlanNotUsableError } from '../lib/quotaErrors';
+import { podcastEpisodeService } from './podcastEpisodeService';
+import { podcastEpisodeRunnerService } from './podcastEpisodeRunnerService';
 
 // Maps ContentTarget values (wizard) → content platform (Phase 9 v2).
 // 'images' is RETIRED as a standalone output: image prompts are embedded inside
 // LinkedIn/Facebook. 'images' maps to undefined → no output (no-op).
 // 'instagram' is RETIRED from the MVP (Sprint 1): tolerated as a legacy target on
 // existing cases but maps to undefined → no output (no-op), so old cases never crash.
-// 'podcast' is likewise RETIRED (deferred from the MVP): tolerated as a legacy target
-// but maps to undefined → no output, so it is never generated for new or old cases.
+// 'podcast' maps to undefined here too — it is NOT a ContentOutput row produced by
+// generateAll. It's a separate output type with its own 5-stage generator
+// (podcastEpisodeRunnerService), auto-triggered below when content_creation
+// completes and 'podcast' is a selected target — see the content_creation branch.
 const CONTENT_TARGET_TO_PLATFORM: Record<string, ContentPlatform | undefined> = {
   linkedin:   'linkedin',
   facebook:   'facebook',
@@ -47,6 +55,7 @@ const caseInclude = {
   outputs:       { orderBy: { generatedAt: 'desc' as const } },
   pipelineSteps: true,
   pipelineRuns:  { orderBy: { startedAt: 'desc' as const }, take: 1 },
+  _count: { select: { pipelineRuns: true } },
 } as const;
 
 // ── Pipeline service ───────────────────────────────────────────────────────────
@@ -97,7 +106,19 @@ export const pipelineService = {
   // synchronous 404/409/400 before detaching the server-side runner. The runner's
   // own startRun remains the authoritative guard (this is best-effort UX; a race is
   // harmless — startRun no-ops on already_running / no_new_sources).
-  async preflight(caseId: string): Promise<{ ok: true } | { ok: false; code: 'case_not_found' | 'already_running' | 'no_new_sources' }> {
+  async preflight(caseId: string): Promise<
+    | { ok: true }
+    | {
+        ok: false;
+        code: 'case_not_found' | 'already_running' | 'no_new_sources' | 'plan_not_usable' | 'quota_exceeded';
+        message?: string;
+        // Only set for quota_exceeded — mirrors QuotaExceededError so the route
+        // can build the exact same response shape sendQuotaError produces elsewhere.
+        metric?: UsageMetric;
+        resetAt?: string;
+        limit?: number;
+      }
+  > {
     const c = await prisma.contentCase.findUnique({
       where: { id: caseId },
       include: { sources: true, pipelineRuns: { where: { status: 'running' }, take: 1 } },
@@ -106,6 +127,27 @@ export const pipelineService = {
     if (c.pipelineRuns.length > 0) return { ok: false, code: 'already_running' };
     const { primary } = partitionSources(c.sources);
     if (primary.length === 0) return { ok: false, code: 'no_new_sources' };
+
+    // Best-effort UX gate — mirrors the guards above: a race against the
+    // authoritative check inside startRun (called by the detached runner) is
+    // harmless, since startRun re-checks and rejects regardless.
+    if (quotaConfig.enforceQuotas) {
+      try {
+        const gatingUser = await ensureCurrentPeriod(c.userId);
+        assertPlanUsable(gatingUser);
+      } catch (err) {
+        if (err instanceof PlanNotUsableError) return { ok: false, code: 'plan_not_usable', message: err.message };
+        throw err;
+      }
+      const peek = await peekUsage(c.userId, 'PIPELINE_RUN');
+      if (!peek.ok) {
+        return {
+          ok: false, code: 'quota_exceeded', message: peek.error.message,
+          metric: peek.error.metric, resetAt: peek.error.resetAt.toISOString(), limit: peek.error.limit,
+        };
+      }
+    }
+
     return { ok: true };
   },
 
@@ -134,6 +176,23 @@ export const pipelineService = {
         code: 'no_new_sources',
         message: 'No new sources are available for this case. Add new sources or reuse existing ones.',
       } as const;
+    }
+
+    // Authoritative quota gate — covers BOTH manual (/pipeline/run, /pipeline/
+    // start) and scheduled (schedulerService) triggers, since both converge on
+    // this exact function. preflight's check above is best-effort UX only.
+    if (quotaConfig.enforceQuotas) {
+      try {
+        await checkAndIncrementUsage(existing.userId, 'PIPELINE_RUN');
+      } catch (err) {
+        if (isQuotaError(err)) {
+          return {
+            type: 'error', code: err.code, message: err.message,
+            ...(err.code === 'quota_exceeded' ? { metric: err.metric, resetAt: err.resetAt.toISOString(), limit: err.limit } : {}),
+          } as const;
+        }
+        throw err;
+      }
     }
 
     // Output language is chosen per run (Phase 8.6). Validate to en|he;
@@ -449,6 +508,19 @@ export const pipelineService = {
       void notificationService
         .onReviewReady(caseId, activeRun.id)
         .catch(err => console.error('[notify] onReviewReady failed', err instanceof Error ? err.message : err));
+
+      // Podcast is one of the case's selected output types, same as LinkedIn/
+      // Facebook/Newsletter — when enabled, generate it as part of THIS run's
+      // output set. Detached (its 5-stage process is slow) and NEVER re-checks
+      // PIPELINE_RUN quota: that unit was already spent starting this run: see
+      // checkAndIncrementUsage in startRun. Only explicit regeneration spends
+      // another unit (podcast.ts's /regenerate route).
+      if (existing.contentTargets.includes('podcast')) {
+        void podcastEpisodeService
+          .create(caseId, activeRun.id)
+          .then(episode => podcastEpisodeRunnerService.runDetached(episode.id))
+          .catch(err => console.error('[pipeline] auto-start podcast failed', caseId, err instanceof Error ? err.message : err));
+      }
     }
 
     return { type: 'ok', case: serializeCase(updatedCase) } as const;

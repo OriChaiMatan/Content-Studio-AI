@@ -18,6 +18,8 @@ import telegramRouter from './api/routes/telegram';
 import visualsRouter  from './api/routes/visuals';
 import podcastRouter  from './api/routes/podcast';
 import contactRouter  from './api/routes/contact';
+import adminRouter    from './api/routes/admin';
+import usageRouter    from './api/routes/usage';
 
 const app = express();
 
@@ -107,6 +109,10 @@ app.use('/api/cases', requireAuth, visualsRouter);
 app.use('/api/cases', requireAuth, podcastRouter);
 // library: grouped-by-run view of approved outputs (per-user)
 app.use('/api/library', requireAuth, libraryRouter);
+// admin: MASTER-only (see requireMaster inside the router) — change a user's plan/status.
+app.use('/api/admin', requireAuth, adminRouter);
+// usage: read-only Plan & Usage summary for the authenticated user (Settings dashboard).
+app.use('/api/usage', requireAuth, usageRouter);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 // Returns 200 when the server is up.

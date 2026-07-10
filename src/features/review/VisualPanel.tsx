@@ -15,8 +15,9 @@ const STATUS_LABEL: Record<VisualStatus, string> = {
   failed: 'Unavailable',
 };
 
-export function VisualPanel({ platform, visual, sectionRef }: { platform: 'linkedin' | 'facebook'; visual: UseVisual; sectionRef?: Ref<HTMLElement> }) {
+export function VisualPanel({ platform, visual, sectionRef, isArchived }: { platform: 'linkedin' | 'facebook'; visual: UseVisual; sectionRef?: Ref<HTMLElement>; isArchived?: boolean }) {
   const { asset, busy, error, isActive, isReady, isFailed, generate, regenerate } = visual;
+  const disabled = busy || isArchived;
 
   return (
     <section ref={sectionRef} className="border-t border-outline-variant/30 pt-5 sm:pt-6 scroll-mt-4">
@@ -28,7 +29,11 @@ export function VisualPanel({ platform, visual, sectionRef }: { platform: 'linke
         </div>
         {isReady && (
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={regenerate} loading={busy} disabled={busy} title="Regenerate background">
+            <Button
+              size="sm" variant="outline" onClick={regenerate} loading={busy}
+              disabled={disabled}
+              title="Regenerate background"
+            >
               <Icon name="refresh" size="sm" />
               <span className="hidden sm:inline">Regenerate Background</span>
             </Button>
@@ -53,7 +58,7 @@ export function VisualPanel({ platform, visual, sectionRef }: { platform: 'linke
                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary/10 flex items-center justify-center"><Icon name="auto_awesome" size="lg" className="text-primary" /></div>
                 <p className="text-[14px] font-medium text-on-surface">Create a visual for this post</p>
                 <p className="text-[12.5px] text-on-surface-variant max-w-xs">AI background with LumAI-rendered headline.</p>
-                <Button size="md" onClick={generate} loading={busy} disabled={busy}>
+                <Button size="md" onClick={generate} loading={busy} disabled={disabled}>
                   <Icon name="auto_awesome" size="sm" /> Generate Visual
                 </Button>
               </>
@@ -70,7 +75,7 @@ export function VisualPanel({ platform, visual, sectionRef }: { platform: 'linke
                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-100 flex items-center justify-center"><Icon name="image_not_supported" size="lg" className="text-amber-700" /></div>
                 <p className="text-[13.5px] font-medium text-on-surface px-2">Visual generation is currently unavailable</p>
                 <p className="text-[12px] text-on-surface-variant max-w-xs">{asset.errorMessage || 'Please try again shortly.'}</p>
-                <Button size="sm" variant="outline" onClick={generate} loading={busy} disabled={busy}>
+                <Button size="sm" variant="outline" onClick={generate} loading={busy} disabled={disabled}>
                   <Icon name="refresh" size="sm" /> Try again
                 </Button>
               </>

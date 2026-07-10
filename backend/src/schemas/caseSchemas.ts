@@ -68,3 +68,12 @@ export const updateCaseSchema = z.object({
 
 export type CreateCaseInput = z.infer<typeof createCaseSchema>;
 export type UpdateCaseInput = z.infer<typeof updateCaseSchema>;
+
+// ── Reactivate — optional swap for the Free-plan "archive current, reactivate
+// this one" conflict flow. Absent = plain reactivate, subject to the normal
+// active-case limit check.
+export const reactivateCaseSchema = z.object({
+  archiveCaseId: z.string().min(1).optional(),
+});
+
+export type ReactivateCaseInput = z.infer<typeof reactivateCaseSchema>;

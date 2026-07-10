@@ -3,6 +3,9 @@ import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { Input, Textarea } from '../../components/ui/Input';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
+import { useIsMaster, buildPerCaseLimitContent } from '../../hooks/useQuotaGate';
+import { useQuotaModalStore } from '../../stores/quotaModalStore';
+import { isQuotaApiError } from '../../lib/api';
 import type { ContentSource, SourceStatus, SourceType, SourceIntelligence } from '../../types';
 
 // ── URL helpers (Phase A/B) ───────────────────────────────
@@ -314,6 +317,9 @@ function AddSourceForm({ onAdd, onAddMany, onCancel }: AddFormProps) {
       await onAdd(type, label, content, type === 'pdf' ? fileData ?? undefined : undefined);
       // Form is closed by the parent on success
     } catch (err) {
+      // Reactive quota rejection (stale usage) — the global bridge already
+      // opened the quota modal; don't ALSO show a duplicate inline banner.
+      if (isQuotaApiError(err)) { setSaving(false); return; }
       setError(err instanceof Error ? err.message : 'Failed to add source. Please try again.');
       setSaving(false);
     }
@@ -427,9 +433,10 @@ interface SourceRowProps {
   onDelete:     (id: string) => Promise<void>;
   onSaveEdit:   (id: string, label: string, content: string) => Promise<void>;
   onManualText: (id: string, text: string) => Promise<void>;
+  isArchived?: boolean;
 }
 
-function SourceRow({ source, onDelete, onSaveEdit, onManualText }: SourceRowProps) {
+function SourceRow({ source, onDelete, onSaveEdit, onManualText, isArchived = false }: SourceRowProps) {
   const [editing, setEditing]         = useState(false);
   const [editLabel, setEditLabel]     = useState(source.label);
   const [editContent, setEditContent] = useState(source.content);
@@ -635,7 +642,7 @@ function SourceRow({ source, onDelete, onSaveEdit, onManualText }: SourceRowProp
                         </Button>
                       </div>
                     </div>
-                  ) : (
+                  ) : !isArchived && (
                     <button
                       onClick={() => setPasting(true)}
                       className="text-[11px] text-primary hover:underline flex items-center gap-1"
@@ -650,8 +657,8 @@ function SourceRow({ source, onDelete, onSaveEdit, onManualText }: SourceRowProp
           )}
         </div>
 
-        {/* Action buttons — hidden while editing */}
-        {!editing && (
+        {/* Action buttons — hidden while editing or on an archived (read-only) case */}
+        {!editing && !isArchived && (
           <div className="flex items-center gap-1 shrink-0">
             {isText && (
               <button
@@ -692,14 +699,29 @@ export function SourcesPanel({ caseId }: SourcesPanelProps) {
   const addSources   = useContentCasesStore(s => s.addSources);
   const updateSource = useContentCasesStore(s => s.updateSource);
   const deleteSource = useContentCasesStore(s => s.deleteSource);
+  const isMaster = useIsMaster();
+  const showQuotaModal = useQuotaModalStore(s => s.show);
   const [showForm, setShowForm] = useState(false);
 
   if (!caseItem) return null;
+
+  // Archived cases are read-only — no adding, editing, or deleting sources.
+  // Backend already rejects with 409; this just avoids offering a doomed action.
+  const isArchived = caseItem.lifecycleStatus === 'ARCHIVED';
 
   // Most recently added first
   const sources = [...caseItem.sources].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
+
+  // True per-case usage (see backend caseService.getCaseById) — not the
+  // Settings-level cross-case aggregate, so this is a meaningful used/limit ratio.
+  const sourceLimitContent = isMaster ? null : buildPerCaseLimitContent('SOURCE_ADDED', caseItem.sourceUsage);
+
+  function openAddForm() {
+    if (sourceLimitContent) { showQuotaModal(sourceLimitContent); return; }
+    setShowForm(true);
+  }
 
   async function handleAdd(type: SourceType, label: string, content: string, fileData?: string) {
     await addSource(caseId, { type, label, content, fileData });
@@ -747,8 +769,8 @@ export function SourcesPanel({ caseId }: SourcesPanelProps) {
               Add sources at any time — they'll be included in the next generation run.
             </p>
           </div>
-          {!showForm && (
-            <Button size="sm" onClick={() => setShowForm(true)}>
+          {!showForm && !isArchived && (
+            <Button size="sm" onClick={openAddForm}>
               <Icon name="add" size="sm" />
               Add Source
             </Button>
@@ -756,7 +778,7 @@ export function SourcesPanel({ caseId }: SourcesPanelProps) {
         </div>
 
         {/* Add form */}
-        {showForm && (
+        {showForm && !isArchived && (
           <div className="mb-4">
             <AddSourceForm
               onAdd={handleAdd}
@@ -776,8 +798,8 @@ export function SourcesPanel({ caseId }: SourcesPanelProps) {
             <p className="text-[13px] text-outline mt-1 max-w-xs">
               Add text notes, URLs, or PDFs — the AI uses all sources in this workspace when generating content.
             </p>
-            {!showForm && (
-              <Button size="sm" className="mt-4" onClick={() => setShowForm(true)}>
+            {!showForm && !isArchived && (
+              <Button size="sm" className="mt-4" onClick={openAddForm}>
                 <Icon name="add" size="sm" />
                 Add First Source
               </Button>
@@ -792,6 +814,7 @@ export function SourcesPanel({ caseId }: SourcesPanelProps) {
                 onDelete={handleDelete}
                 onSaveEdit={handleSaveEdit}
                 onManualText={handleManualText}
+                isArchived={isArchived}
               />
             ))}
           </div>

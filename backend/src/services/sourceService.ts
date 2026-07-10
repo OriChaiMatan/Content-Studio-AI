@@ -5,6 +5,8 @@ import { analyze } from './sourceAnalysisService';
 import { extract as extractUrl } from './urlExtractionService';
 import { extractPdf } from './pdfExtractionService';
 import type { SourceIntelligence } from '../schemas/aiContractSchemas';
+import { quotaConfig } from '../lib/quotaConfig';
+import { checkAndIncrementUsage } from './usageService';
 
 // ── Serializer ────────────────────────────────────────────────────────────────
 // Strips server-only fields (filePath, fileSize, mimeType) but includes
@@ -183,13 +185,21 @@ export type BatchSourceResult =
 export const sourceService = {
 
   // POST /api/cases/:id/sources
+  // Also called directly by ingestionService (WhatsApp/Telegram) — the quota
+  // check lives HERE, not in the HTTP route, so both entry points are covered.
   async addSource(caseId: string, data: AddSourceInput) {
     // Verify the case exists before doing extraction/analysis work.
     const caseExists = await prisma.contentCase.findUnique({
       where: { id: caseId },
-      select: { id: true },
+      select: { id: true, userId: true },
     });
     if (!caseExists) return null;
+
+    // Checked (and incremented) before the slow extraction/analysis work below
+    // so a source that's over quota fails fast instead of burning an API call.
+    if (quotaConfig.enforceQuotas) {
+      await checkAndIncrementUsage(caseExists.userId, 'SOURCE_ADDED', caseId);
+    }
 
     const resolvedLabel = data.label || data.type;
     // Extraction + analysis run OUTSIDE the transaction so network/CPU work (URL

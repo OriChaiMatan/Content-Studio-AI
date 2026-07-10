@@ -343,8 +343,8 @@ export function useLandingEngine() {
   const flowIsStep4 = s.flowStep === 4;
   const flowIsStep5 = s.flowStep === 5;
 
-  const pricingHover0 = s.pricingHoverIdx === 0 ? '260px' : '0px';
-  const pricingHover1 = s.pricingHoverIdx === 1 ? '220px' : '0px';
+  const pricingHover0 = s.pricingHoverIdx === 0 ? '460px' : '0px';
+  const pricingHover1 = s.pricingHoverIdx === 1 ? '260px' : '0px';
 
   // ---- Reasoning visualization (scroll-driven) ----
   const rpct = s.reasoningPct;

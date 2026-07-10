@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { TopBar } from '../../components/layout/TopBar';
-import { CaseStatusBadge, PlatformBadge, OutputStatusBadge } from '../../components/ui/Badge';
+import { CaseStatusBadge, LifecycleBadge, PlatformBadge, OutputStatusBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { Card } from '../../components/ui/Card';
@@ -10,7 +10,10 @@ import { useLiveCase } from './useLiveCase';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { useT } from '../../i18n/useT';
 import type { StringKey } from '../../i18n/strings';
-import { api } from '../../lib/api';
+import { api, isQuotaApiError } from '../../lib/api';
+import { useSchedulingAllowed, useActiveCaseLimitContent, buildCaseLimitInfo } from '../../hooks/useQuotaGate';
+import { useArchiveConfirmModalStore } from '../../stores/archiveConfirmModalStore';
+import { useActiveCaseLimitModalStore } from '../../stores/activeCaseLimitModalStore';
 import type { ContentGoal, ContentStyle, ContentTarget, Language, ContentCase, ContentOutput, PipelineStep, Platform, RunSummary, Schedule, ScheduleFrequency, CaseStatus } from '../../types';
 
 type I18n = ReturnType<typeof useT>;
@@ -117,10 +120,14 @@ export function ContentCaseDetail() {
   const i18n = useT();
   const { t, plural, formatDateTime } = i18n;
 
-  const caseItem    = useLiveCase(id);
-  const loading     = useContentCasesStore(s => s.loading);
-  const refreshCase = useContentCasesStore(s => s.refreshCase);
-  const deleteCase  = useContentCasesStore(s => s.deleteCase);
+  const caseItem       = useLiveCase(id);
+  const loading        = useContentCasesStore(s => s.loading);
+  const refreshCase    = useContentCasesStore(s => s.refreshCase);
+  const deleteCase     = useContentCasesStore(s => s.deleteCase);
+  const reactivateCase = useContentCasesStore(s => s.reactivateCase);
+  const showArchiveConfirm = useArchiveConfirmModalStore(s => s.show);
+  const showActiveCaseLimitModal = useActiveCaseLimitModalStore(s => s.show);
+  const activeCaseLimitContent = useActiveCaseLimitContent();
 
   const [editingSettings, setEditingSettings] = useState(false);
   const [savingSettings,  setSavingSettings]  = useState(false);
@@ -128,6 +135,8 @@ export function ContentCaseDetail() {
   const [confirmDelete,   setConfirmDelete]   = useState(false);
   const [deleting,        setDeleting]        = useState(false);
   const [deleteError,     setDeleteError]     = useState<string | null>(null);
+  const [reactivating,    setReactivating]    = useState(false);
+  const [reactivateError, setReactivateError] = useState<string | null>(null);
 
   const sourcesRef = useRef<HTMLDivElement>(null);
   function scrollToSources() {
@@ -166,6 +175,9 @@ export function ContentCaseDetail() {
   }
 
   const c = caseItem;
+  // Archived cases are read-only — browse/search/read/copy/download/view-history
+  // only. Backend already rejects mutations with 409; this drives the UI layer.
+  const isArchived = c.lifecycleStatus === 'ARCHIVED';
   const currentOutputs = runOutputs(c);
   const approvedCount  = currentOutputs.filter(o => o.status === 'approved').length;
   const pending        = pendingDraftsOf(c);
@@ -218,6 +230,39 @@ export function ContentCaseDetail() {
     }
   }
 
+  function handleArchiveCase() {
+    // No onArchived continuation — stay on this same case, now rendered
+    // read-only, so the user sees "everything preserved" immediately.
+    showArchiveConfirm({ caseId: c.id });
+  }
+
+  async function handleReactivateCase() {
+    // Proactive: known-fresh usage already says the active-case limit is
+    // reached — open the conflict modal instead of sending a request we
+    // already know will be rejected (mirrors the create-case flow).
+    if (activeCaseLimitContent) {
+      showActiveCaseLimitModal({
+        mode: 'reactivate',
+        activeCase: activeCaseLimitContent.activeCase,
+        targetCase: buildCaseLimitInfo(c),
+      });
+      return;
+    }
+    setReactivating(true);
+    setReactivateError(null);
+    try {
+      await reactivateCase(c.id);
+    } catch (err) {
+      // Reactive: usage was stale and the backend rejected anyway — the global
+      // 'quota:exceeded' bridge (authStore.ts) already opened the generic
+      // quota modal for this rare edge case; don't ALSO show a duplicate banner.
+      if (isQuotaApiError(err)) return;
+      setReactivateError(err instanceof Error ? err.message : 'Failed to reactivate case.');
+    } finally {
+      setReactivating(false);
+    }
+  }
+
   const aboutLine = [t(goalKey(c.contentGoal)), c.targetAudience].filter(Boolean).join(' · ');
 
   return (
@@ -241,6 +286,20 @@ export function ContentCaseDetail() {
                 <Icon name="delete" size="sm" />
               </button>
             )}
+            {isArchived ? (
+              <Button variant="outline" size="sm" onClick={handleReactivateCase} loading={reactivating} disabled={reactivating}>
+                <Icon name="unarchive" size="sm" />
+                Reactivate Case
+              </Button>
+            ) : (
+              <Button
+                variant="outline" size="sm" onClick={handleArchiveCase}
+                title="Archive this case without deleting its content. You can reactivate it later."
+              >
+                <Icon name="archive" size="sm" />
+                Archive Case
+              </Button>
+            )}
             <Button variant="secondary" size="sm" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
               <Icon name="schema" size="sm" />
               {t('detail.pipeline')}
@@ -256,6 +315,20 @@ export function ContentCaseDetail() {
             <p className="text-[13px] text-on-error-container">{deleteError}</p>
           </div>
         )}
+        {reactivateError && (
+          <div className="flex items-center gap-3 bg-error-container/60 border border-error/20 rounded-xl px-4 py-3">
+            <Icon name="error" className="text-error shrink-0" size="sm" />
+            <p className="text-[13px] text-on-error-container">{reactivateError}</p>
+          </div>
+        )}
+        {isArchived && (
+          <div className="flex items-start gap-3 bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-3">
+            <Icon name="archive" className="text-outline shrink-0 mt-0.5" size="sm" />
+            <p className="text-[13px] text-on-surface-variant">
+              This case is archived. Existing content remains available, but new content generation is disabled.
+            </p>
+          </div>
+        )}
 
         {/* ── A. Smart header: about · status · next action ─────────── */}
         <div className="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant/30 shadow-sm">
@@ -263,6 +336,7 @@ export function ContentCaseDetail() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <CaseStatusBadge status={c.status} />
+                <LifecycleBadge status={c.lifecycleStatus} alwaysShow />
                 <span className="text-[12px] text-on-surface-variant uppercase font-bold tracking-wider">{c.language}</span>
                 <span className="flex items-center gap-1 text-[12px] text-on-surface-variant">
                   <Icon name="schedule" size="sm" className="text-outline" />
@@ -285,13 +359,16 @@ export function ContentCaseDetail() {
               )}
             </div>
 
-            {/* Single primary next action — full width on mobile, inline on desktop */}
-            <div className="shrink-0 w-full md:w-auto">
-              <Button onClick={cta.run} className="w-full md:w-auto">
-                <Icon name={cta.icon} size="sm" />
-                {cta.label}
-              </Button>
-            </div>
+            {/* Single primary next action — full width on mobile, inline on desktop.
+                Archived cases have no "next action" — they're done. */}
+            {!isArchived && (
+              <div className="shrink-0 w-full md:w-auto">
+                <Button onClick={cta.run} className="w-full md:w-auto">
+                  <Icon name={cta.icon} size="sm" />
+                  {cta.label}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -467,7 +544,7 @@ export function ContentCaseDetail() {
               })}
             </div>
             <Button variant="secondary" size="sm" fullWidth className="mt-4" onClick={() => navigate(`/cases/${c.id}/pipeline`)}>
-              {c.status === 'draft' ? t('common.startPipeline') : t('common.viewPipeline')}
+              {!isArchived && c.status === 'draft' ? t('common.startPipeline') : t('common.viewPipeline')}
             </Button>
           </Card>
         </section>
@@ -648,6 +725,15 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
   const [time, setTime] = useState<string>(c.schedule.time ?? '09:00');
   const [dow,  setDow]  = useState<number>(c.schedule.dayOfWeek ?? 1);
   const [dom,  setDom]  = useState<number>(c.schedule.dayOfMonth ?? 1);
+  // Free plan blocks only 'daily' scheduling — mirrors the backend's
+  // assertSchedulingAllowed for a proactive UI hint (backend stays authoritative).
+  const dailyAllowed = useSchedulingAllowed('daily');
+  const lockedFrequency = (v: ScheduleFrequency) => v === 'daily' && !dailyAllowed;
+  // Legacy data guard: a case saved with Daily before this rule (or via a since-
+  // downgraded plan) can still have schedule.frequency === 'daily' on load. Keep
+  // showing that current value, but block Save until the user actively picks a
+  // frequency their plan allows — never silently keep or silently rewrite it.
+  const staleDailyBlock = freq === 'daily' && !dailyAllowed;
 
   function toggleTarget(target: ContentTarget) {
     setTargets(prev => prev.includes(target) ? prev.filter(x => x !== target) : [...prev, target]);
@@ -675,7 +761,7 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
           <Icon name="tune" className="text-outline" size="sm" />
           {t('detail.caseSettings')}
         </h4>
-        {!editing && (
+        {!editing && c.lifecycleStatus === 'ACTIVE' && (
           <button onClick={handleEdit} className="text-[12px] text-primary font-medium flex items-center gap-1 hover:underline">
             <Icon name="edit" size="sm" />{t('detail.edit')}
           </button>
@@ -704,6 +790,12 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
             <div>
               <p className="text-[11px] text-outline uppercase font-bold tracking-wider">{t('detail.fSchedule')}</p>
               <p className="text-[14px] text-on-surface mt-1">{humanizeSchedule(c.schedule, i18n)}</p>
+              {c.schedule.frequency === 'daily' && !dailyAllowed && (
+                <p className="flex items-center gap-1 text-[11px] text-error mt-1">
+                  <Icon name="warning" size="sm" />
+                  Daily scheduling is unavailable on the Free plan — edit to update.
+                </p>
+              )}
             </div>
           </div>
           <div>
@@ -783,14 +875,33 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
           <div>
             <p className="text-[12px] font-medium text-on-surface-variant mb-1.5">{t('wiz.freqLabel')}</p>
             <div className="grid grid-cols-2 gap-1.5">
-              {FREQ_OPTIONS.map(opt => (
-                <button key={opt.value} type="button" onClick={() => setFreq(opt.value)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[12px] font-medium transition-all ${freq === opt.value ? 'border-primary bg-secondary-container/40 text-primary' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'}`}>
-                  <Icon name={opt.icon} size="sm" />
-                  {t(opt.labelKey)}
-                </button>
-              ))}
+              {FREQ_OPTIONS.map(opt => {
+                const locked = lockedFrequency(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={locked}
+                    onClick={() => setFreq(opt.value)}
+                    title={locked ? 'Daily scheduling is available in LumAI Pro.' : undefined}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[12px] font-medium transition-all ${
+                      locked ? 'opacity-50 cursor-not-allowed border-outline-variant text-on-surface-variant' :
+                      freq === opt.value ? 'border-primary bg-secondary-container/40 text-primary' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'
+                    }`}
+                  >
+                    <Icon name={opt.icon} size="sm" />
+                    {t(opt.labelKey)}
+                    {locked && <Icon name="lock" size="sm" className="text-outline ms-auto" />}
+                  </button>
+                );
+              })}
             </div>
+            {staleDailyBlock && (
+              <p className="flex items-center gap-1 text-[11px] text-error mt-1.5">
+                <Icon name="warning" size="sm" />
+                Daily scheduling is unavailable on the Free plan. Choose Manual, Weekly, or Monthly to save.
+              </p>
+            )}
 
             {freq !== 'manual' && (
               <div className="grid grid-cols-2 gap-2 mt-2">
@@ -833,7 +944,7 @@ function CaseSettingsCard({ c, editing, saving, onEdit, onCancel, onSave }: Case
                 scheduleDayOfWeek:  freq === 'weekly'  ? dow : null,
                 scheduleDayOfMonth: freq === 'monthly' ? dom : null,
               })}
-              loading={saving} disabled={saving || targets.length === 0}>
+              loading={saving} disabled={saving || targets.length === 0 || staleDailyBlock}>
               <Icon name="save" size="sm" />
               {saving ? t('common.saving') : t('detail.saveSettings')}
             </Button>

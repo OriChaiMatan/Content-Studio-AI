@@ -1,10 +1,13 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { prisma } from '../../lib/prisma';
-import { requireCaseOwnership } from '../middleware/auth';
+import { requireCaseOwnership, requireActiveCase } from '../middleware/auth';
 import { aiHeavyLimiter } from '../middleware/rateLimit';
 import { podcastEpisodeService } from '../../services/podcastEpisodeService';
 import { podcastEpisodeRunnerService } from '../../services/podcastEpisodeRunnerService';
+import { quotaConfig } from '../../lib/quotaConfig';
+import { checkAndIncrementUsage } from '../../services/usageService';
+import { isQuotaError, sendQuotaError } from '../../lib/quotaErrors';
 
 const router = Router();
 
@@ -27,7 +30,11 @@ router.get('/:caseId/podcast/episodes', async (req: Request, res: Response) => {
 });
 
 // ── POST /api/cases/:caseId/podcast/episodes ──────────────────────────────────
-// Trigger podcast generation from a completed pipeline run.
+// Trigger podcast generation from a completed pipeline run. Normally this
+// happens automatically (pipelineService.ts, right after content_creation
+// completes for a case with 'podcast' enabled) — this route is the manual
+// fallback entry point and, like the automatic trigger, never charges a
+// PIPELINE_RUN unit for the FIRST generation of a given run.
 //
 // Body: { pipelineRunId: string }
 //
@@ -38,7 +45,7 @@ router.get('/:caseId/podcast/episodes', async (req: Request, res: Response) => {
 //
 // Returns 202 immediately; generation runs detached in-process.
 
-router.post('/:caseId/podcast/episodes', aiHeavyLimiter, async (req: Request, res: Response) => {
+router.post('/:caseId/podcast/episodes', requireActiveCase, aiHeavyLimiter, async (req: Request, res: Response) => {
   const { caseId } = req.params;
   const { pipelineRunId } = req.body as { pipelineRunId?: string };
 
@@ -75,12 +82,21 @@ router.post('/:caseId/podcast/episodes', aiHeavyLimiter, async (req: Request, re
       return;
     }
 
+    // No quota charge here: the initial podcast generation is included in the
+    // PIPELINE_RUN unit already spent by the run that produced pipelineRunId
+    // (see pipelineService.ts's content_creation branch, which now auto-starts
+    // podcast generation for cases with 'podcast' enabled). This route is a
+    // fallback entry point (e.g. if the automatic trigger failed) — the first
+    // generation for a given run must never cost a second unit. Only
+    // /regenerate (a new version) spends another PIPELINE_RUN unit.
+
     // Create episode row and detach runner
     const episode = await podcastEpisodeService.create(caseId, pipelineRunId);
     await podcastEpisodeRunnerService.runDetached(episode.id);
 
     res.status(202).json({ accepted: true, episodeId: episode.id, status: 'pending' });
   } catch (err) {
+    if (isQuotaError(err)) { sendQuotaError(res, err); return; }
     console.error('[POST /podcast/episodes]', err);
     res.status(500).json({ error: 'Failed to start podcast generation' });
   }
@@ -115,6 +131,7 @@ router.get('/:caseId/podcast/episodes/:episodeId', async (req: Request, res: Res
 
 router.post(
   '/:caseId/podcast/episodes/:episodeId/regenerate',
+  requireActiveCase,
   aiHeavyLimiter,
   async (req: Request, res: Response) => {
     try {
@@ -138,12 +155,18 @@ router.post(
         return;
       }
 
+      if (quotaConfig.enforceQuotas) {
+        const { userId } = await prisma.contentCase.findUniqueOrThrow({ where: { id: req.params.caseId }, select: { userId: true } });
+        await checkAndIncrementUsage(userId, 'PIPELINE_RUN');
+      }
+
       // Create new version row (researchPack copied, all downstream artifacts absent)
       const newEpisode = await podcastEpisodeService.createNextVersion(episode);
       await podcastEpisodeRunnerService.runDetached(newEpisode.id);
 
       res.status(202).json({ accepted: true, episodeId: newEpisode.id, version: newEpisode.version, status: 'pending' });
     } catch (err) {
+      if (isQuotaError(err)) { sendQuotaError(res, err); return; }
       console.error('[POST /podcast/episodes/:id/regenerate]', err);
       res.status(500).json({ error: 'Failed to regenerate podcast episode' });
     }

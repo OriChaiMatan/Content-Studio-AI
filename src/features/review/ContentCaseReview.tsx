@@ -9,6 +9,9 @@ import { useLibraryStore } from '../../stores/libraryStore';
 import { useLiveCase } from '../content-cases/useLiveCase';
 import { VisualPanel } from './VisualPanel';
 import { useVisual } from './useVisual';
+import { useMetricLimitContent } from '../../hooks/useQuotaGate';
+import { useQuotaModalStore } from '../../stores/quotaModalStore';
+import { isQuotaApiError } from '../../lib/api';
 import { PodcastPanel } from '../podcast/PodcastPanel';
 import { useT } from '../../i18n/useT';
 import type { StringKey } from '../../i18n/strings';
@@ -143,7 +146,7 @@ function EditorialBreakdown({ breakdown }: { breakdown: Record<string, unknown> 
 }
 
 // ── Draft pane — the active output (reading + decision surface) ───────────────
-function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }) {
+function DraftPane({ output, caseId, isArchived }: { output: ContentOutput; caseId: string; isArchived: boolean }) {
   const { t } = useT();
   const [editing, setEditing]   = useState(false);
   const [body, setBody]         = useState(output.body);
@@ -155,6 +158,8 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
   const [copyState,  setCopyState]  = useState<'idle' | 'copied' | 'error'>('idle');
   const [shareState, setShareState] = useState<'idle' | 'shared' | 'copied' | 'error'>('idle');
   const [showBreakdown, setShowBreakdown] = useState(false); // editorial breakdown collapsed by default
+  const contentRegenLimitContent = useMetricLimitContent('PIPELINE_RUN');
+  const showQuotaModal = useQuotaModalStore(s => s.show);
 
   // Visual Engine state (shared by the header button + the Visual section). LinkedIn/Facebook only.
   const visualPlatform = output.platform === 'linkedin' || output.platform === 'facebook' ? output.platform : null;
@@ -216,6 +221,8 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
     setCopyState('idle'); setShareState('idle');
   }, [output.body, output.id]);
 
+  // Approve/reject remain available on archived cases — content management,
+  // not content generation (see the Content Case Lifecycle correction).
   async function handleApprove() {
     if (approving || status === 'approved') return;
     const prev = status;
@@ -245,7 +252,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
   }
 
   async function handleSaveEdit() {
-    if (saving) return;
+    if (saving || isArchived) return;
     setSaving(true); setActionError(null);
     try {
       await updateOutputBody(caseId, output.id, body);
@@ -256,11 +263,17 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
   }
 
   async function handleRegenerate() {
-    if (regenerating) return;
+    if (regenerating || isArchived) return;
+    // Proactive: known-fresh usage says the limit is reached — open the modal
+    // instead of sending a request we already know will be rejected.
+    if (contentRegenLimitContent) { showQuotaModal(contentRegenLimitContent); return; }
     setRegenerating(true); setActionError(null);
     try {
       await regenerateOutput(caseId, output.id);
     } catch (err) {
+      // Reactive: usage was stale and the backend rejected anyway — the global
+      // 'quota:exceeded' bridge already opened the same modal; skip the banner.
+      if (isQuotaApiError(err)) return;
       setActionError(err instanceof Error ? err.message : t('review.errRegenerate'));
     } finally { setRegenerating(false); }
   }
@@ -318,7 +331,12 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
     setTimeout(() => setShareState('idle'), 2000);
   }
 
+  // `busy` disables transient in-flight actions regardless of archive state —
+  // used by Approve/Reject/the mobile menu toggle, which all stay available on
+  // archived cases. `genBusy` additionally blocks generation actions (Edit,
+  // Regenerate) on an archived case.
   const busy = approving || rejecting || saving || regenerating;
+  const genBusy = busy || isArchived;
   const hasBreakdown = !!output.breakdown && Object.keys(output.breakdown).length > 0;
 
   return (
@@ -351,11 +369,15 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
 
             {/* Desktop utility actions (sm+). Visual button is NAVIGATION (scrolls). */}
             <div className="hidden sm:flex items-center gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={status === 'approved' || busy} title={t('review.edit')}>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(true)} disabled={status === 'approved' || genBusy} title={t('review.edit')}>
                 <Icon name="edit" size="sm" />
                 <span>{t('review.edit')}</span>
               </Button>
-              <Button size="sm" variant="ghost" onClick={handleRegenerate} loading={regenerating} disabled={busy} title={t('review.regenerate')}>
+              <Button
+                size="sm" variant="ghost" onClick={handleRegenerate} loading={regenerating}
+                disabled={genBusy}
+                title={t('review.regenerate')}
+              >
                 <Icon name="refresh" size="sm" />
                 <span>{regenerating ? t('review.regenerating') : t('review.regenerate')}</span>
               </Button>
@@ -374,10 +396,15 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
               </Button>
               {menuOpen && (
                 <div role="menu" className="absolute z-50 mt-1 start-0 min-w-[210px] rounded-xl border border-outline-variant/60 bg-surface-container-lowest shadow-xl py-1">
-                  <button role="menuitem" onClick={() => { setMenuOpen(false); setEditing(true); }} disabled={status === 'approved'} className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 disabled:opacity-40 text-start">
+                  <button role="menuitem" onClick={() => { setMenuOpen(false); setEditing(true); }} disabled={status === 'approved' || isArchived} className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 disabled:opacity-40 text-start">
                     <Icon name="edit" size="sm" /> {t('review.edit')}
                   </button>
-                  <button role="menuitem" onClick={() => { setMenuOpen(false); void handleRegenerate(); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 text-start">
+                  <button
+                    role="menuitem"
+                    onClick={() => { setMenuOpen(false); void handleRegenerate(); }}
+                    disabled={isArchived}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 disabled:opacity-40 text-start"
+                  >
                     <Icon name="refresh" size="sm" /> {t('review.regenerate')}
                   </button>
                   {visual.enabled && (
@@ -387,7 +414,12 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
                   )}
                   {visual.enabled && visual.isReady && (
                     <>
-                      <button role="menuitem" onClick={() => { setMenuOpen(false); visual.regenerate(); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 text-start">
+                      <button
+                        role="menuitem"
+                        onClick={() => { setMenuOpen(false); visual.regenerate(); }}
+                        disabled={isArchived}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 disabled:opacity-40 text-start"
+                      >
                         <Icon name="refresh" size="sm" /> Regenerate Background
                       </button>
                       <a role="menuitem" href={visual.asset.finalUrl ?? '#'} download={`lumai-${output.platform}.png`} onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] text-on-surface hover:bg-surface-variant/40 text-start">
@@ -512,7 +544,7 @@ function DraftPane({ output, caseId }: { output: ContentOutput; caseId: string }
 
           {/* Visual Section — directly after the post (LinkedIn / Facebook only) */}
           {!editing && visualPlatform && (
-            <VisualPanel platform={visualPlatform} visual={visual} sectionRef={visualRef} />
+            <VisualPanel platform={visualPlatform} visual={visual} sectionRef={visualRef} isArchived={isArchived} />
           )}
 
           {/* Editorial Breakdown — moved below the visual, collapsed by default */}
@@ -782,8 +814,8 @@ export function ContentCaseReview() {
               </div>
 
               {isPodcastActive
-                ? <PodcastPanel caseId={c.id} pipelineRunId={targetRunId} autoStart={hasPodcastTarget && !isHistorical} />
-                : activeOutput && <DraftPane key={activeOutput.id} output={activeOutput} caseId={c.id} />
+                ? <PodcastPanel caseId={c.id} pipelineRunId={targetRunId} autoStart={hasPodcastTarget && !isHistorical} isArchived={c.lifecycleStatus === 'ARCHIVED'} />
+                : activeOutput && <DraftPane key={activeOutput.id} output={activeOutput} caseId={c.id} isArchived={c.lifecycleStatus === 'ARCHIVED'} />
               }
             </div>
           </div>

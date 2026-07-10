@@ -6,9 +6,11 @@ import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { useLiveCase } from './useLiveCase';
+import { useMetricLimitContent } from '../../hooks/useQuotaGate';
+import { useQuotaModalStore } from '../../stores/quotaModalStore';
 import { useT } from '../../i18n/useT';
 import type { StringKey } from '../../i18n/strings';
-import { ApiError } from '../../lib/api';
+import { ApiError, isQuotaApiError } from '../../lib/api';
 import type { PipelineStep } from '../../types';
 
 // ── Step metadata ─────────────────────────────────────────
@@ -169,6 +171,8 @@ export function ContentCasePipeline() {
   const [runnerActive, setRunnerActive] = useState(false);
   // Output language chosen per run (Phase 8.6). null = use the case default.
   const [outputLanguage, setOutputLanguage] = useState<'en' | 'he' | null>(null);
+  const pipelineRunLimitContent = useMetricLimitContent('PIPELINE_RUN');
+  const showQuotaModal = useQuotaModalStore(s => s.show);
 
   const runningStep   = view?.pipeline.find(s => s.status === 'running');
   const allDone       = view?.pipeline.every(s => s.status === 'completed');
@@ -211,12 +215,19 @@ export function ContentCasePipeline() {
   }
 
   const c = view;
+  // Archived cases are read-only — never run/regenerate anything (see the
+  // Content Case Lifecycle plan). Backend already rejects with 409; this just
+  // keeps the UI from offering a doomed action in the first place.
+  const isArchived = c.lifecycleStatus === 'ARCHIVED';
 
   // Default to the case language for backward compatibility, else English.
   const effectiveLang: 'en' | 'he' = outputLanguage ?? (c.language === 'he' ? 'he' : 'en');
 
   async function handleStart() {
-    if (!id || starting || runnerActive) return;
+    if (!id || starting || runnerActive || isArchived) return;
+    // Proactive: known-fresh usage says the limit is reached — open the modal
+    // instead of sending a request we already know will be rejected.
+    if (pipelineRunLimitContent) { showQuotaModal(pipelineRunLimitContent); return; }
     setStartError(null);
     setStarting(true);
     try {
@@ -225,6 +236,9 @@ export function ContentCasePipeline() {
       // runner may not have flipped the case to 'research' in the DB yet.
       setRunnerActive(true);
     } catch (err) {
+      // Reactive: usage was stale and the backend rejected anyway — the global
+      // 'quota:exceeded' bridge already opened the same modal; skip the banner.
+      if (isQuotaApiError(err)) return;
       if (err instanceof ApiError) {
         setStartError(err.message);
       }
@@ -382,7 +396,7 @@ export function ContentCasePipeline() {
               <Button
                 fullWidth
                 onClick={handleStart}
-                disabled={!hasNewSources || isLaunching}
+                disabled={!hasNewSources || isLaunching || isArchived}
                 loading={isLaunching}
               >
                 <Icon name="play_arrow" size="sm" />
@@ -437,7 +451,7 @@ export function ContentCasePipeline() {
                   </div>
                 </div>
                 {hasNewSources && (
-                  <Button variant="secondary" onClick={handleStart} disabled={isLaunching} loading={isLaunching}>
+                  <Button variant="secondary" onClick={handleStart} disabled={isLaunching || isArchived} loading={isLaunching}>
                     <Icon name="refresh" size="sm" />
                     {isLaunching ? t('pipeline.starting') : t('pipeline.retry')}
                   </Button>
@@ -451,7 +465,7 @@ export function ContentCasePipeline() {
                 variant="secondary"
                 fullWidth
                 onClick={handleStart}
-                disabled={isLaunching}
+                disabled={isLaunching || isArchived}
                 loading={isLaunching}
               >
                 <Icon name="autorenew" size="sm" />

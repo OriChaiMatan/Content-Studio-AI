@@ -7,6 +7,7 @@ import { LumaiLogoChip } from '../../components/ui/LumaiLogo';
 import { useContentCasesStore } from '../../stores/contentCasesStore';
 import { useLibraryStore } from '../../stores/libraryStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useGoToNewCase } from '../../hooks/useQuotaGate';
 import { useT } from '../../i18n/useT';
 import type { StringKey } from '../../i18n/strings';
 import type { CaseStatus, ContentCase, Platform, Schedule } from '../../types';
@@ -141,6 +142,7 @@ export function DashboardPage() {
   const loading     = useContentCasesStore(s => s.loading);
   const libraryRuns = useLibraryStore(s => s.runs);
   const user        = useSettingsStore(s => s.user);
+  const goToNewCase = useGoToNewCase(navigate);
 
   // "Needs review" is determined by ACTUAL pending draft outputs in the current
   // run — NOT by case.status. A case can sit at status 'in_review' while all its
@@ -149,7 +151,7 @@ export function DashboardPage() {
   // approving/rejecting on the review page removes the case once drafts hit 0.
   const reviewCases   = cases.filter(c => pendingDraftsOf(c) > 0);
   const progressCases = cases.filter(c => IN_PROGRESS_STATUSES.includes(c.status));
-  const activeCases   = cases.filter(c => c.status !== 'completed').length;
+  const activeCases   = cases.filter(c => c.lifecycleStatus === 'ACTIVE').length;
   const approved      = libraryRuns.reduce((n, r) => n + r.approvedCount, 0);
   const recentCases   = [...cases].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
 
@@ -208,7 +210,7 @@ export function DashboardPage() {
             <p className="text-[14px] text-on-surface-variant mb-8 leading-relaxed">
               {t('dash.welcomeBody')}
             </p>
-            <Button onClick={() => navigate('/cases/new')} size="lg">
+            <Button onClick={goToNewCase} size="lg">
               <Icon name="add" size="sm" />
               {t('dash.createFirst')}
             </Button>
@@ -251,7 +253,7 @@ export function DashboardPage() {
           </div>
           <Button
             variant={inReview > 0 ? 'ghost' : 'primary'}
-            onClick={() => navigate('/cases/new')}
+            onClick={goToNewCase}
           >
             <Icon name="add" size="sm" />
             {t('common.newCase')}

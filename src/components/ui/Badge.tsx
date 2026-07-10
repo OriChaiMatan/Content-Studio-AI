@@ -1,4 +1,4 @@
-import type { Platform, CaseStatus, OutputStatus } from '../../types';
+import type { Platform, CaseStatus, CaseLifecycleStatus, OutputStatus } from '../../types';
 import { useT } from '../../i18n/useT';
 import type { StringKey } from '../../i18n/strings';
 
@@ -68,6 +68,29 @@ export function CaseStatusBadge({ status }: CaseStatusBadgeProps) {
   return (
     <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${cfg.bg} ${cfg.text}`}>
       {t(cfg.labelKey)}
+    </span>
+  );
+}
+
+// ── Lifecycle badge (ACTIVE / ARCHIVED) ────────────────────
+// Independent of CaseStatus (pipeline progress) — see ContentCase.lifecycleStatus.
+// By default renders nothing for ACTIVE (the unremarkable default state, and the
+// Content Cases list already has All/Active/Archived filter chips, so a per-card
+// ACTIVE badge there would be redundant clutter) — only ARCHIVED gets a visible,
+// muted pill there. Case Detail passes `alwaysShow` since the page must clearly
+// state ACTIVE or ARCHIVED regardless.
+interface LifecycleBadgeProps { status: CaseLifecycleStatus; alwaysShow?: boolean; }
+
+export function LifecycleBadge({ status, alwaysShow = false }: LifecycleBadgeProps) {
+  if (status !== 'ARCHIVED' && !alwaysShow) return null;
+  const isArchived = status === 'ARCHIVED';
+  return (
+    <span
+      className={`px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${
+        isArchived ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-container text-on-primary-container'
+      }`}
+    >
+      {isArchived ? 'Archived' : 'Active'}
     </span>
   );
 }

@@ -3,8 +3,9 @@ import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { outputService } from '../../services/outputService';
 import { updateOutputBodySchema, updateOutputStatusSchema } from '../../schemas/outputSchemas';
-import { requireCaseOwnership } from '../middleware/auth';
+import { requireCaseOwnership, requireActiveCase } from '../middleware/auth';
 import { aiHeavyLimiter } from '../middleware/rateLimit';
+import { isQuotaError, sendQuotaError } from '../../lib/quotaErrors';
 
 const router = Router();
 
@@ -14,7 +15,7 @@ router.param('caseId', requireCaseOwnership);
 // ── PATCH /api/cases/:caseId/outputs/:outputId ───────────────────────────────
 // Edit the body (and optionally title) of a draft output.
 
-router.patch('/:caseId/outputs/:outputId', async (req: Request, res: Response) => {
+router.patch('/:caseId/outputs/:outputId', requireActiveCase, async (req: Request, res: Response) => {
   try {
     const input  = updateOutputBodySchema.parse(req.body);
     const output = await outputService.updateBody(req.params.caseId, req.params.outputId, input);
@@ -31,6 +32,10 @@ router.patch('/:caseId/outputs/:outputId', async (req: Request, res: Response) =
 // Approve or reject an output.
 // On approval: creates LibraryItem, marks primary sources used (first approval for run).
 // On rejection: removes LibraryItem if it existed.
+// NOT gated by requireActiveCase — approve/reject is content management, not
+// content generation, and stays available on archived (read-only-for-generation)
+// cases. See the Content Case Lifecycle correction: "Do not treat approve/
+// reject, copy, share or download as content-generation actions."
 
 router.patch('/:caseId/outputs/:outputId/status', async (req: Request, res: Response) => {
   try {
@@ -48,12 +53,13 @@ router.patch('/:caseId/outputs/:outputId/status', async (req: Request, res: Resp
 // ── POST /api/cases/:caseId/outputs/:outputId/regenerate ─────────────────────
 // Reset output to draft with bumped version. Sources are not affected.
 
-router.post('/:caseId/outputs/:outputId/regenerate', aiHeavyLimiter, async (req: Request, res: Response) => {
+router.post('/:caseId/outputs/:outputId/regenerate', requireActiveCase, aiHeavyLimiter, async (req: Request, res: Response) => {
   try {
     const output = await outputService.regenerate(req.params.caseId, req.params.outputId);
     if (!output) { res.status(404).json({ error: 'Output not found' }); return; }
     res.json(output);
   } catch (err) {
+    if (isQuotaError(err)) { sendQuotaError(res, err); return; }
     console.error('[POST /outputs/:id/regenerate]', err);
     res.status(500).json({ error: 'Failed to regenerate output' });
   }

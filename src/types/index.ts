@@ -84,6 +84,10 @@ export type CaseStatus =
   | 'in_review'
   | 'completed';
 
+// Product lifecycle — separate from CaseStatus (pipeline progress). See the
+// ContentCase.lifecycleStatus field comment for why these must stay distinct.
+export type CaseLifecycleStatus = 'ACTIVE' | 'ARCHIVED';
+
 export type OutputStatus = 'draft' | 'approved' | 'rejected';
 
 export type ScheduleFrequency = 'manual' | 'daily' | 'weekly' | 'monthly';
@@ -243,6 +247,15 @@ export interface ContentCase {
   id: string;
   title: string;
   status: CaseStatus;
+  // Product lifecycle — independent of `status` (pipeline progress). A case
+  // cycles through `status` stages repeatedly over its life while staying
+  // lifecycleStatus 'ACTIVE'; archiving is the only explicit, user-initiated
+  // transition to 'ARCHIVED', never automatic.
+  lifecycleStatus: CaseLifecycleStatus;
+  archivedAt: string | null;
+  // Total pipeline runs ever started for this case (not just the latest —
+  // see currentRun below). Cheap aggregate count from the cases-list response.
+  pipelineRunCount: number;
   language: Language;
 
   // Audience (Step 2)
@@ -271,6 +284,9 @@ export interface ContentCase {
   pipeline: PipelineStep[];
   currentRun: PipelineRunSummary | null; // active or most recent pipeline run
   runHistory?: RunSummary[];             // all runs (newest first) for the Run History section (API-provided)
+  // Roles/Plans/Usage (Phase 3) — true per-case SOURCE_ADDED usage this cycle,
+  // provided only by the case-detail fetch (GET /cases/:id), not by list/create.
+  sourceUsage?: { used: number; limit: number };
 
   // Timestamps
   createdAt: string;

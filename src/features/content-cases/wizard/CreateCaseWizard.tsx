@@ -6,6 +6,10 @@ import { Icon } from '../../../components/ui/Icon';
 import { Input } from '../../../components/ui/Input';
 import { useContentCasesStore } from '../../../stores/contentCasesStore';
 import { useSettingsStore } from '../../../stores/settingsStore';
+import { useCaseLimitContent, useActiveCaseLimitContent, useSchedulingAllowed } from '../../../hooks/useQuotaGate';
+import { useQuotaModalStore } from '../../../stores/quotaModalStore';
+import { useActiveCaseLimitModalStore } from '../../../stores/activeCaseLimitModalStore';
+import { isQuotaApiError } from '../../../lib/api';
 import { useT } from '../../../i18n/useT';
 import type { StringKey } from '../../../i18n/strings';
 import type { WizardFormData, Language, ContentGoal, ContentStyle, ContentTarget, ScheduleFrequency } from '../../../types';
@@ -249,6 +253,12 @@ function Step2StyleTargets({ form, update }: { form: WizardFormData; update: Upd
 function Step3Schedule({ form, update }: { form: WizardFormData; update: UpdateFn }) {
   const { t } = useT();
   const freq = form.scheduleFrequency;
+  // Free plan blocks only 'daily' scheduling (manual/weekly/monthly are open on
+  // every plan) — mirrors the backend's assertSchedulingAllowed for a proactive
+  // UI hint only (backend stays authoritative).
+  const dailyAllowed = useSchedulingAllowed('daily');
+  const lockedFrequency = (v: WizardFormData['scheduleFrequency']) => v === 'daily' && !dailyAllowed;
+
   return (
     <div className="space-y-6">
       {/* Compact pre-creation summary of the chosen output language (no dedicated Review step). */}
@@ -264,25 +274,32 @@ function Step3Schedule({ form, update }: { form: WizardFormData; update: UpdateF
           {t('wiz.freqDescPre')} <strong>{t('wiz.generateNow')}</strong> {t('wiz.freqDescPost')}
         </p>
         <div className="grid grid-cols-2 gap-3">
-          {FREQUENCY_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => update('scheduleFrequency', opt.value)}
-              className={[
-                'flex flex-col gap-0.5 px-4 py-3 rounded-xl border-2 text-left transition-all',
-                freq === opt.value
-                  ? 'border-primary bg-secondary-container/40'
-                  : 'border-outline-variant hover:border-primary/30 hover:bg-surface-container',
-              ].join(' ')}
-            >
-              <span className="flex items-center gap-2">
-                <Icon name={opt.icon} size="sm" className={freq === opt.value ? 'text-primary' : 'text-outline'} />
-                <span className={`text-[14px] font-bold ${freq === opt.value ? 'text-primary' : 'text-on-surface'}`}>{t(opt.labelKey)}</span>
-              </span>
-              <span className="text-[11px] text-on-surface-variant">{t(opt.subKey)}</span>
-            </button>
-          ))}
+          {FREQUENCY_OPTIONS.map(opt => {
+            const locked = lockedFrequency(opt.value);
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={locked}
+                onClick={() => update('scheduleFrequency', opt.value)}
+                title={locked ? 'Daily scheduling is available in LumAI Pro.' : undefined}
+                className={[
+                  'relative flex flex-col gap-0.5 px-4 py-3 rounded-xl border-2 text-left transition-all',
+                  locked ? 'opacity-50 cursor-not-allowed border-outline-variant' :
+                  freq === opt.value
+                    ? 'border-primary bg-secondary-container/40'
+                    : 'border-outline-variant hover:border-primary/30 hover:bg-surface-container',
+                ].join(' ')}
+              >
+                <span className="flex items-center gap-2">
+                  <Icon name={opt.icon} size="sm" className={freq === opt.value && !locked ? 'text-primary' : 'text-outline'} />
+                  <span className={`text-[14px] font-bold ${freq === opt.value && !locked ? 'text-primary' : 'text-on-surface'}`}>{t(opt.labelKey)}</span>
+                  {locked && <Icon name="lock" size="sm" className="text-outline ms-auto" />}
+                </span>
+                <span className="text-[11px] text-on-surface-variant">{locked ? 'Available in LumAI Pro' : t(opt.subKey)}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -350,6 +367,10 @@ export function CreateCaseWizard() {
   }));
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const caseLimitContent = useCaseLimitContent();
+  const activeCaseLimitContent = useActiveCaseLimitContent();
+  const showQuotaModal = useQuotaModalStore(s => s.show);
+  const showActiveCaseLimitModal = useActiveCaseLimitModalStore(s => s.show);
 
   function update<K extends keyof WizardFormData>(key: K, value: WizardFormData[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -364,12 +385,22 @@ export function CreateCaseWizard() {
 
   async function handleCreate() {
     if (creating || form.contentTargets.length === 0) return;
+    // Proactive: known-fresh usage says the limit is reached — open the modal
+    // instead of sending a request we already know will be rejected. Prefer
+    // the specific ActiveCaseLimitModal (real data about the one active case);
+    // fall back to the generic QuotaLimitModal for the Pro/Master multi-case edge.
+    if (activeCaseLimitContent) { showActiveCaseLimitModal({ mode: 'create', activeCase: activeCaseLimitContent.activeCase }); return; }
+    if (caseLimitContent) { showQuotaModal(caseLimitContent); return; }
     setCreating(true);
     setCreateError(null);
     try {
       const newCase = await createCase(form);
       navigate(`/cases/${newCase.id}`);
     } catch (err) {
+      // Reactive: usage was stale and the backend rejected anyway — the global
+      // 'quota:exceeded' bridge (authStore.ts) already opened the same modal;
+      // don't ALSO show a duplicate inline banner for it.
+      if (isQuotaApiError(err)) return;
       setCreateError(err instanceof Error ? err.message : t('wiz.createError'));
     } finally {
       setCreating(false);

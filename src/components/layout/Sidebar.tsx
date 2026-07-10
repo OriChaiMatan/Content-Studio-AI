@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useUiStore } from '../../stores/uiStore';
+import { useGoToNewCase } from '../../hooks/useQuotaGate';
 import { useT } from '../../i18n/useT';
 import type { StringKey } from '../../i18n/strings';
 import { Icon } from '../ui/Icon';
@@ -22,6 +23,7 @@ export function Sidebar() {
   const location = useLocation();
   const mobileNavOpen = useUiStore(s => s.mobileNavOpen);
   const closeMobileNav = useUiStore(s => s.closeMobileNav);
+  const goToNewCase = useGoToNewCase(navigate);
   const { t, dir } = useT();
   // Off-canvas (closed) slides out toward the inline-start edge — left in LTR,
   // right in RTL — so the drawer animation is correct in both directions.
@@ -55,9 +57,11 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* New Content Case CTA */}
+      {/* New Content Case CTA — clicking while at the active-case limit opens a
+          modal instead of navigating; the wizard blocks unreachable anyway,
+          but this saves the user the extra step. */}
       <button
-        onClick={() => navigate('/cases/new')}
+        onClick={goToNewCase}
         className="flex items-center justify-center gap-2 bg-primary text-on-primary rounded-xl px-6 py-3 font-bold text-sm transition-transform active:scale-95 hover:bg-primary/90"
       >
         <Icon name="add" size="sm" />

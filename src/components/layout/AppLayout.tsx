@@ -1,6 +1,9 @@
 import { type ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { useUiStore } from '../../stores/uiStore';
+import { QuotaLimitModal } from '../ui/QuotaLimitModal';
+import { ActiveCaseLimitModal } from '../ui/ActiveCaseLimitModal';
+import { ArchiveConfirmModal } from '../ui/ArchiveConfirmModal';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -26,6 +29,10 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="ms-0 md:ms-72 min-h-screen flex flex-col">
         {children}
       </div>
+
+      <QuotaLimitModal />
+      <ActiveCaseLimitModal />
+      <ArchiveConfirmModal />
     </div>
   );
 }

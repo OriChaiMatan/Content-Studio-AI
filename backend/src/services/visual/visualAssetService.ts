@@ -11,6 +11,8 @@ import { critiqueRenders } from './renderCritic';
 import { DESIGN_VERSION } from './lumaiDesign';
 import { getBackground, ProviderError } from './backgroundProvider';
 import { renderOverlay } from './overlayRender';
+import { quotaConfig } from '../../lib/quotaConfig';
+import { checkAndIncrementUsage } from '../usageService';
 
 const ACTIVE: ReadonlyArray<string> = ['pending', 'generating', 'rendering'];
 
@@ -174,6 +176,11 @@ export const visualAssetService = {
     });
     if (active) return active; // idempotent — don't double-spend on a quick double-click
 
+    if (quotaConfig.enforceQuotas) {
+      const { userId } = await prisma.contentCase.findUniqueOrThrow({ where: { id: contentCaseId }, select: { userId: true } });
+      await checkAndIncrementUsage(userId, 'IMAGE_GENERATION');
+    }
+
     const output = await prisma.contentOutput.findUnique({ where: { id: contentOutputId } });
     const caseItem = output ? await prisma.contentCase.findUnique({ where: { id: output.contentCaseId } }) : null;
     const language = caseItem?.language === 'he' ? 'he' : 'en';
@@ -188,6 +195,11 @@ export const visualAssetService = {
   // New version, reusing the prior plan (scene + headline + palette) so a reroll varies
   // the IMAGE, not the idea — and avoids a second Visual-Intelligence LLM call.
   async regenerate(contentCaseId: string, contentOutputId: string, platform: VisualAsset['platform']): Promise<VisualAsset> {
+    if (quotaConfig.enforceQuotas) {
+      const { userId } = await prisma.contentCase.findUniqueOrThrow({ where: { id: contentCaseId }, select: { userId: true } });
+      await checkAndIncrementUsage(userId, 'IMAGE_GENERATION');
+    }
+
     const latest = await prisma.visualAsset.findFirst({ where: { contentOutputId, platform }, orderBy: { version: 'desc' } });
     const asset = await prisma.visualAsset.create({
       data: { contentOutputId, contentCaseId, platform, language: latest?.language ?? 'en', status: 'pending', version: (latest?.version ?? 0) + 1 },
