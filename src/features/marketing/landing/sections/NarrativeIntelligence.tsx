@@ -1,8 +1,67 @@
+import { useIsMobile } from '../../../../hooks/useIsMobile';
+
 const reveal: React.CSSProperties = { opacity: 0, transform: 'translateY(20px)', transition: 'opacity 0.55s ease, transform 0.55s ease' };
 
 const DIFFS = ['Contradictions, not consensus', 'Thesis before writing', 'Maps known vs. inferred'];
 
 export function NarrativeIntelligence() {
+  const isMobile = useIsMobile(900);
+
+  if (isMobile) {
+    // Text first, then a rebuilt mobile visualization: two stacked full-width
+    // vertical mini-flows (Generic AI vs LumAI) instead of two half-width
+    // columns squeezed side by side.
+    return (
+      <section style={{ background: 'var(--bg-elevated)', padding: '56px 20px' }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--bright)', textTransform: 'uppercase', marginBottom: 14 }}>Why LumAI Is Different</div>
+        <h2 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 16px', lineHeight: 1.25 }}>Most AI tools summarize.<br />LumAI builds an argument.</h2>
+        <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.7 }}>LumAI looks for the mechanism behind the information — not the main themes, but the specific claim that explains why things are the way they are and what follows from it.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 24, marginBottom: 40 }}>
+          {DIFFS.map((label) => (
+            <div key={label} style={{ display: 'flex', gap: 14 }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(9,76,178,0.12)', border: '1px solid rgba(9,76,178,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--bright)' }}>◆</div>
+              <div style={{ fontWeight: 600, fontSize: 15, paddingTop: 5 }}>{label}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+          <div style={{ textAlign: 'center', background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 16, padding: '24px 20px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 16 }}>Generic AI</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <div style={{ border: '1px dashed rgba(96,104,128,0.4)', borderRadius: 8, padding: '10px 14px', fontSize: 11.5, color: 'var(--text-muted)' }}>Sources</div>
+              <span style={{ color: 'var(--text-muted)' }}>→</span>
+              <div style={{ border: '1px dashed rgba(96,104,128,0.4)', borderRadius: 8, padding: '10px 14px', fontSize: 11.5, color: 'var(--text-muted)' }}>Bullet Points</div>
+            </div>
+            <div style={{ color: 'var(--text-muted)', margin: '10px 0' }}>↓</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <div style={{ border: '1px dashed rgba(96,104,128,0.4)', borderRadius: 8, padding: '10px 14px', fontSize: 11.5, color: 'var(--text-muted)' }}>Summary</div>
+              <span style={{ color: 'rgba(255,107,107,0.6)', fontSize: 18 }}>✗</span>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center', background: 'rgba(9,76,178,0.06)', border: '1.5px solid rgba(9,76,178,0.25)', borderRadius: 16, padding: '24px 20px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--pale)', marginBottom: 16 }}>LumAI</div>
+            <div style={{ border: '1px solid rgba(9,76,178,0.3)', background: 'rgba(9,76,178,0.06)', borderRadius: 8, padding: '10px 14px', fontSize: 11.5, color: 'var(--pale)', display: 'inline-block' }}>Sources</div>
+            <div style={{ color: 'var(--bright)', margin: '8px 0', fontSize: 13 }}>↓</div>
+            <div style={{ border: '1px solid rgba(9,76,178,0.2)', background: 'rgba(9,76,178,0.04)', borderRadius: 8, padding: '9px 13px', fontSize: 11, color: 'var(--text-secondary)', display: 'inline-block' }}>Contradictions</div>
+            <div style={{ color: 'var(--bright)', margin: '8px 0', fontSize: 13 }}>↓</div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 5, margin: '6px 0' }}>
+              {[0, 1, 2, 3, 4].map((d) => <div key={d} style={{ width: 6, height: 6, borderRadius: '50%', background: '#4D82E8', animation: 'marketing-float 2s ease-in-out infinite' }} />)}
+            </div>
+            <div style={{ color: 'var(--bright)', margin: '8px 0', fontSize: 13 }}>↓</div>
+            <div style={{ borderRadius: 8, padding: '10px 14px', fontSize: 11.5, color: 'var(--pale)', background: 'rgba(9,76,178,0.15)', boxShadow: '0 0 20px rgba(9,76,178,0.4)', display: 'inline-block' }}>Thesis</div>
+            <div style={{ color: 'var(--bright)', margin: '8px 0', fontSize: 13 }}>↓</div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 10, fontSize: 18 }}>
+              <span>💼</span><span>👥</span><span>✉️</span><span>🎙️</span>
+            </div>
+            <div style={{ color: '#5EE38A', fontSize: 16, marginTop: 8 }}>✓</div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section style={{ background: 'var(--bg-elevated)', padding: '100px 40px' }}>
       <div style={{ display: 'flex', maxWidth: 1100, margin: '0 auto', gap: 80, flexWrap: 'wrap' }}>

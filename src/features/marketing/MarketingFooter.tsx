@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 const productLinks = [
   { href: '#how', label: 'How it Works' },
@@ -9,9 +10,10 @@ const productLinks = [
 ];
 
 export function MarketingFooter() {
+  const isMobile = useIsMobile(900);
   return (
-    <footer style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '48px 40px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 32, maxWidth: 1200, margin: '0 auto' }}>
+    <footer style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: isMobile ? '40px 20px' : '48px 40px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))', gap: isMobile ? 28 : 32, maxWidth: 1200, margin: '0 auto' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <svg width="24" height="24" viewBox="0 0 56 56">

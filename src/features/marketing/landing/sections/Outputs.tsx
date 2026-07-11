@@ -1,13 +1,20 @@
+import { useIsMobile } from '../../../../hooks/useIsMobile';
+
 const reveal: React.CSSProperties = { opacity: 0, transform: 'translateY(20px)', transition: 'opacity 0.55s ease, transform 0.55s ease, border-color 0.2s ease' };
 
 export function Outputs() {
+  const isMobile = useIsMobile(900);
+  // Mobile cards are full-width but that's narrower than a desktop half-card
+  // (335px vs ~528px), so the same copy wraps to more lines — the preview
+  // needs *more* height on mobile, not less, to avoid clipping the mockup text.
+  const previewHeight = isMobile ? 236 : 196;
   return (
-    <section id="outputs" style={{ padding: '100px 40px', textAlign: 'center' }}>
-      <h2 data-reveal="1" style={{ ...reveal, fontSize: 44, fontWeight: 700, margin: '0 0 12px' }}>One thesis. Multiple formats.</h2>
-      <p data-reveal="1" style={{ ...reveal, fontSize: 18, color: 'var(--text-secondary)', margin: '0 0 48px' }}>Same research. Same argument. Different register.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, maxWidth: 1080, margin: '0 auto', textAlign: 'left' }}>
+    <section id="outputs" style={{ padding: isMobile ? '56px 20px' : '100px 40px', textAlign: 'center' }}>
+      <h2 data-reveal="1" style={{ ...reveal, fontSize: isMobile ? 26 : 44, fontWeight: 700, margin: '0 0 12px' }}>One thesis. Multiple formats.</h2>
+      <p data-reveal="1" style={{ ...reveal, fontSize: isMobile ? 15 : 18, color: 'var(--text-secondary)', margin: isMobile ? '0 0 28px' : '0 0 48px' }}>Same research. Same argument. Different register.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 18 : 24, maxWidth: 1080, margin: '0 auto', textAlign: 'left' }}>
         <div data-reveal="1" style={{ ...reveal, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 16, overflow: 'hidden' }}>
-          <div style={{ padding: '18px 18px 0', height: 196, background: '#1B1F2E', overflow: 'hidden' }}>
+          <div style={{ padding: '18px 18px 0', height: previewHeight, background: '#1B1F2E', overflow: 'hidden' }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
               <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg,#4D82E8,#094CB2)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 15, color: 'white' }}>JK</div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -32,7 +39,7 @@ export function Outputs() {
         </div>
 
         <div data-reveal="1" style={{ ...reveal, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 16, overflow: 'hidden' }}>
-          <div style={{ padding: '22px 24px 0', height: 196, background: '#12151F', overflow: 'hidden' }}>
+          <div style={{ padding: '22px 24px 0', height: previewHeight, background: '#12151F', overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 12 }}>
               <span style={{ fontFamily: "'Noto Serif',serif", fontWeight: 700, fontSize: 19, color: 'var(--text-primary)' }}>The Signal</span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Vol. 47 · Jul 2026</span>
@@ -51,7 +58,7 @@ export function Outputs() {
         </div>
 
         <div data-reveal="1" style={{ ...reveal, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 16, overflow: 'hidden' }}>
-          <div style={{ padding: '18px 18px 0', height: 196, background: '#1B1F2E', overflow: 'hidden' }}>
+          <div style={{ padding: '18px 18px 0', height: previewHeight, background: '#1B1F2E', overflow: 'hidden' }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
               <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg,#4D82E8,#094CB2)', flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -73,7 +80,7 @@ export function Outputs() {
         </div>
 
         <div data-reveal="1" style={{ ...reveal, background: 'rgba(9,76,178,0.06)', border: '1.5px solid rgba(9,76,178,0.35)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 0 32px rgba(9,76,178,0.1)' }}>
-          <div style={{ padding: '18px 20px 0', height: 196, background: '#0E1424', overflow: 'hidden', fontFamily: "'Noto Serif',serif" }}>
+          <div style={{ padding: '18px 20px 0', height: previewHeight, background: '#0E1424', overflow: 'hidden', fontFamily: "'Noto Serif',serif" }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
               <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', textTransform: 'uppercase', fontFamily: "'Inter',sans-serif" }}>Episode 04 · Script</span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: "'Inter',sans-serif" }}>Page 3 / 11</span>

@@ -2,11 +2,18 @@ import { useState } from 'react';
 import { MarketingLayout } from './MarketingLayout';
 import { SubpageChrome } from './SubpageChrome';
 import { api, ApiError } from '../../lib/api';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
-const inputStyle: React.CSSProperties = {
-  background: '#141828', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10,
-  padding: '14px 16px', color: '#E9EBFF', fontSize: 14, fontFamily: "'Inter',sans-serif",
-};
+// Mobile gets a 16px input font (iOS Safari auto-zooms the page on focusing
+// any input smaller than that) and a taller touch target — desktop keeps its
+// existing 14px/14px padding exactly as approved.
+function useInputStyle(isMobile: boolean): React.CSSProperties {
+  return {
+    background: '#141828', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10,
+    padding: isMobile ? '15px 16px' : '14px 16px', color: '#E9EBFF', fontSize: isMobile ? 16 : 14,
+    fontFamily: "'Inter',sans-serif", width: '100%', boxSizing: 'border-box',
+  };
+}
 
 type Status = 'idle' | 'submitting' | 'success' | 'error';
 
@@ -16,6 +23,8 @@ export function ContactPage() {
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const isMobile = useIsMobile(900);
+  const inputStyle = useInputStyle(isMobile);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,9 +85,9 @@ export function ContactPage() {
             type="submit"
             disabled={status === 'submitting'}
             style={{
-              background: '#1E54C8', color: 'white', fontWeight: 700, fontSize: 15, padding: '14px 32px',
+              background: '#1E54C8', color: 'white', fontWeight: 700, fontSize: 15, padding: isMobile ? '15px 32px' : '14px 32px',
               borderRadius: 12, textAlign: 'center', boxShadow: '0 4px 16px rgba(30,84,200,0.4)', border: 'none',
-              cursor: status === 'submitting' ? 'default' : 'pointer', opacity: status === 'submitting' ? 0.7 : 1,
+              width: isMobile ? '100%' : undefined, cursor: status === 'submitting' ? 'default' : 'pointer', opacity: status === 'submitting' ? 0.7 : 1,
             }}
           >
             {status === 'submitting' ? 'Sending…' : 'Send Message'}

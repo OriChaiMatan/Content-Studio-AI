@@ -1,13 +1,76 @@
 import { useEffect, useRef } from 'react';
 import type { LandingVals, LandingRefs } from '../useLandingEngine';
+import { useIsMobile } from '../../../../hooks/useIsMobile';
 
 export function WatchItThink({ vals, refs }: { vals: LandingVals; refs: LandingRefs }) {
   const reasonLocalRef = useRef<HTMLElement>(null);
+  const isMobile = useIsMobile(900);
   useEffect(() => {
     refs.setReasonRef(reasonLocalRef.current);
     return () => refs.setReasonRef(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs object is stable across renders
   }, []);
+
+  if (isMobile) {
+    // Dedicated mobile storytelling: same scroll-driven stage machine and
+    // timing as desktop (reasonSources/reasonShowInsight/reasonShowOutcomes,
+    // untouched, shared), but told as a staged vertical sequence — sources
+    // appear as a simple wrapping list, then the insight, then the outcomes
+    // — instead of an absolutely-positioned canvas with an orb and tiny
+    // moving connection nodes that don't read on a phone.
+    return (
+      <section id="watch-think" ref={reasonLocalRef} style={{ position: 'relative', height: '320vh' }}>
+        <div style={{ position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', padding: '72px 20px 24px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--bright)', textTransform: 'uppercase', marginBottom: 12, textAlign: 'center' }}>{vals.reasonStageLabel}</div>
+          <h2 style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.25, margin: '0 0 20px', textAlign: 'center' }}>Every AI can write.<br />Very few can think.</h2>
+
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+            {vals.reasonCaptionText && (
+              <div style={{ fontSize: 11, fontFamily: "'Noto Serif',serif", fontStyle: 'italic', color: 'var(--text-muted)', opacity: vals.reasonCaptionOpacity, transition: 'opacity 0.5s ease', marginBottom: 14 }}>{vals.reasonCaptionText}</div>
+            )}
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+              {vals.reasonSources.filter((src) => src.opacity > 0.05).map((src) => (
+                <div key={src.name} style={{ width: 104, background: 'rgba(20,24,40,0.55)', border: `1px solid ${src.borderColor}`, borderRadius: 10, padding: '7px 9px', opacity: src.opacity, transition: 'opacity 0.5s ease, border-color 0.4s ease', textAlign: 'left' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: 'white', background: src.accent }}>{src.mono}</div>
+                    <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{src.name}</div>
+                  </div>
+                  {src.showReject && <div style={{ marginTop: 5, fontSize: 8, fontWeight: 700, color: src.tagColor }}>✕ {src.rejectLabel}</div>}
+                </div>
+              ))}
+            </div>
+
+            {vals.reasonShowInsight && (
+              <div style={{ marginTop: 20, width: '100%', maxWidth: 320, background: 'rgba(9,76,178,0.1)', border: '1.5px solid rgba(9,76,178,0.4)', borderRadius: 16, padding: '18px 20px', opacity: vals.reasonInsightOpacity, transition: 'opacity 0.9s ease' }}>
+                <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>The Insight</div>
+                <div style={{ fontFamily: "'Noto Serif',serif", fontStyle: 'italic', fontSize: 15.5, lineHeight: 1.55, color: 'var(--pale)' }}>
+                  {vals.reasonInsightWords.map((w, i) => <span key={i} style={{ opacity: w.opacity, transition: 'opacity 0.4s ease' }}>{w.text} </span>)}
+                </div>
+              </div>
+            )}
+
+            {vals.reasonShowOutcomes && (
+              <div style={{ marginTop: 18, display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                {vals.reasonOutcomes.map((o) => (
+                  <div key={o.name} style={{ width: 108, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '8px 9px', opacity: o.opacity, transition: 'opacity 0.5s ease', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8.5, fontWeight: 700, color: 'white', background: o.accent }}>{o.mono}</div>
+                      <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-primary)' }}>{o.name}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', background: 'rgba(13,17,33,0.7)', border: '1px solid var(--border-subtle)', borderRadius: 100, padding: '9px 16px', marginTop: 12, opacity: vals.reasonStatsOpacity, transition: 'opacity 0.6s ease', maxWidth: '100%' }}>
+            <span>18 Sources</span><span style={{ color: 'var(--text-muted)' }}>→</span><span>6 Survived</span><span style={{ color: 'var(--text-muted)' }}>→</span><span style={{ color: 'var(--pale)' }}>1 Insight</span><span style={{ color: 'var(--text-muted)' }}>→</span><span>4 Outputs</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section id="watch-think" ref={reasonLocalRef} style={{ position: 'relative', height: '320vh' }}>

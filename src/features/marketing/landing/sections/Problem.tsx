@@ -1,15 +1,91 @@
 import { useEffect, useRef } from 'react';
 import type { LandingVals, LandingRefs } from '../useLandingEngine';
+import { useIsMobile } from '../../../../hooks/useIsMobile';
 
 const reveal: React.CSSProperties = { opacity: 0, transform: 'translateY(20px)', transition: 'opacity 0.55s ease, transform 0.55s ease' };
 
 export function Problem({ vals, refs }: { vals: LandingVals; refs: LandingRefs }) {
   const chaosLocalRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile(900);
   useEffect(() => {
     refs.setChaosRef(chaosLocalRef.current);
     return () => refs.setChaosRef(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs object is stable across renders
   }, []);
+
+  if (isMobile) {
+    // Dedicated mobile staged reveal: same problemPhase timer/booleans as
+    // desktop (untouched, shared), but rendered as one evolving card instead
+    // of a scattered percentage-positioned canvas — each stage's content
+    // simply replaces the last rather than fighting for the same cramped box.
+    return (
+      <section style={{ position: 'relative', padding: '72px 20px 56px', textAlign: 'center' }}>
+        <h2 data-reveal="1" style={{ ...reveal, fontSize: 28, fontWeight: 700, margin: '0 auto', lineHeight: 1.25 }}>
+          The bottleneck is not information.<br />It is synthesis.
+        </h2>
+        <p data-reveal="1" style={{ ...reveal, fontSize: 15.5, color: 'var(--text-secondary)', margin: '18px auto 0', lineHeight: 1.75 }}>
+          You already have the articles, reports, links and ideas. Most AI tools can summarize them — but summaries do not build authority. Authority comes from having a thesis.
+        </p>
+
+        <div ref={chaosLocalRef} style={{ position: 'relative', width: '100%', margin: '32px auto 0', background: 'var(--bg-base)', borderRadius: 18, border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+          <div style={{ height: 32, display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#FF6B6B' }} />
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F5C242' }} />
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#5EE38A' }} />
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>LumAI — Reasoning Engine</span>
+          </div>
+          <div style={{ minHeight: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 18px' }}>
+            {vals.problemShowSources && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
+                {vals.problemSources.map((src) => (
+                  <div key={src.name} style={{ width: 128, background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 10, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8, opacity: src.opacity, transition: 'opacity 0.6s ease' }}>
+                    <div style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: 'white', background: src.accent }}>{src.mono}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{src.name}</div>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{src.type}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {vals.problemShowSignals && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                {vals.problemSignals.map((sig) => (
+                  <div key={sig.text} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--pale)', background: 'rgba(9,76,178,0.14)', border: '1px solid rgba(9,76,178,0.3)', borderRadius: 100, padding: '6px 13px', opacity: 0, animation: 'marketing-outlineIn 0.5s ease forwards', animationDelay: sig.delay }}>{sig.text}</div>
+                ))}
+              </div>
+            )}
+
+            {vals.problemShowThesis && (
+              <div style={{ background: 'rgba(9,76,178,0.12)', border: '1.5px solid rgba(9,76,178,0.45)', borderRadius: 16, padding: '22px 36px', boxShadow: '0 0 60px rgba(9,76,178,0.3)', animation: 'marketing-thesisPulse 2.2s ease-in-out infinite' }}>
+                <div style={{ fontFamily: "'Noto Serif',serif", fontStyle: 'italic', fontWeight: 700, fontSize: 24, color: 'var(--pale)', letterSpacing: '0.02em' }}>Thesis</div>
+              </div>
+            )}
+
+            {vals.problemShowOutputs && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12 }}>One Thesis. Every Format.</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                  {vals.problemOutputs.map((out) => (
+                    <div key={out.name} style={{ opacity: 0, animation: 'marketing-outlineIn 0.45s ease forwards', animationDelay: out.delay }}>
+                      <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '8px 14px', fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>{out.icon} {out.name}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {vals.problemShowQuestion && (
+              <div style={{ fontWeight: 600, fontSize: 17, color: 'var(--text-primary)', textAlign: 'center', opacity: 0, animation: 'marketing-outlineIn 0.5s ease forwards' }}>
+                &ldquo;What thesis is hiding inside these sources?&rdquo;
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section style={{ position: 'relative', padding: '120px 40px 80px', textAlign: 'center' }}>

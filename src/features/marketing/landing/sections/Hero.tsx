@@ -1,16 +1,81 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import type { LandingVals, LandingRefs } from '../useLandingEngine';
+import { useIsMobile } from '../../../../hooks/useIsMobile';
 
 export function Hero({ vals, refs }: { vals: LandingVals; refs: LandingRefs }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const foregroundRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile(900);
   useEffect(() => {
     refs.setHeroCanvasRef(canvasRef.current);
     refs.setHeroForegroundRef(foregroundRef.current);
     return () => { refs.setHeroCanvasRef(null); refs.setHeroForegroundRef(null); };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs object is stable across renders
   }, []);
+
+  if (isMobile) {
+    // Dedicated mobile composition: text leads, a compact staged "story card"
+    // follows below it — the same autoplay timeline (heroAct, untouched,
+    // shared with desktop) drives this reveal too, but nothing is absolutely
+    // positioned, so there's no canvas to squeeze and nothing can overlap.
+    return (
+      <section
+        style={{
+          position: 'relative', minHeight: '100vh', padding: '96px 20px 48px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 32,
+          opacity: vals.contentOpacity, transition: 'opacity 0.3s ease',
+          background: 'radial-gradient(ellipse 700px 500px at 50% 20%, rgba(9,76,178,0.1) 0%, transparent 65%)',
+        }}
+      >
+        <div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(9,76,178,0.12)', border: '1px solid rgba(9,76,178,0.25)', color: 'var(--pale)', padding: '6px 12px', borderRadius: 100, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 20 }}>
+            Narrative Intelligence Platform
+          </div>
+          <div style={{ fontWeight: 700, fontSize: 34, lineHeight: 1.15, color: 'var(--text-primary)' }}>
+            <div style={{ opacity: vals.heroLine1, transition: 'opacity 0.6s ease' }}>You have the sources.</div>
+            <div style={{ opacity: vals.heroLine2, transition: 'opacity 0.6s ease' }}>LumAI finds</div>
+            <div style={{ opacity: vals.heroLine3, transition: 'opacity 0.6s ease', fontStyle: 'italic' }}>the thesis.</div>
+          </div>
+          <p style={{ fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.65, marginTop: 18, opacity: vals.heroSub, transition: 'opacity 0.6s ease' }}>
+            LumAI transforms articles, reports and research into thesis-driven content — from LinkedIn and Facebook posts to newsletters and complete expert-style podcast scripts.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 28, opacity: vals.heroSub, transition: 'opacity 0.6s ease' }}>
+            <Link to="/register" style={{ background: '#1E54C8', color: 'white', fontWeight: 700, fontSize: 16, padding: '15px 24px', borderRadius: 12, boxShadow: '0 4px 16px rgba(30,84,200,0.4)', textDecoration: 'none', textAlign: 'center' }}>Start Free</Link>
+            <a href="#" onClick={(e) => { e.preventDefault(); vals.openDemo(e); }} style={{ border: '1px solid rgba(255,255,255,0.15)', color: 'var(--text-primary)', fontWeight: 600, fontSize: 16, padding: '15px 24px', borderRadius: 12, textDecoration: 'none', textAlign: 'center' }}>Watch the demo →</a>
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 16, opacity: vals.heroSub, textAlign: 'center' }}>No credit card required.</div>
+        </div>
+
+        <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 20, padding: '22px 18px', opacity: vals.heroSub, transition: 'opacity 0.7s ease' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+            {vals.sourceCards.slice(0, 3).map((card) => (
+              <div key={card.name} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-subtle)', borderRadius: 100, padding: '6px 12px', opacity: card.opacity, transition: 'opacity 0.5s ease' }}>
+                <span style={{ width: 6, height: 6, borderRadius: 2, background: 'var(--text-muted)' }} />
+                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{card.name}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 16, background: 'rgba(9,76,178,0.12)', border: '1.5px solid rgba(9,76,178,0.4)', borderRadius: 14, padding: '16px 18px', opacity: vals.thesisOpacity, transform: vals.thesisTransform, transition: 'opacity 0.6s cubic-bezier(0.34,1.56,0.64,1), transform 0.6s cubic-bezier(0.34,1.56,0.64,1)', animation: vals.thesisPulseAnim }}>
+            <div style={{ fontFamily: "'Noto Serif',serif", fontStyle: 'italic', fontSize: 14, color: 'var(--pale)', lineHeight: 1.5, textAlign: 'center' }}>{vals.thesisText}</div>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 16 }}>
+            {vals.outputCards.map((oc) => (
+              <div key={oc.name} style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '7px 12px', opacity: oc.opacity, transition: 'opacity 0.6s ease' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>{oc.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: vals.heroSub }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4D82E8', animation: 'marketing-float 1.6s ease-in-out infinite' }} />
+          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>847 theses formed today</span>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section

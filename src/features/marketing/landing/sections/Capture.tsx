@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { LandingVals, LandingRefs } from '../useLandingEngine';
+import { useIsMobile } from '../../../../hooks/useIsMobile';
 
 const reveal: React.CSSProperties = { opacity: 0, transform: 'translateY(20px)', transition: 'opacity 0.55s ease, transform 0.55s ease' };
 
@@ -13,11 +14,58 @@ function OriginIcon({ o }: { o: LandingVals['captureOrigins'][number] }) {
 
 export function Capture({ vals, refs }: { vals: LandingVals; refs: LandingRefs }) {
   const captureLocalRef = useRef<HTMLElement>(null);
+  const isMobile = useIsMobile(900);
   useEffect(() => {
     refs.setCaptureRef(captureLocalRef.current);
     return () => refs.setCaptureRef(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs object is stable across renders
   }, []);
+
+  if (isMobile) {
+    // Dedicated mobile ecosystem: the Research Case card stays the visual
+    // center, with the four origins arranged cleanly in a 2x2 grid below it
+    // instead of a cross-shaped absolute layout — and the physics-driven
+    // flying source chips (tuned for a wide canvas) are dropped rather than
+    // forced into a cramped column, per "simplify decorative motion."
+    return (
+      <section ref={captureLocalRef} style={{ padding: '64px 20px' }}>
+        <h2 data-reveal="1" style={{ ...reveal, fontSize: 26, fontWeight: 700, lineHeight: 1.25, margin: '0 0 16px', textAlign: 'center' }}>Capture ideas where they happen.</h2>
+        <p data-reveal="1" style={{ ...reveal, fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '0 0 32px', textAlign: 'center' }}>
+          Whether you&apos;re browsing the web, chatting in WhatsApp, sharing links in Telegram or working directly inside LumAI, every source flows into the same research case.
+        </p>
+
+        <div style={{ width: '100%', maxWidth: 300, margin: '0 auto' }}>
+          <div style={{ width: '100%', background: 'rgba(20,24,40,0.7)', border: '1px solid rgba(77,130,232,0.35)', borderRadius: 20, padding: '26px 22px', textAlign: 'center', boxShadow: vals.captureCaseShadow, animation: 'marketing-orbBreathe 5s ease-in-out infinite', marginBottom: 32 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>Research Case</div>
+            <div style={{ fontSize: 15.5, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>AI and the Knowledge Economy</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 8 }}>
+              <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--pale)', fontVariantNumeric: 'tabular-nums' }}>{vals.captureCount}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>source{vals.captureCountSuffix} collected</span>
+            </div>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--bright)', marginTop: 10, letterSpacing: '0.02em' }}>{vals.captureStatusText}</div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20 }}>
+            {vals.captureOrigins.map((o) => (
+              <div key={o.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
+                <div style={{ position: 'relative', width: 46, height: 46 }}>
+                  <div style={{ position: 'absolute', inset: -5, borderRadius: 16, border: `1px solid ${o.accent}`, opacity: Number(o.ringOpacity), transition: 'opacity 0.4s ease' }} />
+                  <div style={{ position: 'absolute', inset: 0, borderRadius: 13, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)' }}>
+                    <OriginIcon o={o} />
+                  </div>
+                </div>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center' }}>{o.label}{o.isWa ? ' (Coming Soon)' : ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p data-reveal="1" style={{ ...reveal, fontSize: 15, fontWeight: 600, color: 'var(--pale)', margin: '32px 0 0', textAlign: 'center' }}>
+          Stop collecting bookmarks.<br />Start building knowledge.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section ref={captureLocalRef} style={{ padding: '140px 40px' }}>

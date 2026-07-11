@@ -1,3 +1,5 @@
+import { useIsMobile } from '../../../../hooks/useIsMobile';
+
 const reveal: React.CSSProperties = { opacity: 0, transform: 'translateY(20px)', transition: 'opacity 0.55s ease, transform 0.55s ease' };
 
 const TRUST_ITEMS = [
@@ -8,11 +10,12 @@ const TRUST_ITEMS = [
 ];
 
 export function Trust() {
+  const isMobile = useIsMobile(900);
   return (
-    <section style={{ background: 'var(--bg-elevated)', padding: '100px 40px', textAlign: 'center' }}>
-      <h2 data-reveal="1" style={{ ...reveal, fontSize: 44, fontWeight: 700, margin: '0 0 12px' }}>Built for serious thinking.</h2>
-      <p data-reveal="1" style={{ ...reveal, fontSize: 18, color: 'var(--text-secondary)', maxWidth: 560, margin: '0 auto 48px' }}>LumAI is not trying to replace your judgment. It gives your judgment better material to work with.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, maxWidth: 840, margin: '0 auto', textAlign: 'left' }}>
+    <section style={{ background: 'var(--bg-elevated)', padding: isMobile ? '56px 20px' : '100px 40px', textAlign: 'center' }}>
+      <h2 data-reveal="1" style={{ ...reveal, fontSize: isMobile ? 26 : 44, fontWeight: 700, margin: '0 0 12px' }}>Built for serious thinking.</h2>
+      <p data-reveal="1" style={{ ...reveal, fontSize: isMobile ? 15 : 18, color: 'var(--text-secondary)', maxWidth: 560, margin: isMobile ? '0 auto 28px' : '0 auto 48px' }}>LumAI is not trying to replace your judgment. It gives your judgment better material to work with.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(300px, 1fr))', gap: isMobile ? 14 : 20, maxWidth: 840, margin: '0 auto', textAlign: 'left' }}>
         {TRUST_ITEMS.map((item) => (
           <div key={item.title} data-reveal="1" style={{ ...reveal, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 14, padding: 24 }}>
             <div style={{ color: 'var(--bright)', fontSize: 20, marginBottom: 10 }}>{item.icon}</div>

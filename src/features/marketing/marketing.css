@@ -21,6 +21,13 @@
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* No overflow-x:hidden here on purpose: it would make this div a nested
+     scroll container, which silently breaks position:sticky for every
+     descendant (Product Flow's and Watch It Think's scroll-jacked sections
+     stick relative to the nearest scrolling ancestor — turn this into one,
+     and they stop re-pinning entirely). Overflow correctness on mobile comes
+     from each section's own layout being independently verified, not from
+     a blanket clip here. */
 }
 
 .marketing-root ::selection {
@@ -47,12 +54,6 @@
 @keyframes marketing-popScale { 0% { transform: scale(0.7); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes marketing-softGlow { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
 @keyframes marketing-idleFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-
-/* Baseline responsive stacking — the source design has no mobile breakpoints,
-   so this is added as reasonable engineering quality, not pixel-matched to a spec. */
-@media (max-width: 860px) {
-  .marketing-root nav .marketing-nav-links { display: none; }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .marketing-root *, .marketing-root *::before, .marketing-root *::after {
